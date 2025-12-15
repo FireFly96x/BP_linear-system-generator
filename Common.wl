@@ -1,6 +1,7 @@
 (* ::Package:: *)
 
 BeginPackage["MojeGeneratory`Common`"];
+
 Internal`$ContextMarks = False;
 
 ResolveSolutionType::usage =
@@ -23,14 +24,6 @@ WithRetries::usage =
 
 DimensionByDifficulty::usage =
   "DimensionByDifficulty[generatorKey, diff] vr\[AAcute]ti rozmer pod\:013ea pravidiel: \"Elimination\"/\"Substitution\" -> 2/3/3; inak -> 4/5/6.";
-
-ResolveSolutionType;
-CellText;
-CellExpr;
-IsAllowedFraction;
-ValidateStepNumbers;
-WithRetries;
-DimensionByDifficulty;
 
 Begin["`Private`"];
 

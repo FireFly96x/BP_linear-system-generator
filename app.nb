@@ -10,26 +10,30 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      1369,         45]
-NotebookOptionsPosition[       996,         31]
-NotebookOutlinePosition[      1415,         47]
-CellTagsIndexPosition[      1372,         44]
+NotebookDataLength[      1569,         49]
+NotebookOptionsPosition[      1194,         35]
+NotebookOutlinePosition[      1613,         51]
+CellTagsIndexPosition[      1570,         48]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
 Cell[BoxData[{
+ RowBox[{
+  RowBox[{"SetDirectory", "[", 
+   RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
  RowBox[{"<<", "\"\<Common.wl\>\""}], "\n", 
  RowBox[{
   RowBox[{"<<", "\"\<EliminationMatrixGenerator.wl\>\""}], "\n"}], "\[IndentingNewLine]", 
  RowBox[{"Gen01", "[", 
   RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-   RowBox[{"Visualization", "->", "True"}]}], "]"}]}], "Input",
- CellChangeTimes->{{3.97480607998942*^9, 
-  3.97480607998942*^9}},ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-\
-48f2cc160b32"]
+   RowBox[{"Visualization", "->", "True"}], ",", " ", "\"\<NONE\>\""}], 
+  "]"}]}], "Input",
+ CellChangeTimes->{{3.97480607998942*^9, 3.97480607998942*^9}, {
+  3.974810081879202*^9, 3.9748101095887127`*^9}},
+ CellLabel->"",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 },
-WindowSize->{574.8, 568.8},
+WindowSize->{660.6, 568.8},
 WindowMargins->{{18, Automatic}, {-22.799999999999955`, Automatic}},
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
 StyleDefinitions->"Default.nb",
@@ -46,7 +50,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 438, 9, 85, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
+Cell[554, 20, 636, 13, 104, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 }
 ]
 *)
