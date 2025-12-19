@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      1594,         50]
-NotebookOptionsPosition[      1219,         36]
-NotebookOutlinePosition[      1638,         52]
-CellTagsIndexPosition[      1595,         49]
+NotebookDataLength[      1869,         53]
+NotebookOptionsPosition[      1475,         38]
+NotebookOutlinePosition[      1913,         55]
+CellTagsIndexPosition[      1870,         52]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -24,18 +24,21 @@ Cell[BoxData[{
    RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
  RowBox[{"<<", "\"\<Common.wl\>\""}], "\n", 
  RowBox[{
-  RowBox[{"<<", "\"\<EliminationMatrixGenerator.wl\>\""}], 
-  "\[IndentingNewLine]"}], "\n", 
+  RowBox[{"<<", "\"\<EliminationMatrixGenerator.wl\>\""}], "\n"}], "\[IndentingNewLine]", 
  RowBox[{"Gen01", "[", 
   RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+   RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", " ", 
    RowBox[{"Visualization", "->", "True"}]}], "]"}]}], "Input",
  CellChangeTimes->{{3.97480607998942*^9, 3.97480607998942*^9}, {
   3.974810081879202*^9, 3.9748101095887127`*^9}, {3.974820901315119*^9, 
-  3.9748209185905113`*^9}},
+  3.9748209185905113`*^9}, {3.975159960091425*^9, 3.9751599671637154`*^9}, {
+  3.975160072813387*^9, 3.9751600911089344`*^9}, {3.9751605244967804`*^9, 
+  3.9751605479613514`*^9}, {3.975166203745863*^9, 3.975166225033451*^9}},
  CellLabel->"",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 },
-WindowSize->{660.6, 568.8},
-WindowMargins->{{18, Automatic}, {-22.799999999999955`, Automatic}},
+WindowSize->{574.8, 573.6},
+WindowMargins->{{Automatic, -4.7999999999999545`}, {Automatic, 0}},
+LightDark->"Light",
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
 StyleDefinitions->"Default.nb",
 ExpressionUUID->"384ef020-a7a5-a248-a44a-6c63d58a9978"
@@ -51,7 +54,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 661, 14, 104, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
+Cell[554, 20, 917, 16, 123, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 }
 ]
 *)
