@@ -52,11 +52,16 @@ eqWithNote[eq_, note_String] :=
 (* Zv\[YAcute]raznenie \[CHacek]lena, ktor\[YAcute] sa ide vyru\[SHacek]i\[THacek] *)
 highlightTerm[term_] := Style[term, Bold, Background -> RGBColor[1, 0.9, 0.6]];
 
-(* Form\[AAcute]tovanie syst\[EAcute]mu rovn\[IAcute]c pod sebou *)
+(* Form\[AAcute]tovanie syst\[EAcute]mu rovn\[IAcute]c pod sebou - POU\[CapitalZHacek]ITIE GRID PRE ZAROVNANIE POD\:013dA ROVNA SA *)
 systemColumn[A_, b_, vars_] := 
-  Column[
-    Table[eqTF[holdEq[A[[i]] . vars, b[[i]]]], {i, Length[b]}],
-    Spacings -> 0.5, Alignment -> Left
+  Grid[
+    Table[{
+      TraditionalForm[A[[i]] . vars], 
+      "=", 
+      TraditionalForm[b[[i]]]
+    }, {i, Length[b]}],
+    Alignment -> {{Right, Center, Left}},
+    Spacings -> {0.5, 0.8}
   ];
 
 lineLegendText[a_, b_, c_] := Module[{m, q, fmt},
@@ -70,6 +75,22 @@ lineLegendText[a_, b_, c_] := Module[{m, q, fmt},
   ]
 ];
 
+(* Pomocn\[AAcute] funkcia na form\[AAcute]tovanie pozn\[AAcute]mky pre n\[AAcute]sobenie *)
+(* Ak je n\[AAcute]sobok 1, vr\[AAcute]ti pr\[AAcute]zdny re\[THacek]azec (nezobraz\[IAcute] ni\[CHacek]) *)
+multiplyNote[m_] := Which[
+  m == 1, "",
+  m == -1, Style["/ \[CenterDot] (-1)", "Text", GrayLevel[0.25], Italic, FontSize -> 14],
+  True, Style["/ \[CenterDot] " <> ToString[m], "Text", GrayLevel[0.25], Italic, FontSize -> 14]
+];
+
+(* Pomocn\[AAcute] funkcia na vyn\[UAcute]tenie poradia X pred Y pomocou Row *)
+(* Rie\[SHacek]i probl\[EAcute]m, \[ZHacek]e Style[...] objekt Mathematica automaticky h\[AAcute]d\[ZHacek]e na koniec s\[UAcute]\[CHacek]tu *)
+(* OPRAVA: O\[SHacek]etrenie koeficientu 1 a -1, aby sa nezobrazovalo "1 y" *)
+orderedLHS[termX_, coeffY_, varY_] := Row[{
+  termX, 
+  If[coeffY < 0, " - ", " + "], 
+  If[Abs[coeffY] == 1, varY, Row[{Abs[coeffY], varY}]]
+}];
 
 (* ======================== GENEROVANIE D\[CapitalAAcute]T ======================== *)
 
@@ -108,8 +129,6 @@ generateSystemNone2[diff_] := Module[{r, row1, row2, k, c1, c2, A, b},
   r = coeffRangeByDiff[diff];
   row1 = randomRow[2, r];
   
-  (* K\:013d\[CapitalUAcute]\[CapitalCHacek]OV\[CapitalAAcute] OPRAVA: Pre elimin\[AAcute]ciu X nesmie by\[THacek] koeficient pri X nulov\[YAcute] *)
-  (* Ak vygenerujeme 0, zmen\[IAcute]me ju na n\[AAcute]hodn\[EAcute] nenulov\[EAcute] \[CHacek]\[IAcute]slo *)
   If[row1[[1]] == 0, row1[[1]] = RandomChoice[{-r, -1, 1, r}]];
   
   k = RandomChoice[{-3, -2, 2, 3}]; 
@@ -121,7 +140,6 @@ generateSystemNone2[diff_] := Module[{r, row1, row2, k, c1, c2, A, b},
   A = {row1, row2};
   b = {c1, c2};
   
-  (* Znova skontrolujeme nuly pre istotu *)
   If[A[[1, 1]] == 0 || A[[2, 1]] == 0, Return[$Failed]];
 
   If[!numbersNiceQ[A, b, diff], Return[$Failed]];
@@ -151,111 +169,275 @@ generateSystemInfinite2[diff_] := Module[{r, row1, row2, k, c1, c2, A, b},
 
 (* ======================== KROKY RIE\[CapitalSHacek]ENIA ======================== *)
 
+(* Pomocn\[AAcute] funkcia: Analyzuje vhodnos\[THacek] premennej na elimin\[AAcute]ciu *)
+analyzeVariableElimination[colIndex_, A_] := Module[
+  {c1, c2, lcm, mul1, mul2, score},
+  c1 = A[[1, colIndex]];
+  c2 = A[[2, colIndex]];
+  
+  (* Ak je nie\[CHacek]o nula, je to super \:013eahk\[EAcute], ale pre elimin\[AAcute]ciu chceme nenulov\[EAcute] *)
+  If[c1 == 0 || c2 == 0, Return[<|"Score" -> 9999|>]]; 
+  
+  lcm = LCM[Abs[c1], Abs[c2]];
+  mul1 = lcm / Abs[c1];
+  mul2 = lcm / Abs[c2];
+  
+  (* Sk\[OAcute]re: Preferujeme LCM \[CHacek]o najmen\[SHacek]ie. 
+     Ve\:013ek\[AAcute] penaliz\[AAcute]cia (1000), ak mus\[IAcute]me n\[AAcute]sobi\[THacek] OBE rovnice. 
+     Ak mul1==1 alebo mul2==1, je to lep\[SHacek]ie. *)
+  score = lcm + If[mul1 > 1 && mul2 > 1, 1000, 0];
+  
+  <|"Score" -> score, "LCM" -> lcm, "RawMul1" -> mul1, "RawMul2" -> mul2, "Coeffs" -> {c1, c2}|>
+];
+
 (* Pomocn\[AAcute] funkcia pre za\[CHacek]iatok elimin\[AAcute]cie *)
 eliminationStart[A_, b_, vars_] := Module[
-  {content = {}, x, y, a1, b1, c1, a2, b2, c2, lcm, m1, m2, eq1Mod, eq2Mod, separator},
+  {content = {}, x, y, a1, b1, c1, a2, b2, c2, 
+   resX, resY, choice, targetVar, elimReason,
+   rawM1, rawM2, m1, m2, k1, k2,
+   eq1Mod, eq2Mod, hlX, hlY, cXMod, cYMod},
   
   x = vars[[1]]; y = vars[[2]];
   a1 = A[[1, 1]]; b1 = A[[1, 2]]; c1 = b[[1]];
   a2 = A[[2, 1]]; b2 = A[[2, 2]]; c2 = b[[2]];
   
-  (* Vizu\[AAcute]lny separ\[AAcute]tor - \[CHacek]iara (StringRepeat) *)
-  separator = Style[
-    Row[{StringRepeat["\[LongDash]", 30]}],
-    GrayLevel[0], FontSize -> 14];
-
+  (* 1. Anal\[YAcute]za oboch premenn\[YAcute]ch *)
+  resX = analyzeVariableElimination[1, A];
+  resY = analyzeVariableElimination[2, A];
+  
+  (* 2. Rozhodnutie ktor\[UAcute] eliminova\[THacek] *)
+  If[resY["Score"] < resX["Score"],
+    (* Eliminujeme Y *)
+    choice = "Y";
+    targetVar = y;
+    {k1, k2} = resY["Coeffs"];
+    {rawM1, rawM2} = {resY["RawMul1"], resY["RawMul2"]};
+    If[rawM1 == 1 || rawM2 == 1,
+      elimReason = "sta\[CHacek]\[IAcute] vyn\[AAcute]sobi\[THacek] len jednu rovnicu a \[CHacek]\[IAcute]sla ostan\[UAcute] mal\[EAcute].",
+      elimReason = "koeficienty maj\[UAcute] men\[SHacek]\[IAcute] spolo\[CHacek]n\[YAcute] n\[AAcute]sobok."
+    ];,
+    (* Eliminujeme X (default) *)
+    choice = "X";
+    targetVar = x;
+    {k1, k2} = resX["Coeffs"];
+    {rawM1, rawM2} = {resX["RawMul1"], resX["RawMul2"]};
+    If[rawM1 == 1 || rawM2 == 1,
+      elimReason = "sta\[CHacek]\[IAcute] vyn\[AAcute]sobi\[THacek] len jednu rovnicu.",
+      elimReason = "je to v\[YAcute]hodnej\[SHacek]ie pre v\[YAcute]po\[CHacek]et."
+    ];
+  ];
+  
   AppendTo[content, 
-   "Vyn\[AAcute]sob\[IAcute]me rovnice tak, aby koeficienty pri premennej " <> ToString[x] <> " mali opa\[CHacek]n\[EAcute] znamienka a po s\[CHacek]\[IAcute]tan\[IAcute] sa navz\[AAcute]jom vyru\[SHacek]ili.\n\n" <>
-   "Cie\:013eom je n\[AAcute]js\[THacek] najmen\[SHacek]\[IAcute] spolo\[CHacek]n\[YAcute] n\[AAcute]sobok koeficientov a pripravi\[THacek] rovnice na s\[CHacek]\[IAcute]tanie, aby sa jedna premenn\[AAcute] eliminovala."
+   "Rozhodneme sa eliminova\[THacek] premenn\[UAcute] " <> ToString[targetVar] <> ", preto\[ZHacek]e " <> elimReason
   ];
 
-  (* Ochrana pred delen\[IAcute]m nulou *)
-  If[a1 == 0 || a2 == 0, Return[<|"failed" -> True|>]];
+  (* 3. Ur\[CHacek]enie znamienok n\[AAcute]sobkov *)
+  (* Pravidlo: Ak maj\[UAcute] koeficienty opa\[CHacek]n\[EAcute] znamienka, NEMEN\[CapitalIAcute]ME ich (n\[AAcute]sob\[IAcute]me kladn\[YAcute]m).
+     Ak maj\[UAcute] rovnak\[EAcute], mus\[IAcute]me jedno zmeni\[THacek] na z\[AAcute]porn\[EAcute]. *)
+  
+  If[Sign[k1] != Sign[k2],
+    (* Opa\[CHacek]n\[EAcute] znamienka -> n\[AAcute]sob\[IAcute]me kladn\[YAcute]mi \[CHacek]\[IAcute]slami *)
+    m1 = rawM1; 
+    m2 = rawM2;,
+    
+    (* Rovnak\[EAcute] znamienka -> jedno mus\[IAcute] by\[THacek] z\[AAcute]porn\[EAcute] *)
+    (* Heuristika: Neguj t\[UAcute] rovnicu, ktor\[AAcute] m\[AAcute] z\[AAcute]porn\[UAcute] prav\[UAcute] stranu (aby sa stala kladnou), 
+       alebo t\[UAcute], ktor\[UAcute] n\[AAcute]sob\[IAcute]me 1 (ak existuje), alebo jednoducho druh\[UAcute]. *)
+    If[c1 < 0, 
+       m1 = -rawM1; m2 = rawM2,
+       If[c2 < 0,
+          m1 = rawM1; m2 = -rawM2,
+          (* Default: negujeme druh\[UAcute] rovnicu *)
+          m1 = rawM1; m2 = -rawM2
+       ]
+    ]
+  ];
 
-  lcm = LCM[Abs[a1], Abs[a2]];
-  
-  m1 = lcm / Abs[a1];
-  If[a1 < 0, m1 = -m1];
-  
-  m2 = -lcm / Abs[a2];
-  If[a2 < 0, m2 = -m2]; 
-  
-  (* Zobrazenie n\[AAcute]sobenia - Style[..., "Text"] odstr\[AAcute]ni \[UAcute]vodzovky *)
+  (* Zobrazenie n\[AAcute]sobenia - s kontrolou pre '1' *)
   AppendTo[content, Grid[{
-    {eqTF[holdEq[a1 x + b1 y, c1]], Style["/ \[CenterDot] " <> ToString[m1], "Text", GrayLevel[0.25], Italic, FontSize -> 14]},
-    {eqTF[holdEq[a2 x + b2 y, c2]], Style["/ \[CenterDot] " <> ToString[m2], "Text", GrayLevel[0.25], Italic, FontSize -> 14]}
-  }, Alignment -> Left, Spacings -> {1, 0.5}]];
+    {eqTF[holdEq[a1*x + b1*y, c1]], multiplyNote[m1]},
+    {eqTF[holdEq[a2*x + b2*y, c2]], multiplyNote[m2]}
+  }, Alignment -> {{Left, Left}, Baseline}, Spacings -> {1, 0.5}]];
   
-  AppendTo[content, separator];
+  (* Priprava modifikovan\[YAcute]ch rovn\[IAcute]c *)
+  eq1Mod = m1 * (a1*x + b1*y);
+  eq2Mod = m2 * (a2*x + b2*y);
   
-  eq1Mod = holdEq[highlightTerm[m1*a1*x] + (m1*b1)*y, m1*c1];
-  eq2Mod = holdEq[highlightTerm[m2*a2*x] + (m2*b2)*y, m2*c2];
+  (* Identifik\[AAcute]cia koeficientov po \[UAcute]prave pre zv\[YAcute]raznenie *)
+  (* Mus\[IAcute]me manu\[AAcute]lne zostavi\[THacek] v\[YAcute]razy pre zobrazenie, aby sme vedeli \[CHacek]o zv\[YAcute]razni\[THacek] *)
   
-  AppendTo[content, Column[{eqTF[eq1Mod], eqTF[eq2Mod]}, Spacings -> 0.5, Alignment -> Left]];
-  AppendTo[content, "S\[CHacek]\[IAcute]tame upraven\[EAcute] rovnice. \[CapitalCHacek]leny s premennou " <> ToString[x] <> " sa vyru\[SHacek]ia."];
+  cXMod = m1*a1; cYMod = m1*b1;
+  term1 = If[choice == "X", orderedLHS[highlightTerm[cXMod*x], cYMod, y], orderedLHS[cXMod*x, cYMod, highlightTerm[y]]]; (* Y highlighted inside orderedLHS logic? No, orderedLHS handles numbers. We need raw terms. *)
+  
+  (* Uprav\[IAcute]me orderedLHS aby bralo priamo termy *)
+  (* Pre X elimin\[AAcute]ciu: *)
+  If[choice == "X",
+     eq1ModDisplay = holdEq[orderedLHS[highlightTerm[m1*a1*x], m1*b1, y], m1*c1];
+     eq2ModDisplay = holdEq[orderedLHS[highlightTerm[m2*a2*x], m2*b2, y], m2*c2];,
+     (* Pre Y elimin\[AAcute]ciu *)
+     (* Tu chceme poradie X (+/-) Y, ale Y je zv\[YAcute]raznen\[EAcute] *)
+     eq1ModDisplay = holdEq[orderedLHS[m1*a1*x, m1*b1, highlightTerm[y]], m1*c1];
+     eq2ModDisplay = holdEq[orderedLHS[m2*a2*x, m2*b2, highlightTerm[y]], m2*c2];
+  ];
+  
+  AppendTo[content, Column[{eqTF[eq1ModDisplay], eqTF[eq2ModDisplay]}, Spacings -> 0.5, Alignment -> Left]];
+  AppendTo[content, "S\[CHacek]\[IAcute]tame upraven\[EAcute] rovnice. \[CapitalCHacek]leny s premennou " <> ToString[targetVar] <> " sa vyru\[SHacek]ia."];
 
-  <|"content" -> content, "m1" -> m1, "m2" -> m2, "failed" -> False|>
+  <|"content" -> content, "m1" -> m1, "m2" -> m2, "EliminatedVariable" -> choice, "failed" -> False|>
 ];
 
 (* --- Kroky pre ONE --- *)
 stepsOne2[A_, b_, vars_] := Module[
   {data, content, m1, m2, a1, b1, c1, a2, b2, c2, x, y, 
-   sumRHS, coeffY, yVal, stepsY, stepsSub, valProduct, lhsSimple, op, rhsX, xVal},
+   sumRHS, sumCoeffX, sumCoeffY, calcVar, calcVal, otherVar, otherVal,
+   stepsY, stepsSub, valProduct, lhsSimple, op, rhsRem, elimVarStr,
+   explicitSubstLHS, calculatedSubstLHS, termRemAbs, 
+   substCoeff, substConst},
   
   x = vars[[1]]; y = vars[[2]];
   a1 = A[[1, 1]]; b1 = A[[1, 2]]; c1 = b[[1]];
+  a2 = A[[2, 1]]; b2 = A[[2, 2]]; c2 = b[[2]];
   
   data = eliminationStart[A, b, vars];
   If[data["failed"], Return[$Failed]];
   
   content = data["content"];
   m1 = data["m1"]; m2 = data["m2"];
-  b2 = A[[2, 2]]; c2 = b[[2]];
+  elimVarStr = data["EliminatedVariable"]; (* "X" alebo "Y" *)
 
   sumRHS = m1 c1 + m2 c2;
-  coeffY = m1 b1 + m2 b2;
+  sumCoeffX = m1 a1 + m2 a2;
+  sumCoeffY = m1 b1 + m2 b2;
   
-  (* S\[UAcute]\[CHacek]et po elimin\[AAcute]cii - pou\[ZHacek]itie \[CHacek]istej rovnice bez Row *)
-  AppendTo[content, eqTF[holdEq[0*x + coeffY*y, sumRHS]]];
-  
-  If[coeffY == 0, Return[$Failed]]; 
-
-  yVal = sumRHS / coeffY;
+  (* 1. Zobrazenie s\[CHacek]\[IAcute]tania a v\[YAcute]po\[CHacek]et prvej premennej *)
   stepsY = {};
   
-  If[coeffY < 0,
-    AppendTo[stepsY, eqWithNote[holdEq[coeffY y, sumRHS], "/ \[CenterDot] (-1)"]];
-    AppendTo[stepsY, eqWithNote[holdEq[-coeffY y, -sumRHS], "/ : " <> ToString[-coeffY]]];
-    ,
-    AppendTo[stepsY, eqWithNote[holdEq[coeffY y, sumRHS], "/ : " <> ToString[coeffY]]];
+  If[elimVarStr == "X",
+     (* Eliminovali sme X, ostalo Y *)
+     (* O\[CHacek]ak\[AAcute]vame sumCoeffX ~ 0 *)
+     AppendTo[content, eqTF[holdEq[0*x + sumCoeffY*y, sumRHS]]];
+     
+     If[sumCoeffY == 0, Return[$Failed]]; (* Nemalo by sa sta\[THacek] pri ONE solution *)
+     
+     calcVar = y;
+     calcVal = sumRHS / sumCoeffY;
+     otherVar = x;
+     
+     (* Kroky rie\[SHacek]enia pre Y *)
+     If[sumCoeffY < 0,
+       AppendTo[stepsY, eqWithNote[holdEq[sumCoeffY y, sumRHS], "/ \[CenterDot] (-1)"]];
+       AppendTo[stepsY, eqWithNote[holdEq[-sumCoeffY y, -sumRHS], "/ : " <> ToString[-sumCoeffY]]];
+       ,
+       AppendTo[stepsY, eqWithNote[holdEq[sumCoeffY y, sumRHS], "/ : " <> ToString[sumCoeffY]]];
+     ];
+     AppendTo[stepsY, eqTF[holdEq[y, calcVal]]];
+     ,
+     
+     (* Eliminovali sme Y, ostalo X *)
+     (* O\[CHacek]ak\[AAcute]vame sumCoeffY ~ 0 *)
+     AppendTo[content, eqTF[holdEq[sumCoeffX*x + 0*y, sumRHS]]];
+     
+     If[sumCoeffX == 0, Return[$Failed]];
+     
+     calcVar = x;
+     calcVal = sumRHS / sumCoeffX;
+     otherVar = y;
+     
+     (* Kroky rie\[SHacek]enia pre X *)
+     If[sumCoeffX < 0,
+       AppendTo[stepsY, eqWithNote[holdEq[sumCoeffX x, sumRHS], "/ \[CenterDot] (-1)"]];
+       AppendTo[stepsY, eqWithNote[holdEq[-sumCoeffX x, -sumRHS], "/ : " <> ToString[-sumCoeffX]]];
+       ,
+       AppendTo[stepsY, eqWithNote[holdEq[sumCoeffX x, sumRHS], "/ : " <> ToString[sumCoeffX]]];
+     ];
+     AppendTo[stepsY, eqTF[holdEq[x, calcVal]]];
   ];
   
-  AppendTo[stepsY, eqTF[holdEq[y, yVal]]];
   AppendTo[content, Column[stepsY, Alignment -> Left, Spacings -> 0.5]];
   
-  AppendTo[content, "Dosad\[IAcute]me vypo\[CHacek]\[IAcute]tan\[UAcute] hodnotu " <> ToString[y] <> " do prvej rovnice."];
+  (* 2. Substit\[UAcute]cia do prvej rovnice *)
+  AppendTo[content, "Dosad\[IAcute]me vypo\[CHacek]\[IAcute]tan\[UAcute] hodnotu " <> ToString[calcVar] <> " do prvej rovnice."];
   stepsSub = {};
   
-  AppendTo[stepsSub, eqWithNote[holdEq[a1 x + b1 y, c1], "/ " <> ToString[y] <> " = " <> ToString[yVal]]];
+  (* Rovnica 1: a1*x + b1*y = c1 *)
+  (* Ak sme vypo\[CHacek]\[IAcute]tali Y, dos\[AAcute]dzame za Y. Ak X, za X. *)
   
-  (* Dosadenie - vizu\[AAcute]lna substit\[UAcute]cia pomocou v\[YAcute]razu *)
-  AppendTo[stepsSub, eqTF[holdEq[a1*x + b1*(yVal), c1]]];
+  AppendTo[stepsSub, eqWithNote[holdEq[a1 x + b1 y, c1], "/ " <> ToString[calcVar] <> " = " <> ToString[calcVal]]];
   
-  valProduct = b1 * yVal;
-  lhsSimple = a1 x + valProduct; 
+  If[elimVarStr == "X",
+     (* Vypo\[CHacek]\[IAcute]tali sme Y, dos\[AAcute]dzame za Y, h\:013ead\[AAcute]me X *)
+     substCoeff = a1; (* Koef pri nezn\[AAcute]mej *)
+     substConst = b1; (* Koef pri zn\[AAcute]mej *)
+     termRemAbs = If[Abs[a1] == 1, x, Row[{Abs[a1], x}]];
+     
+     (* Explicitn\[EAcute] dosadenie: a1*x + b1*(yVal) = c1 *)
+     (* Chceme form\[AAcute]t:  CISLO +/- a1*x = c1 *)
+     
+     explicitSubstLHS = Row[{
+        substConst, "\[CenterDot]", If[calcVal < 0, Row[{"(", calcVal, ")"}], calcVal], 
+        If[substCoeff < 0, " - ", " + "],
+        termRemAbs
+     }];
+     
+     valProduct = substConst * calcVal;
+     calculatedSubstLHS = Row[{
+        valProduct,
+        If[substCoeff < 0, " - ", " + "],
+        termRemAbs
+     }];
+     ,
+     
+     (* Vypo\[CHacek]\[IAcute]tali sme X, dos\[AAcute]dzame za X, h\:013ead\[AAcute]me Y *)
+     substCoeff = b1; (* Koef pri nezn\[AAcute]mej (Y) *)
+     substConst = a1; (* Koef pri zn\[AAcute]mej (X) *)
+     termRemAbs = If[Abs[b1] == 1, y, Row[{Abs[b1], y}]];
+     
+     (* Explicitn\[EAcute] dosadenie: a1*(xVal) + b1*y = c1 *)
+     (* Form\[AAcute]t: CISLO +/- b1*y = c1 *)
+     
+     explicitSubstLHS = Row[{
+        substConst, "\[CenterDot]", If[calcVal < 0, Row[{"(", calcVal, ")"}], calcVal], 
+        If[substCoeff < 0, " - ", " + "],
+        termRemAbs
+     }];
+     
+     valProduct = substConst * calcVal;
+     calculatedSubstLHS = Row[{
+        valProduct,
+        If[substCoeff < 0, " - ", " + "],
+        termRemAbs
+     }];
+  ];
+  
+  AppendTo[stepsSub, eqTF[holdEq[explicitSubstLHS, c1]]];
+  
   op = If[valProduct > 0, "/ - " <> ToString[valProduct], "/ + " <> ToString[Abs[valProduct]]];
-  AppendTo[stepsSub, eqWithNote[holdEq[lhsSimple, c1], op]];
+  AppendTo[stepsSub, eqWithNote[holdEq[calculatedSubstLHS, c1], op]];
   
-  rhsX = c1 - valProduct;
-  If[a1 == 0, Return[$Failed]]; 
-  AppendTo[stepsSub, eqWithNote[holdEq[a1 x, rhsX], "/ : " <> ToString[a1]]];
+  rhsRem = c1 - valProduct;
   
-  xVal = rhsX / a1;
-  AppendTo[stepsSub, eqTF[holdEq[x, xVal]]];
+  (* Rie\[SHacek]enie zvy\[SHacek]nej premennej *)
+  If[substCoeff == 0, Return[$Failed]];
+  
+  If[Abs[substCoeff] =!= 1,
+     (* Zobraz\[IAcute]me koeficient spr\[AAcute]vne: ak je nezn\[AAcute]ma X, je to 'a1 x', ak Y, tak 'b1 y' *)
+     termUnknown = If[elimVarStr == "X", a1 x, b1 y]; 
+     AppendTo[stepsSub, eqWithNote[holdEq[termUnknown, rhsRem], "/ : " <> ToString[substCoeff]]];
+  ];
+  If[substCoeff == -1,
+     termUnknown = If[elimVarStr == "X", -x, -y];
+     AppendTo[stepsSub, eqWithNote[holdEq[termUnknown, rhsRem], "/ : (-1)"]];
+  ];
+  
+  otherVal = rhsRem / substCoeff;
+  AppendTo[stepsSub, eqTF[holdEq[otherVar, otherVal]]];
   
   AppendTo[content, Column[stepsSub, Alignment -> Left, Spacings -> 0.5]];
   
-  <|"Content" -> content, "Solution" -> {xVal, yVal}|>
+  (* Ulo\[ZHacek]enie v\[YAcute]sledku v spr\[AAcute]vnom porad\[IAcute] {x, y} *)
+  solPair = If[elimVarStr == "X", {otherVal, calcVal}, {calcVal, otherVal}];
+  
+  <|"Content" -> content, "Solution" -> solPair|>
 ];
 
 (* --- Kroky pre NONE --- *)
@@ -273,8 +455,8 @@ stepsNone2[A_, b_, vars_] := Module[
   c1 = b[[1]]; c2 = b[[2]];
 
   sumRHS = m1 c1 + m2 c2;
-  coeffY = m1 b1 + m2 b2; (* Malo by by\[THacek] 0 *)
   
+  (* Pri NONE je jedno \[CHacek]o sme eliminovali, obe strany bud\[UAcute] 0 alebo kon\[SHacek]tanta *)
   (* Vizu\[AAcute]lne: 0x + 0y = sumRHS *)
   AppendTo[content, eqTF[holdEq[0*x + 0*y, sumRHS]]];
   
@@ -304,7 +486,6 @@ stepsInfinite2[A_, b_, vars_] := Module[
   c1 = b[[1]]; c2 = b[[2]];
 
   sumRHS = m1 c1 + m2 c2; (* 0 *)
-  coeffY = m1 b1 + m2 b2; (* 0 *)
   
   (* Vizu\[AAcute]lne: 0x + 0y = 0 *)
   AppendTo[content, eqTF[holdEq[0*x + 0*y, sumRHS]]];
@@ -314,16 +495,17 @@ stepsInfinite2[A_, b_, vars_] := Module[
   AppendTo[content, "Dostali sme pravdiv\[UAcute] rovnos\[THacek] 0 = 0. S\[UAcute]stava m\[AAcute] nekone\[CHacek]ne ve\:013ea rie\[SHacek]en\[IAcute]."];
   AppendTo[content, "Vyjadrenie rie\[SHacek]enia pomocou parametra p:"];
   
-  solSet = Row[{
-    "(", 
-    If[a1 == 1, 
-       Row[{c1 - b1*y}], 
-       FractionBox[ToBoxes[HoldForm[c1 - b1*y]], ToBoxes[a1]] // DisplayForm
-    ], 
-    "; ", y, ")"
-  }];
-  
-  AppendTo[content, solSet];
+AppendTo[
+  content,
+  Column[
+    {
+      eqTF[holdEq[x, (c1 - b1*y)/a1]],
+      eqTF[holdEq[y, y]]
+    },
+    Alignment -> Left,
+    Spacings -> 0.5
+  ]
+];
 
   <|"Content" -> content, "Solution" -> "INFINITE"|>
 ];
@@ -535,8 +717,8 @@ Gen01[diff_String, mode_String, opts : OptionsPattern[]] :=
   Null
 ];
 
-CellSection[str_] := CellPrint[Cell[str, "Section"]];
-CellSubsection[str_] := CellPrint[Cell[str, "Subsection"]];
+CellSection[str_String] := CellPrintStyle[str, "Section"];
+CellSubsection[str_String] := CellPrintStyle[str, "Subsection"];
 
 End[];
 EndPackage[];
