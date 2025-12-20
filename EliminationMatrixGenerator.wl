@@ -114,7 +114,7 @@ pickBestElimPair[rowIdx_List, elimCol_Integer, A_] := Module[
   Uses Rank(A) vs Rank(Ab) theorem and NullSpace analysis.
 *)
 systemIntersection3[A_, b_, vars_] := Module[
-  {rankA, rankAb, sol, ns, x0, v, v2, x, y, z},
+  {rankA, rankAb, sol, ns, x0, v, v2, x, y, z, inst},
 
   {x, y, z} = vars;
 
@@ -130,13 +130,12 @@ systemIntersection3[A_, b_, vars_] := Module[
 
   ns = NullSpace[A];
 
-  sol = Quiet @ Check[
-    First @ (vars /. Solve[A.vars == b, vars, Reals]),
-    $Failed
-  ];
-  If[sol === $Failed, Return[<|"Type" -> "INFINITE"|>]];
+  (* Use FindInstance to get a guaranteed numeric point on the solution space *)
+  inst = Quiet @ FindInstance[A.vars == b, vars, Reals, 1];
 
-  x0 = ({x, y, z} /. sol);
+  If[inst === {}, Return[<|"Type" -> "NONE"|>]]; (* Should be covered by rank check, but safe fallback *)
+
+  x0 = {x, y, z} /. First[inst];
 
   If[Length[ns] == 1,
     v = First[ns];
@@ -470,6 +469,13 @@ lineLegendText[a_, b_, c_] := Module[{m, q, fmt, mStr},
     mStr = Which[m === 1, "", m === -1, "-", True, fmt[m]];
     "y = " <> mStr <> "x" <> Which[q === 0, "", q > 0, " + " <> fmt[q], True, " - " <> fmt[Abs[q]]]
   ]
+];
+
+(* Generates legend expression for a plane ax+by+cz=d *)
+planeLegendText[row_, rhs_, vars_] := Module[
+  {lhsExpr},
+  lhsExpr = formatLHS3[row[[1]], row[[2]], row[[3]], ""];
+  Row[{lhsExpr, " = ", TraditionalForm[rhs]}]
 ];
 
 multiplyNoteString[m_] := Which[
@@ -1462,7 +1468,7 @@ visualize2[A_, b_, vars_, sol_] := Module[
 (* 3D Visualization (3x3) - Non-interactive, fast rendering using ContourPlot3D for stability *)
 visualize3[A_, b_, vars_, sol_] := Module[
   {x, y, z, range = 10, xmin, xmax, ymin, ymax, zmin, zmax,
-    n1, n2, n3, d1, d2, d3, inter, subtitle, planes, mark},
+    n1, n2, n3, d1, d2, d3, inter, subtitle, planes, mark, legendLabels},
 
   {x, y, z} = vars;
   {xmin, xmax} = {-range, range};
@@ -1489,39 +1495,59 @@ visualize3[A_, b_, vars_, sol_] := Module[
     {n1.{x, y, z} == d1, n2.{x, y, z} == d2, n3.{x, y, z} == d3},
     {x, xmin, xmax}, {y, ymin, ymax}, {z, zmin, zmax},
     Mesh -> None,
-    PlotPoints -> 22,
-    MaxRecursion -> 0,
+    PlotPoints -> 25,
     PerformanceGoal -> "Speed",
     ContourStyle -> {
-      Directive[Cyan, Opacity[0.45]],
-      Directive[Magenta, Opacity[0.45]],
-      Directive[Yellow, Opacity[0.45]]
+      Directive[Cyan, Opacity[0.4]],
+      Directive[Magenta, Opacity[0.4]],
+      Directive[Yellow, Opacity[0.4]]
     },
     BoundaryStyle -> None
   ];
 
-  (* Highlight intersection - point only (for ONE) *)
-  (* If line highlight needed for LINE type, it can be added here. Currently minimal implementation. *)
+  (* Highlight intersection based on type *)
   mark = Graphics3D @ Switch[inter["Type"],
     "POINT",
-    {Black, PointSize[0.03], Point[N@inter["Point"]], Black, Sphere[N@inter["Point"], 0.35]},
+    {
+      Black, PointSize[0.03], Point[N@inter["Point"]],
+      Black, Sphere[N@inter["Point"], 0.15]
+    },
+    "LINE",
+    Module[{p0, v},
+      p0 = N@inter["Point"];
+      v  = N@inter["Dir"];
+      (* Draw a tube along the intersection line *)
+      {
+        Black, Specularity[White, 20],
+        Tube[{p0 - 20 v, p0 + 20 v}, 0.1]
+      }
+    ],
+    (* For NONE and PLANE, no specific point/line highlight *)
     _, {}
   ];
 
-  CellBox @ Show[
-    planes,
-    mark,
-    PlotRange -> {{xmin, xmax}, {ymin, ymax}, {zmin, zmax}},
-    BoxRatios -> {1, 1, 1},
-    Axes -> True,
-    AxesLabel -> {"x", "y", "z"},
-    SphericalRegion -> True,
-    ImageSize -> 400,
-    Background -> White,
-    Lighting -> "Neutral",
-    ViewAngle -> 35 Degree,
-    ViewPoint -> {2.2, -2.0, 1.4},
-    Method -> {"MouseInteraction" -> {"Rotate" -> False, "Pan" -> False, "Zoom" -> False}}
+  (* Construct legend labels using 3D equation formatting *)
+  legendLabels = Table[planeLegendText[A[[i]], b[[i]], vars], {i, 1, 3}];
+
+  CellBox @ Legended[
+    Show[
+      planes,
+      mark,
+      PlotRange -> {{xmin, xmax}, {ymin, ymax}, {zmin, zmax}},
+      BoxRatios -> {1, 1, 1},
+      Axes -> True,
+      AxesLabel -> {"x", "y", "z"},
+      SphericalRegion -> True,
+      ImageSize -> 400,
+      Lighting -> "Neutral",
+      ViewAngle -> 35 Degree,
+      ViewPoint -> {2.2, -2.0, 1.4},
+      Method -> {"MouseInteraction" -> {"Rotate" -> False, "Pan" -> False, "Zoom" -> False}}
+    ],
+    Placed[
+      SwatchLegend[{Cyan, Magenta, Yellow}, legendLabels, LegendFunction -> "Frame"],
+      After
+    ]
   ];
 ];
 
@@ -1601,8 +1627,7 @@ Gen01[diff_String, mode_String, opts : OptionsPattern[]] :=
 
       Switch[sol,
         "NONE",
-        CellTextU["Sústava nemá riešenie (pri sčítaní vznikol spor)."];
-        Null,
+        CellTextU["Sústava nemá riešenie (pri sčítaní vznikol spor)."],
 
         "INFINITE",
         CellTextU["Sústava má nekonečne veľa riešení. Riešenia zapíšeme pomocou parametra."];
@@ -1658,8 +1683,7 @@ Gen01[diff_String, mode_String, opts : OptionsPattern[]] :=
           ];
         ];
 
-        If[dim == 3, printInfiniteResult3[A, b, vars]];
-        ,
+        If[dim == 3, printInfiniteResult3[A, b, vars]];,
 
         _,
         CellPrint @ Cell[
@@ -1672,13 +1696,13 @@ Gen01[diff_String, mode_String, opts : OptionsPattern[]] :=
           ],
           "Text", ShowStringCharacters -> False
         ];
-
-        If[OptionValue[Visualization],
-          If[dim == 2, visualize2[A, b, vars, sol]];
-          If[dim == 3, visualize3[A, b, vars, sol]];
-        ];
-        Null
       ];
+
+      If[OptionValue[Visualization],
+        If[dim == 2, visualize2[A, b, vars, sol]];
+        If[dim == 3, visualize3[A, b, vars, sol]];
+      ];
+      Null
     ];
 End[];
 EndPackage[];
