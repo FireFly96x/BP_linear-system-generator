@@ -7,15 +7,10 @@
   Updated: Dynamic step numbering added.
 *)
 
-BeginPackage["MojeGeneratory`EliminationMatrixGenerator`",
-  {"MojeGeneratory`Common`"}
-];
+BeginPackage["MojeGeneratory`EliminationMatrixGenerator`", "MojeGeneratory`Common`"];
 
 $CharacterEncoding = "UTF-8";
-
 Internal`$ContextMarks = False;
-
-(* Public interface *)
 
 Gen01::usage = "Gen01[diff, mode, opts] vygeneruje príklad riešenia sústavy lineárnych rovníc eliminačnou metódou (sčítaním rovníc).
 
@@ -23,7 +18,6 @@ diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)
 mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"
 opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
 
-(* Error messages *)
 Gen01::baddiff  = "Neplatná obtiažnosť `1`. Použi \"EASY\"|\"MEDIUM\"|\"HARD\".";
 Gen01::badmode  = "Neplatný režim `1`. Použi \"TASK\"|\"TASK_RESULT\"|\"TASK_STEPS_RESULT\".";
 Gen01::fail     = "Nepodarilo sa vygenerovať vhodný príklad.";
@@ -32,92 +26,94 @@ Options[Gen01] = {SolutionType -> Automatic, Visualization -> False};
 
 Begin["`Private`"];
 
-(* Step numbering for visualization *)
-stepsCounter = 0;
-stepHeader[text_String] := (stepsCounter++; Style[ToString[stepsCounter] <> ". " <> text, Bold]);
-
-(* --- 1. FORMATTING & HELPERS --- *)
-
+(* ~-~-~ COMMON HELPERS ~-~-~ *)
 CellSection[str_] := CellPrintStyle[str, "Section"];
 CellSubsection[str_] := CellPrintStyle[str, "Subsection"];
 CellTextU[str_] := CellPrint @ Cell[str, "Text", ShowStringCharacters -> False];
 CellTextExpr[expr_] := CellPrint @ Cell[BoxData @ ToBoxes[expr, StandardForm], "Text", ShowStringCharacters -> False];
 CellBox[expr_] := CellPrint @ Cell[BoxData @ ToBoxes[expr, TraditionalForm], "DisplayFormula", ShowStringCharacters -> False];
-
-renderItem[item_] := Which[
-  StringQ[item], CellTextU[item],
-  MatchQ[item, Style[_String, ___]], CellPrint @ Cell[BoxData @ ToBoxes[item, StandardForm], "Text", ShowStringCharacters -> False],
-  Head[item] === Graphics || Head[item] === Graphics3D, CellPrint @ Cell[BoxData @ ToBoxes[item, StandardForm], "Graphics"],
-  True, CellBox[item]
-];
-
 highlightTerm[term_] := Style[term, Bold, RGBColor[0.8, 0, 0]];
 highlightGrid[grid_] := Style[grid, Background -> RGBColor[0.95, 0.95, 0.95], Frame -> True, FrameStyle -> None, FrameMargins -> 5];
+stepHeader[text_String] := (stepsCounter++; Style[ToString[stepsCounter] <> ". " <> text, Bold]);
+tf[val_] := TraditionalForm[Together[val]];
 
-(* Grid Formatters *)
-alignedEquations[data_] := Module[{eqSign = Style["=", 16], vbar = Style["|", GrayLevel[.25]], stepRow},
-  stepRow[{lhs_, rhs_, note_}] := {lhs, eqSign, rhs, If[note === "" || note === None, "", Style[Row[{vbar, Spacer[4], note}], GrayLevel[.6], FontSize -> 13]]};
-  stepRow[{lhs_, rhs_}] := stepRow[{lhs, rhs, ""}];
-  Grid[stepRow /@ data, Alignment -> {{Right, Center, Left, Left}}, Spacings -> {0.5, 0.6}, BaseStyle -> {FontSize -> 14}]
-];
+(*funkcie pre append*)
+add[content_, item_] := Append[content, item];
+addAll[content_, items_List] := Join[content, items];
+addStep[content_, title_] := add[content, stepHeader[title]];
+addText[content_, s_String] := add[content, s];
+addEq[content_, eq_] := add[content, alignedEquations[eq]];
 
-alignedEquationsGrouped[data_, breaks_List : {2}, gap_ : 1.25] := Module[{baseGap = 0.6, rowGaps, n = Length[data]},
-  rowGaps = Join[{baseGap}, Table[If[MemberQ[breaks, i], gap, baseGap], {i, 1, Max[0, n - 1]}], {baseGap}];
-  Grid[
-    (Function[{row}, {row[[1]], Style["=", 16], row[[2]], If[Length[row] > 2 && row[[3]] =!= "", Style[Row[{Style["|", GrayLevel[.25]], Spacer[4], row[[3]]}], GrayLevel[.6], FontSize -> 13], ""]}] /@ data),
-    Alignment -> {{Right, Center, Left, Left}}, Spacings -> {0.5, rowGaps}, BaseStyle -> {FontSize -> 14}
+
+renderItem[item_] := Which[ StringQ[item], CellTextU[item],
+                            MatchQ[item, Style[_String, ___]], CellPrint @ Cell[BoxData @ ToBoxes[item, StandardForm], "Text", ShowStringCharacters -> False],
+                            Head[item] === Graphics || Head[item] === Graphics3D, CellPrint @ Cell[BoxData @ ToBoxes[item, StandardForm], "Graphics"],
+                            True, CellBox[item]];
+
+(* zarovnaný grid rovníc *)
+alignedEquations[data_, breaks_List:{}, gap_:1.25] := Module[
+  {eq = Style["=",16], bar = Style["|",GrayLevel[.25]], base = 0.6, n, gaps},
+  n = Length[data];
+  gaps = If[breaks === {}, base, Join[{base}, Table[If[MemberQ[breaks,i], gap, base], {i,1,n-1}], {base}]];
+
+  Grid[ (If[Length[#]==2, Append[#,""], #] & /@ data) /.
+        {lhs_,rhs_,note_} :> { lhs, eq, rhs,
+          If[note===""||note===None, "",
+            Style[Row[{bar,Spacer[4],note}], GrayLevel[.6], FontSize->13]
+          ]
+        },
+    Alignment -> {{Right,Center,Left,Left}}, Spacings -> {0.5, gaps}, BaseStyle -> {FontSize->14}
   ]
 ];
 
-(* LHS Formatting *)
-formatLHS[cx_, cy_, choice_, vars2_] := Module[{x, y, tX, tY, sign},
-  {x, y} = vars2;
-  tX = If[choice == "X", highlightTerm[cx x], cx x];
-  If[cy == 0, TraditionalForm[tX],
-    sign = If[cy < 0, " - ", " + "];
-    tY = If[choice == "Y", highlightTerm[If[Abs[cy] == 1, y, Abs[cy] y]], If[Abs[cy] == 1, y, Abs[cy] y]];
-    Row[{TraditionalForm[tX], sign, TraditionalForm[tY]}]
-  ]
+(* formát ľavej strany rovnice *)
+formatLHSN[coeffs_List, choice_, vars_List] := Module[{terms = {}, first = True, choiceVar, addTerm},
+
+  choiceVar = Which[
+    MemberQ[vars, choice], choice,
+    choice === "X" && Length[vars] >= 1, vars[[1]],
+    choice === "Y" && Length[vars] >= 2, vars[[2]],
+    choice === "Z" && Length[vars] >= 3, vars[[3]],
+    True, None
+  ];
+
+  addTerm[c_, v_] := If[c =!= 0,
+    Module[{sign, t},
+      sign = If[first, If[c < 0, "-", ""], If[c < 0, " - ", " + "]];
+      t = If[Abs[c] === 1, v, Abs[c] v];
+      If[v === choiceVar, t = highlightTerm[t]];
+      If[sign =!= "", AppendTo[terms, sign]];
+      AppendTo[terms, TraditionalForm[t]];
+      first = False;
+    ]
+  ];
+
+  MapThread[addTerm, {coeffs, vars}];
+  If[terms === {}, TraditionalForm[0], Row[terms]]
 ];
 
-formatLHS3[cx_, cy_, cz_, choice_, vars3_:{x,y,z}] := Module[{terms = {}, addTerm, x, y, z},
-  {x, y, z} = vars3;
-  addTerm[c_, v_, ch_] := If[c != 0,
-    Module[{t, s},
-      s = If[Length[terms] > 0, If[c < 0, " - ", " + "], If[c < 0, "-", ""]];
-      t = If[Abs[c] == 1, v, Abs[c] v];
-      If[ch == ToString[v] || (ch == "X" && v===x) || (ch == "Y" && v===y) || (ch == "Z" && v===z), t = highlightTerm[t]];
-      AppendTo[terms, s]; AppendTo[terms, TraditionalForm[t]];
-    ]];
-  addTerm[cx, x, choice]; addTerm[cy, y, choice]; addTerm[cz, z, choice];
-  If[Length[terms] == 0, TraditionalForm[0], Row[terms]]
+(* zátvorky pre zápornú hodnotu *)
+wrapNegValue[val_] := If[NumericQ[val] && val < 0,
+  Row[{"(", tf[val], ")"}],
+  tf[val]
 ];
 
-(* Notes and Substitutions *)
+(* poznámka k prenásobeniu rovnice *)
 multiplyNote[m_] := Which[
   m == 1, "",
-  m < 0, Row[{"\[CenterDot] (", m, ")"}],
-  True,  Row[{"\[CenterDot] ", m}]
+  True, Row[{"\[CenterDot] ", wrapNegValue[m]}]
 ];
 
-multiplyNoteRow[m_] := Module[{mBox},
-  mBox = If[m < 0, Row[{"(", m, ")"}], m];
-  Row[{"\[CenterDot] ", mBox}]
-];
-
+(* note k substitúcii premenných *)
 substNote[solMap_, remVars_, row_, vars_] := Module[{usedVars},
   usedVars = Select[remVars, row[[First@First@Position[vars, #]]] =!= 0 &];
   If[usedVars === {}, "", Row[Riffle[(Row[{#, " \[Rule] ", tf[solMap[#]]}] & /@ usedVars), ", "]]]
 ];
 
-tf[val_] := TraditionalForm[Together[val]];
-
-parenIfNeg[val_] := If[NumericQ[val] && val < 0,
-  Row[{"(", tf[val], ")"}],
-  tf[val]
-];
-
+(* text znamienka medzi členmi *)
 signStr[c_] := If[c < 0, " - ", " + "];
+
+(* --- Bigger helpers for correctness check --- *)
 
 checkTermsRow[row_, sol_] := Module[{n = Length[row], first = True, out = {}},
   Do[
@@ -125,19 +121,19 @@ checkTermsRow[row_, sol_] := Module[{n = Length[row], first = True, out = {}},
     If[first,
       out = Join[out,
         If[row[[j]] < 0,
-          {"-", TraditionalForm[Abs[row[[j]]]], "\[CenterDot]", parenIfNeg[sol[[j]]]},
-          {TraditionalForm[row[[j]]], "\[CenterDot]", parenIfNeg[sol[[j]]]}
+          {"-", TraditionalForm[Abs[row[[j]]]], "\[CenterDot]", wrapNegValue[sol[[j]]]},
+          {TraditionalForm[row[[j]]], "\[CenterDot]", wrapNegValue[sol[[j]]]}
         ]
       ];
       first = False;,
-      out = Join[out, {signStr[row[[j]]], TraditionalForm[Abs[row[[j]]]], "\[CenterDot]", parenIfNeg[sol[[j]]]}];
+      out = Join[out, {signStr[row[[j]]], TraditionalForm[Abs[row[[j]]]], "\[CenterDot]", wrapNegValue[sol[[j]]]}];
     ];
     , {j, 1, n}];
   If[out === {}, TraditionalForm[0], Row[out]]
 ];
 
 appendCorrectnessCheck[content_, A_, b_, vars_, sol_] := Module[
-  {c = content, n = Length[vars], solN, row, idx, prods, lhs, prodRow},
+  {c = content, n = Length[vars], solN, row, lhs, prodRow},
 
   solN = Together /@ sol;
 
@@ -170,11 +166,21 @@ appendCorrectnessCheck[content_, A_, b_, vars_, sol_] := Module[
   c
 ];
 
-coeffTimesValue[coeff_, val_] := Which[coeff === 0, 0, coeff === 1, parenIfNeg[val], coeff === -1, Row[{"-", parenIfNeg[val]}], True, Row[{coeff, " \[CenterDot] ", parenIfNeg[val]}]];
+coeffTimesValue[coeff_, val_] := Which[coeff === 0, 0, coeff === 1, wrapNegValue[val], coeff === -1, Row[{"-", wrapNegValue[val]}], True, Row[{coeff, " \[CenterDot] ", wrapNegValue[val]}]];
 
-(* Substitution LHS formatters *)
-formatSubstLHS3Generic[row_, vars_, solMap_, unknownVar_, evalMode_] := Module[{terms = {}, first = True, addTerm},
-  addTerm[content_, sign_] := (AppendTo[terms, If[first, If[sign === -1, Row[{"-", content}], content], Row[{If[sign === -1, " - ", " + "], content}]]]; first = False;);
+(*  LHS formatter pre dosadzovanie *)
+formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_:False] := Module[{terms = {}, first = True, addTerm},
+
+  addTerm[content_, sign_] := (
+    AppendTo[
+      terms,
+      If[first,
+        If[sign === -1, Row[{"-", content}], content],
+        Row[{If[sign === -1, " - ", " + "], content}]
+      ]
+    ];
+    first = False;
+  );
 
   Do[
     With[{c = row[[i]], v = vars[[i]]},
@@ -183,36 +189,41 @@ formatSubstLHS3Generic[row_, vars_, solMap_, unknownVar_, evalMode_] := Module[{
           addTerm[TraditionalForm[If[Abs[c] === 1, v, Abs[c] v]], Sign[c]],
           If[evalMode,
             With[{prod = Together[c * solMap[v]]},
-              If[!PossibleZeroQ[prod], addTerm[TraditionalForm[Abs[prod]], Sign[prod]]]],
+              If[!PossibleZeroQ[prod], addTerm[TraditionalForm[Abs[prod]], Sign[prod]]]
+            ],
             addTerm[coeffTimesValue[Abs[c], solMap[v]], Sign[c]]
           ]
         ]
       ]
-    ], {i, 1, Length[vars]}
+    ],
+    {i, 1, Length[vars]}
   ];
-  If[Length[terms] == 0, TraditionalForm[0], Row[terms]]
+
+  If[terms === {}, TraditionalForm[0], Row[terms]]
 ];
-
-formatSubstLHS3[row_, vars_, solMap_, uVar_] := formatSubstLHS3Generic[row, vars, solMap, uVar, False];
-formatSubstLHS3Eval[row_, vars_, solMap_, uVar_] := formatSubstLHS3Generic[row, vars, solMap, uVar, True];
-
 
 (* --- 2. GENERATION LOGIC --- *)
 
-coeffRangeByDiff["EASY"] := 5;
-coeffRangeByDiff[_] := 5;
-boundByDiff["EASY"] := 60;
-boundByDiff["HARD"] := 180;
-boundByDiff[_] := 90;
+$diffConfig = <|
+  "EASY" -> <|"CoeffRange" -> 5, "Bound" -> 60|>,
+  "MEDIUM" -> <|"CoeffRange" -> 5, "Bound" -> 90|>,
+  "HARD" -> <|"CoeffRange" -> 5, "Bound" -> 180|>
+|>;
 
-numbersNiceQ[A_, b_, diff_] := Max[Abs @ Join[Flatten[A], Flatten[b]]] <= boundByDiff[diff];
+diffConfig[diff_] := Lookup[$diffConfig, diff, $diffConfig["MEDIUM"]];
+
+coeffRangeByDiff[diff_] := diffConfig[diff]["CoeffRange"];
+boundByDiff[diff_] := diffConfig[diff]["Bound"];
+
+
+numbersNiceQ[A_, b_, diff_] := Max[Abs @ Join[Flatten[A], Flatten[b]]] <= Lookup[$diffConfig, diff, $diffConfig["MEDIUM"]]["Bound"];
 
 generateLinearSystem[dim_, diff_, solType_ : "ONE"] := Module[
   {r, nzPool, pickNZ, makeRow2NoZero, makeRow3NoZero, targetZeroCount, zeroRow, zeroCol, makeRow3PlannedZero, makeRow,
     zerosOkQ, fullRankQ, niceOkQ, attemptLimit, A, b, x0, contradiction, k, k1, k2, c1, c2, c3, vars, data, okQ,
     r1, r2, r3},
 
-  r = coeffRangeByDiff[diff];
+  r = Lookup[$diffConfig, diff, $diffConfig["MEDIUM"]]["CoeffRange"];
 
   (* nenulové koeficienty *)
   nzPool = Join[-Range[r, 1], Range[1, r]];
@@ -378,8 +389,7 @@ makeHardDisplayFromStandard[data_Association, vars_] := Module[
     AppendTo[leftMultAll, lMult];
     AppendTo[rightMultAll, rMult];
 
-    AppendTo[eqDisp, {termsToRow[lMult], termsToRow[rMult], ""}];
-    , {i, 1, n}
+    AppendTo[eqDisp, {termsToRow[lMult], termsToRow[rMult], ""}];, {i, 1, n}
   ];
 
   Join[
@@ -469,8 +479,7 @@ hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[
       rowsStd[[i]] = rowStd;
       rhsStdAll[[i]] = rhsStd;
 
-      {termsToRow[lMult], termsToRow[rMult], addNote}
-      , {i, 1, 3}
+      {termsToRow[lMult], termsToRow[rMult], addNote}, {i, 1, 3}
     ]
   ];
 
@@ -478,7 +487,7 @@ hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[
 
   AppendTo[content,
     alignedEquations@Table[
-      {formatLHS3[rowsStd[[i, 1]], rowsStd[[i, 2]], rowsStd[[i, 3]], "", vars], rhsStdAll[[i]], ""},
+      {formatLHSN[rowsStd[[i]], "", vars], rhsStdAll[[i]], ""},
       {i, 1, 3}
     ]
   ];
@@ -502,7 +511,7 @@ hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[
 
         AppendTo[content,
           alignedEquations[{
-            {formatLHS3[rowsFinal[[i, 1]], rowsFinal[[i, 2]], rowsFinal[[i, 3]], "", vars], rhsFinal[[i]], ": " <> ToString[gcds[[i]]]}
+            {formatLHSN[rowsFinal[[i]], "", vars], rhsFinal[[i]], ": " <> ToString[gcds[[i]]]}
           }]
         ];
 
@@ -516,7 +525,7 @@ hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[
 
     AppendTo[content,
       alignedEquations@Table[
-        {formatLHS3[rowsFinal[[i, 1]], rowsFinal[[i, 2]], rowsFinal[[i, 3]], "", vars], rhsFinal[[i]], ""},
+        {formatLHSN[rowsFinal[[i]], "", vars], rhsFinal[[i]], ""},
         {i, 1, 3}
       ]
     ];
@@ -561,36 +570,35 @@ eliminationStart2D[A_, b_, vars_] := Module[
   ];
 
   rows1 = {
-    {formatLHS[A[[1,1]], A[[1,2]], choice, vars], b[[1]], multiplyNote[m1]},
-    {formatLHS[A[[2,1]], A[[2,2]], choice, vars], b[[2]], multiplyNote[m2]}
+    {formatLHSN[A[[1]], choice, vars], b[[1]], multiplyNote[m1]},
+    {formatLHSN[A[[2]], choice, vars], b[[2]], multiplyNote[m2]}
   };
 
   rows2 = {
-    {formatLHS[m1 A[[1,1]], m1 A[[1,2]], "", vars], m1 b[[1]], ""},
-    {formatLHS[m2 A[[2,1]], m2 A[[2,2]], "", vars], m2 b[[2]], ""}
+    {formatLHSN[m1 A[[1]], "", vars], m1 b[[1]], ""},
+    {formatLHSN[m2 A[[2]], "", vars], m2 b[[2]], ""}
   };
 
   If[needsMult,
-    AppendTo[content, alignedEquationsGrouped[Join[rows1, rows2], {2}, 1]],
+    AppendTo[content, alignedEquations[Join[rows1, rows2], {2}, 1]],
     AppendTo[content, alignedEquations[{
-      {formatLHS[A[[1,1]], A[[1,2]], choice, vars], b[[1]], ""},
-      {formatLHS[A[[2,1]], A[[2,2]], choice, vars], b[[2]], ""}
+      {formatLHSN[A[[1]], choice, vars], b[[1]], ""},
+      {formatLHSN[A[[2]], choice, vars], b[[2]], ""}
     }]]
   ];
 
   <|"content" -> content, "m1" -> m1, "m2" -> m2, "EliminatedVariable" -> choice, "A_mod" -> {m1 A[[1]], m2 A[[2]]}, "b_mod" -> {m1 b[[1]], m2 b[[2]]}|>
 ];
 
-renderAddition2D[rowMod_, rhsMod_, vars_] := Module[{signSep},
-  signSep[v_] := If[v < 0, " - ", " + "];
-
+renderAddition2D[rowMod_, rhsMod_, vars_] := Module[{},
   alignedEquations[{{
     Row[{
-      TraditionalForm[rowMod[[1,1]] vars[[1]]], signSep[rowMod[[2,1]]], TraditionalForm[Abs[rowMod[[2,1]]] vars[[1]]],
-      signSep[rowMod[[1,2]]], TraditionalForm[Abs[rowMod[[1,2]]] vars[[2]]],
-      signSep[rowMod[[2,2]]], TraditionalForm[Abs[rowMod[[2,2]]] vars[[2]]]
+      TraditionalForm[rowMod[[1,1]] vars[[1]]],
+      signStr[rowMod[[2,1]]], TraditionalForm[Abs[rowMod[[2,1]]] vars[[1]]],
+      signStr[rowMod[[1,2]]], TraditionalForm[Abs[rowMod[[1,2]]] vars[[2]]],
+      signStr[rowMod[[2,2]]], TraditionalForm[Abs[rowMod[[2,2]]] vars[[2]]]
     }],
-    Row[{rhsMod[[1]], signSep[rhsMod[[2]]], Abs[rhsMod[[2]]]}],
+    Row[{rhsMod[[1]], signStr[rhsMod[[2]]], Abs[rhsMod[[2]]]}],
     ""
   }}]
 ];
@@ -640,14 +648,12 @@ stepsOne2[A_, b_, vars_] := Module[
   rowOrig = A[[1]]; rhsOrig = b[[1]];
   stepsSub = {};
   AppendTo[stepsSub, {rowOrig[[1]] vars[[1]] + rowOrig[[2]] vars[[2]], rhsOrig, Row[{keepVar, " \[Rule] ", tf[valKeep]}]}];
-
-  (* vizualizácia dosadenia *)
-  AppendTo[stepsSub, {formatSubstLHS3Generic[rowOrig, vars, <|keepVar->valKeep|>, elimVar, False], rhsOrig, ""}];
+  AppendTo[stepsSub, {formatSubstLHS[rowOrig, vars, <|keepVar->valKeep|>, elimVar, False], rhsOrig, ""}];
 
   valProd = rowOrig[[keepIdx]] * valKeep;
   Module[{noteShift},
     noteShift = Which[PossibleZeroQ[valProd], "", TrueQ[valProd > 0], Row[{"- ", TraditionalForm[valProd]}], True, Row[{"+ ", TraditionalForm[Abs[valProd]]}]];
-    AppendTo[stepsSub, {formatSubstLHS3Generic[rowOrig, vars, <|keepVar->valKeep|>, elimVar, True], rhsOrig, noteShift}];
+    AppendTo[stepsSub, {formatSubstLHS[rowOrig, vars, <|keepVar->valKeep|>, elimVar, True], rhsOrig, noteShift}];
   ];
 
   rhsRem = rhsOrig - valProd;
@@ -682,9 +688,9 @@ stepsSingular2[A_, b_, vars_, kind_String, includeConclusion_: True] := Module[
 
   introText = Switch[kind,
     "NONE",
-    "Sčítaním rovníc overíme konzistenciu sústavy. Ak vznikne nepravdivá rovnosť, sústava nemá riešenie.",
+    "Sčítaním rovníc overíme konzistenciu sústavy. Ak vznikne nepravdivá rovnosť 0 ≠ k, sústava nemá riešenie.",
     "INFINITE",
-    "Rovnice sčítame. Ak vyjde \(0=0\), rovnice sú totožné a riešení je nekonečne veľa.",
+    "Rovnice sčítame. Ak vyjde pravdivá rovnosť 0 = 0, znamená to, že jedna rovnica je násobkom druhej a sústava má nekonečne veľa riešení.",
     _,
     "Sčítame rovnice."
   ];
@@ -702,11 +708,11 @@ stepsSingular2[A_, b_, vars_, kind_String, includeConclusion_: True] := Module[
     AppendTo[content, stepHeader["Záver"]];
     conclText = Switch[kind,
       "NONE",
-      "Po sčítaní vyšla nepravdivá rovnosť (napr. 0 = nenulové číslo). To je spor, preto sústava nemá riešenie.",
+      "Sústava nemá riešenie, pretože sme dostali nepravdivú rovnosť 0 ≠ " <> ToString[sumRHS] <> ".",
       "INFINITE",
-      "Po sčítaní vyšla pravdivá rovnosť 0 = 0. To znamená, že druhá rovnica je len násobkom prvej (opisujú tú istú priamku). Sústava má nekonečne veľa riešení.",
+      "Sústava má nekonečne veľa riešení, pretože sme dostali pravdivú rovnosť 0 = 0.",
       _,
-      "Sústava je singulárna."
+      ""
     ];
     AppendTo[content, conclText];
   ];
@@ -795,30 +801,46 @@ analyzeElimination3[A_] := Module[{zp, scorePair, zeroCols, scoreZeroCol, baseSc
 
 reducePair3[rowA_, rhsA_, rowB_, rhsB_, elimCol_, vars_, tagA_, tagB_] := Module[
   {content = {}, valA = rowA[[elimCol]], valB = rowB[[elimCol]], choiceStr = {"X", "Y", "Z"}[[elimCol]],
-    m1, m2, lcm, newRow, newRHS},
+    lcm, m1, m2, rowA2, rhsA2, rowB2, rhsB2, newRow, newRHS, rows1, rows2},
 
   If[valA == 0 || valB == 0,
     AppendTo[content, alignedEquations[{
-      {formatLHS3[rowA[[1]], rowA[[2]], rowA[[3]], choiceStr], rhsA, ""},
-      {formatLHS3[rowB[[1]], rowB[[2]], rowB[[3]], choiceStr], rhsB, ""}
+      {formatLHSN[rowA, choiceStr, vars], rhsA, ""},
+      {formatLHSN[rowB, choiceStr, vars], rhsB, ""}
     }]];
     If[valB == 0, {newRow, newRHS} = {rowB, rhsB}, {newRow, newRHS} = {rowA, rhsA}];,
 
-    (* Elimination logic *)
     lcm = LCM[Abs[valA], Abs[valB]];
     m1 = lcm/Abs[valA]; m2 = lcm/Abs[valB];
     If[Sign[valA] == Sign[valB], m2 = -m2];
 
-    AppendTo[content, alignedEquations[{
-      {formatLHS3[rowA[[1]], rowA[[2]], rowA[[3]], choiceStr], rhsA, multiplyNoteRow[m1]},
-      {formatLHS3[rowB[[1]], rowB[[2]], rowB[[3]], choiceStr], rhsB, multiplyNoteRow[m2]}
-    }]];
+    (* 1) povodne rovnice + poznamky k nasobeniu *)
+    rows1 = {
+      {formatLHSN[rowA, choiceStr, vars], rhsA, multiplyNote[m1]},
+      {formatLHSN[rowB, choiceStr, vars], rhsB, multiplyNote[m2]}
+    };
 
-    newRow = m1*rowA + m2*rowB;
-    newRHS = m1*rhsA + m2*rhsB;
+    (* 2) prenásobené rovnice (medzikrok) *)
+    rowA2 = m1 rowA; rhsA2 = m1 rhsA;
+    rowB2 = m2 rowB; rhsB2 = m2 rhsB;
+
+    rows2 = {
+      {formatLHSN[rowA2, "", vars], rhsA2, ""},
+      {formatLHSN[rowB2, "", vars], rhsB2, ""}
+    };
+
+    (* 2 a 2: medzi dvojicami vacsia medzera, vnutri dvojic mensia *)
+    AppendTo[content, alignedEquations[Join[rows1, rows2], {2}, 1]];
+
+    (* 3) výsledok sčítania *)
+    newRow = rowA2 + rowB2;
+    newRHS = rhsA2 + rhsB2;
   ];
 
-  AppendTo[content, alignedEquations[{{Style[formatLHS3[newRow[[1]], newRow[[2]], newRow[[3]], ""], Darker[Green, 0.2]], Style[newRHS, Darker[Green, 0.2]], ""}}]];
+  AppendTo[content,
+    alignedEquations[{{Style[formatLHSN[newRow, "", vars], Darker[Green, 0.2]], Style[newRHS, Darker[Green, 0.2]], ""}}]
+  ];
+
   <|"Row" -> newRow, "RHS" -> newRHS, "Content" -> content|>
 ];
 
@@ -850,7 +872,7 @@ reduce3to2[A_, b_, vars_] := Module[
 
       rowV = A[[iKeep]]; rhsV = b[[iKeep]];
       AppendTo[content, Style["b) Rovnica bez vyrušovanej premennej (použijeme ju priamo):", Italic]];
-      AppendTo[content, alignedEquations[{{formatLHS3[rowV[[1]], rowV[[2]], rowV[[3]], ""], rhsV, ""}}]];
+      AppendTo[content, alignedEquations[{{formatLHSN[rowV, "", vars], rhsV, ""}}]];
       ,
       (* premenná je už eliminovaná aspoň v dvoch rovniciach – netreba eliminovať *)
       {i1, i2} = zeroRows[[1 ;; 2]];
@@ -859,8 +881,8 @@ reduce3to2[A_, b_, vars_] := Module[
 
       AppendTo[content, Style["a) Rovnice bez vyrušovanej premennej (použijeme ich priamo):", Italic]];
       AppendTo[content, alignedEquations[{
-        {formatLHS3[rowIV[[1]], rowIV[[2]], rowIV[[3]], ""], rhsIV, ""},
-        {formatLHS3[rowV[[1]], rowV[[2]], rowV[[3]], ""], rhsV, ""}
+        {formatLHSN[rowIV, "", vars], rhsIV, ""},
+        {formatLHSN[rowV, "", vars], rhsV, ""}
       }]];
     ];
     ,
@@ -908,14 +930,14 @@ stepsOne3[A_, b_, vars_, data_:<||>] := Module[
     AppendTo[content, "Z jednej dvojice rovnic sme elimináciou získali jednu novú rovnicu a druhá rovnica bola už v zadaní bez vyrušovanej premennej. Spolu tvoria sústavu 2×2."]
   ];
   AppendTo[content, alignedEquations[{
-    {formatLHS[A2[[1,1]], A2[[1,2]], "", remVars], b2[[1]], ""},
-    {formatLHS[A2[[2,1]], A2[[2,2]], "", remVars], b2[[2]], ""}
+    {formatLHSN[A2[[1]], "", remVars], b2[[1]], ""},
+    {formatLHSN[A2[[2]], "", remVars], b2[[2]], ""}
   }]];
 
   sol2x2 = stepsOne2[A2, b2, remVars];
   If[sol2x2 === $Failed, Return[$Failed]];
 
-  (* v 3×3 nechceme skúšku zzobraziť predčasne pre 2x2 *)
+  (* skúška pre 2x2 *)
   Module[{c2 = sol2x2["Content"], pos},
     pos = FirstPosition[
       c2,
@@ -927,7 +949,7 @@ stepsOne3[A_, b_, vars_, data_:<||>] := Module[
       content = Join[content, Take[c2, pos[[1]] - 1]]
     ];
   ];
-
+  stepsCounter --;
   solMap = AssociationThread[remVars -> sol2x2["Solution"]];
   finalVar = red["elimVar"];
 
@@ -946,14 +968,14 @@ stepsOne3[A_, b_, vars_, data_:<||>] := Module[
   coeffU = row[[red["elimCol"]]];
 
   subSteps = {};
-  AppendTo[subSteps, {formatLHS3[row[[1]], row[[2]], row[[3]], ""], rhs, substNote[solMap, remVars, row, vars]}];
-  AppendTo[subSteps, {formatSubstLHS3[row, vars, solMap, finalVar], rhs, ""}];
+  AppendTo[subSteps, {formatLHSN[row, "", vars], rhs, substNote[solMap, remVars, row, vars]}];
+  AppendTo[subSteps, {formatSubstLHS[row, vars, solMap, finalVar, False], rhs, ""}];
 
   knownSum = Together @ Total @ Table[If[i == red["elimCol"], 0, row[[i]] * solMap[vars[[i]]]], {i, 1, 3}];
   rhsShift = Together[rhs - knownSum];
   noteShift = Which[PossibleZeroQ[knownSum], "", TrueQ[knownSum > 0], Row[{"- ", TraditionalForm[knownSum]}], True, Row[{"+ ", TraditionalForm[Abs[knownSum]]}]];
 
-  AppendTo[subSteps, {formatSubstLHS3Eval[row, vars, solMap, finalVar], rhs, noteShift}];
+  AppendTo[subSteps, {formatSubstLHS[row, vars, solMap, finalVar, True], rhs, noteShift}];
 
   If[coeffU === 1,
     AppendTo[subSteps, {TraditionalForm[finalVar], TraditionalForm[rhsShift], ""}],
@@ -1004,8 +1026,8 @@ stepsSingular3[A_, b_, vars_, kind_String, data_:<||>] := Module[
   AppendTo[content, headerText];
 
   AppendTo[content, alignedEquations[{
-    {formatLHS[A2[[1,1]], A2[[1,2]], "", remVars], b2[[1]], ""},
-    {formatLHS[A2[[2,1]], A2[[2,2]], "", remVars], b2[[2]], ""}
+    {formatLHSN[A2[[1]], "", remVars], b2[[1]], ""},
+    {formatLHSN[A2[[2]], "", remVars], b2[[2]], ""}
   }]];
 
   sol2x2 = stepsSingular2[A2, b2, remVars, kind, False];
@@ -1301,8 +1323,8 @@ Gen01[diff_String, mode_String, opts : OptionsPattern[]] := Module[
   If[diff === "HARD" && KeyExistsQ[data, "EqDisplay"],
     CellBox @ alignedEquations[data["EqDisplay"]],
     If[dim == 2,
-      CellBox @ alignedEquations@Table[{formatLHS[A[[i, 1]], A[[i, 2]], "", vars], b[[i]], ""}, {i, 2}],
-      CellBox @ alignedEquations@Table[{formatLHS3[A[[i, 1]], A[[i, 2]], A[[i, 3]], ""], b[[i]], ""}, {i, 3}]
+      CellBox @ alignedEquations@Table[{formatLHSN[A[[i]], "", vars], b[[i]], ""}, {i, 2}],
+      CellBox @ alignedEquations@Table[{formatLHSN[A[[i]], "", vars], b[[i]], ""}, {i, 3}]
     ]
   ];
 
