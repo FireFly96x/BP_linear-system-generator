@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      2721,         65]
-NotebookOptionsPosition[      2316,         49]
-NotebookOutlinePosition[      2765,         67]
-CellTagsIndexPosition[      2722,         64]
+NotebookDataLength[      2735,         67]
+NotebookOptionsPosition[      2330,         51]
+NotebookOutlinePosition[      2779,         69]
+CellTagsIndexPosition[      2736,         66]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -24,10 +24,11 @@ Cell[BoxData[{
    RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
  RowBox[{"<<", "\"\<Common.wl\>\""}], "\n", 
  RowBox[{
-  RowBox[{"<<", "\"\<SubstitutionMatrixGenerator.wl\>\""}], "\n"}], "\[IndentingNewLine]", 
+  RowBox[{"<<", "\"\<SubstitutionMatrixGenerator.wl\>\""}], 
+  "\[IndentingNewLine]"}], "\n", 
  RowBox[{"Gen01", "[", 
   RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-   RowBox[{"SolutionType", "->", "\"\<NONE\>\""}], ",", " ", 
+   RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", " ", 
    RowBox[{"Visualization", "->", "True"}]}], "]"}]}], "Input",
  CellChangeTimes->{{3.97480607998942*^9, 3.97480607998942*^9}, {
    3.974810081879202*^9, 3.9748101095887127`*^9}, {3.974820901315119*^9, 
@@ -44,8 +45,9 @@ Cell[BoxData[{
    3.9753501336871433`*^9}, {3.9753505091608486`*^9, 3.975350509709467*^9}, {
    3.9753505889063625`*^9, 3.9753506009301624`*^9}, {3.9753512175123024`*^9, 
    3.975351218358446*^9}, {3.975353103286577*^9, 3.9753531401310234`*^9}, 
-   3.9753531905714226`*^9, {3.9753535501980705`*^9, 3.975353569822256*^9}},
- CellLabel->"",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
+   3.9753531905714226`*^9, {3.9753535501980705`*^9, 3.975353569822256*^9}, 
+   3.975398966168314*^9},ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-\
+48f2cc160b32"]
 },
 WindowSize->{574.8, 568.8},
 WindowMargins->{{0, Automatic}, {Automatic, 0}},
@@ -66,7 +68,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 1758, 27, 73, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
+Cell[554, 20, 1772, 29, 73, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 }
 ]
 *)

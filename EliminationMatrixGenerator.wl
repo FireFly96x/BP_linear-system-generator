@@ -602,7 +602,7 @@ generateLinearSystem[dim_, diff_, solType_ : "ONE"] := Module[
         A = {r1, r2, r3})
       ];
 
-      x0 = RandomInteger[{-5, 5}, dim];
+      x0 = RandomInteger[{-9, 9}, dim];
       b = A . x0;
 
       If[okQ[], Break[]];
@@ -1130,11 +1130,12 @@ visualize2[A_, b_, vars_, sol_] := Module[
   ];
 
   seg[row_, rhs_] := With[{a = row[[1]], bb = row[[2]]},
-    If[bb != 0,
-      Line[{{xrange[[1]], (rhs - a*xrange[[1]])/bb}, {xrange[[2]], (rhs - a*xrange[[2]])/bb}}],
-      Line[{{rhs/a, yrange[[1]]}, {rhs/a, yrange[[2]]}}]
+    If[bb =!= 0,
+      InfiniteLine[{{0, rhs/bb}, {1, (rhs - a)/bb}}],
+      InfiniteLine[{{rhs/a, 0}, {rhs/a, 1}}]
     ]
   ];
+
 
   printTextExprCell[subtitle];
 
@@ -1180,13 +1181,14 @@ visualize2[A_, b_, vars_, sol_] := Module[
       PlotRange -> {xrange, yrange},
       Axes -> True,
       GridLines -> Automatic,
-      ImageSize -> Medium
+      ImageSize -> Medium,
+      PlotRangeClipping -> True
     ],
     legend
   ]
 ];
 visualize3[A_, b_, vars_, sol_] := Module[
-  {x, y, z, range = 10, xmin, xmax, ymin, ymax, zmin, zmax,
+  {x, y, z, range = 15, xmin, xmax, ymin, ymax, zmin, zmax,
     n1, n2, n3, d1, d2, d3, inter, best, subtitle,
     planes, mark, plot, eqLbl, planeStyles, planeLabels,
     extraLegStyles, extraLegLabels, legend},
