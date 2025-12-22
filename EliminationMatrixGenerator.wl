@@ -369,7 +369,7 @@ eliminationStart2[A_, b_, vars_] := Module[
     {formatEquationLHS[m2 A[[2]], "", vars], m2 b[[2]], ""}
   };
 
-  
+
 
   If[needsMult,
     AppendTo[content, alignedEquations[Join[rows1, rows2], {2}, 1]],
@@ -527,7 +527,7 @@ printInfiniteResult[A_, b_, vars_] := Module[
   best = chooseParametrization[A, b, vars];
   If[best === $Failed, Return[$Failed]];
 
-  (* uprav formu: odstráň 1/q * (...) -> (...) / q *)
+  (*  1/q * (...) -> (...) / q *)
   exprs = Together /@ best["Exprs"];
 
   exprs = exprs //. {
@@ -567,7 +567,7 @@ generateLinearSystem[dim_, diff_, solType_ : "ONE"] := Module[
   r = Lookup[$diffConfig, diff, $diffConfig["MEDIUM"]]["CoeffRange"];
 
   (* nenulové koeficienty *)
-  nzPool = Join[-Range[r, 1], Range[1, r]];
+  nzPool = Join[-Range[r], Range[r]];
   pickNZ[] := RandomChoice[nzPool];
   makeRow2NoZero[] := {pickNZ[], pickNZ[]};
   makeRow3NoZero[] := {pickNZ[], pickNZ[], pickNZ[]};

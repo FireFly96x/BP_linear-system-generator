@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      1920,         57]
-NotebookOptionsPosition[      1513,         41]
-NotebookOutlinePosition[      1965,         59]
-CellTagsIndexPosition[      1922,         56]
+NotebookDataLength[      2721,         65]
+NotebookOptionsPosition[      2316,         49]
+NotebookOutlinePosition[      2765,         67]
+CellTagsIndexPosition[      2722,         64]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -24,23 +24,31 @@ Cell[BoxData[{
    RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
  RowBox[{"<<", "\"\<Common.wl\>\""}], "\n", 
  RowBox[{
-  RowBox[{"<<", "\"\<EliminationMatrixGenerator.wl\>\""}], "\n"}], "\[IndentingNewLine]", 
+  RowBox[{"<<", "\"\<SubstitutionMatrixGenerator.wl\>\""}], "\n"}], "\[IndentingNewLine]", 
  RowBox[{"Gen01", "[", 
-  RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-   RowBox[{"SolutionType", "->", "\"\<INFINITE\>\""}], ",", " ", 
+  RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+   RowBox[{"SolutionType", "->", "\"\<NONE\>\""}], ",", " ", 
    RowBox[{"Visualization", "->", "True"}]}], "]"}]}], "Input",
- CellChangeTimes->CompressedData["
-1:eJxTTMoPSmViYGAQBWIQHbLyv3v43LeOMDpHycYmEkjvubbJHkSXiK5qiQPS
-FU8vtYHoL2+YhFnmvXXUsH0Kpl3YpRRBdEpNsjKIXvC0PxLMP1wXA6Jl7pXL
-swNpDiFFJRC94+tmOx4gbRB3GUx3NLgaqAHpAsdLhiD6y9JtGWD+hvm5INrg
-sWM7iF5RPbMLROuUuE8D0VPeBYPpCbOd1oBokZZUMJ0S2XYBRIdsNr4CoiOC
-o3gTQO5wrADTCs9iLEH0n2fyNiBa47BNH4h+cycBTAfoznsHokX+bgXTa1SX
-yiaC3LV5G5h+wzBXHUQ/OSyrCaJPpBiUgeiUCm8wDQAUgaT7
-  "],
+ CellChangeTimes->{{3.97480607998942*^9, 3.97480607998942*^9}, {
+   3.974810081879202*^9, 3.9748101095887127`*^9}, {3.974820901315119*^9, 
+   3.9748209185905113`*^9}, {3.975159960091425*^9, 3.9751599671637154`*^9}, {
+   3.975160072813387*^9, 3.9751600911089344`*^9}, {3.9751605244967804`*^9, 
+   3.9751605479613514`*^9}, {3.975166203745863*^9, 3.975166225033451*^9}, {
+   3.975176693623745*^9, 3.9751766946052475`*^9}, {3.97522982617194*^9, 
+   3.975229838570488*^9}, {3.975230277707758*^9, 3.975230316990288*^9}, {
+   3.975230522058983*^9, 3.9752305487963448`*^9}, {3.975230642232931*^9, 
+   3.9752306426228733`*^9}, {3.9752308180814896`*^9, 3.975230819172373*^9}, {
+   3.975231108198412*^9, 3.9752311376156406`*^9}, {3.975348330822674*^9, 
+   3.975348331757948*^9}, {3.9753486829030914`*^9, 3.9753487049969463`*^9}, {
+   3.975349361898823*^9, 3.975349363026968*^9}, {3.9753501329430313`*^9, 
+   3.9753501336871433`*^9}, {3.9753505091608486`*^9, 3.975350509709467*^9}, {
+   3.9753505889063625`*^9, 3.9753506009301624`*^9}, {3.9753512175123024`*^9, 
+   3.975351218358446*^9}, {3.975353103286577*^9, 3.9753531401310234`*^9}, 
+   3.9753531905714226`*^9, {3.9753535501980705`*^9, 3.975353569822256*^9}},
  CellLabel->"",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 },
-WindowSize->{574.8, 573.6},
-WindowMargins->{{-4.8, Automatic}, {Automatic, 0}},
+WindowSize->{574.8, 568.8},
+WindowMargins->{{0, Automatic}, {Automatic, 0}},
 LightDark->"Light",
 Magnification:>0.7 Inherited,
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
@@ -58,7 +66,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 955, 19, 73, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
+Cell[554, 20, 1758, 27, 73, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 }
 ]
 *)
