@@ -35,23 +35,31 @@ $diffConfig = <|
 diffConfig[diff_] := Lookup[$diffConfig, diff, $diffConfig["MEDIUM"]];
 
 (* ~-~-~ COMMON CELL PRINTING HELPERS ~-~-~ *)
-printSectionCell[str_] := CellPrintStyle[str, "Section"];
-printSubsectionCell[str_] := CellPrintStyle[str, "Subsection"];
-printTextCell[str_] := CellPrint @ Cell[str, "Text", ShowStringCharacters -> False];
-printTextExprCell[expr_] := CellPrint @ Cell[BoxData @ ToBoxes[expr, StandardForm], "Text", ShowStringCharacters -> False];
-printFormulaCell[expr_] := CellPrint @ Cell[BoxData @ ToBoxes[expr, StandardForm], "DisplayFormula", ShowStringCharacters -> False];
+printSectionCell[str_String] := CellSection[str];
+printSubsectionCell[str_String] := CellSubsection[str];
+printTextCell[str_String] := CellText[str];
+printTextExprCell[expr_] := CellTextExpr[expr];
+printFormulaCell[expr_] := CellFormula[expr];
 
 (* ~-~-~ COMMON FORMATTING HELPERS ~-~-~ *)
 highlightTerm[term_] := Style[term, Bold, RGBColor[0.8, 0, 0]];
 highlightGrid[grid_] := Style[grid, Background -> RGBColor[0.95, 0.95, 0.95], Frame -> True, FrameStyle -> None, FrameMargins -> 5];
 tf[val_] := TraditionalForm[val];
 tft[val_] := tf[Together[val]];
-buildTermsRow[terms_List] := Module[{out = {}, first = True, c, v, t},
-  If[terms === {} || AllTrue[terms[[All, 1]], # == 0 &], Return[tf[0]]];
+
+(*renderTermsRow*)
+renderTermsRow[terms_List, mode_ : "Numeric"] := Module[ {pairs, out = {}, first = True, c, v, t, zeroQ, negQ},
+
+  pairs = Select[terms, MatchQ[#, {_, _}] &];
+
+  zeroQ = If[mode === "Symbolic", PossibleZeroQ, (# == 0 &)];
+  negQ  = If[mode === "Symbolic", (TrueQ[# < 0] &), (# < 0 &)];
+
+  If[pairs === {} || AllTrue[pairs[[All, 1]], zeroQ], Return[tf[0]]];
 
   Do[
-    {c, v} = terms[[i]];
-    If[c == 0, Continue[]];
+    {c, v} = pairs[[i]];
+    If[zeroQ[c], Continue[]];
 
     t = If[v === None,
       tf[Abs[c]],
@@ -59,11 +67,11 @@ buildTermsRow[terms_List] := Module[{out = {}, first = True, c, v, t},
     ];
 
     If[first,
-      If[c < 0, out = Join[out, {"-", t}], out = Join[out, {t}]];
+      If[negQ[c], out = Join[out, {"-", t}], out = Join[out, {t}]];
       first = False;,
-      out = Join[out, {If[c < 0, " - ", " + "], t}];
+      out = Join[out, {If[negQ[c], " - ", " + "], t}];
     ];
-    , {i, 1, Length[terms]}];
+    , {i, 1, Length[pairs]}];
 
   If[out === {}, tf[0], Row[out]]
 ];
@@ -77,8 +85,7 @@ renderStepItem[item_] := Which[ StringQ[item], printTextCell[item],
   True, printFormulaCell[item]];
 
 (* zarovnaný grid rovníc *)
-alignedEquations[data_, breaks_List : {}, gap_ : 1.25] := Module[
-  {eq = Style["=", 16], bar = Style["|", GrayLevel[.25]], base = 0.6, n, rowGaps, stepRow},
+alignedEquations[data_, breaks_List : {}, gap_ : 1.25] := Module[ {eq = Style["=", 16], bar = Style["|", GrayLevel[.25]], n, rowGaps, stepRow},
 
   n = Length[data];
 
@@ -99,7 +106,8 @@ alignedEquations[data_, breaks_List : {}, gap_ : 1.25] := Module[
 ];
 
 (* formát ľavej strany rovnice *)
-formatEquationLHS[coeffs_List, choice_, vars_List] := Module[{terms = {}, first = True, choiceVar, addTerm},
+formatEquationLHS[coeffs_List, choice_, vars_List] := Module[{terms = {}, first = True, c, v, sign, t, choiceVar, i, n},
+
   choiceVar = Which[
     MemberQ[vars, choice], choice,
     choice === "X" && Length[vars] >= 1, vars[[1]],
@@ -107,22 +115,29 @@ formatEquationLHS[coeffs_List, choice_, vars_List] := Module[{terms = {}, first 
     choice === "Z" && Length[vars] >= 3, vars[[3]],
     True, None
   ];
-  addTerm[c_, v_] := If[c =!= 0,
-    Module[{sign, t},
-      sign = If[first, If[c < 0, "-", ""], If[c < 0, " - ", " + "]];
-      t = If[Abs[c] === 1, v, Abs[c] v];
-      If[v === choiceVar, t = highlightTerm[t]];
-      If[sign =!= "", AppendTo[terms, sign]];
-      AppendTo[terms, tf[t]];
-      first = False;
-    ]
+
+  n = Min[Length[coeffs], Length[vars]];
+  For[i = 1, i <= n, i++,
+    c = coeffs[[i]];
+    v = vars[[i]];
+    If[c === 0, Continue[]];
+
+    sign = If[first, If[c < 0, "-", ""], If[c < 0, " - ", " + "]];
+
+    t = If[Abs[c] === 1, v, Abs[c] v];
+    If[v === choiceVar, t = highlightTerm[t]];
+
+    If[sign =!= "", AppendTo[terms, sign]];
+    AppendTo[terms, tf[t]];
+    first = False;
   ];
-  MapThread[addTerm, {coeffs, vars}];
+
   If[terms === {}, tf[0], Row[terms]]
 ];
 
 (* formátovanie ľavej strany pre substitúciu *)
-formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_:False] := Module[{terms = {}, first = True, addTerm},
+formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_: False] := Module[
+  {terms = {}, first = True, addTerm, emitKnownTerm, emitUnknownTerm},
 
   addTerm[content_, sign_] := (
     AppendTo[
@@ -135,18 +150,24 @@ formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_:False] := Module[{te
     first = False;
   );
 
+  (* známa premenná: buď nechaj koef·hodnota (symbolicky), alebo vypočítaj súčin *)
+  emitKnownTerm[c_, v_] := Module[{prod},
+    If[!KeyExistsQ[solMap, v], Return[Null]];
+
+    If[TrueQ[evalMode],
+      prod = Together[c*solMap[v]];
+      If[!PossibleZeroQ[prod], addTerm[tf[Abs[prod]], Sign[prod]]],
+      addTerm[coeffVal[Abs[c], solMap[v]], Sign[c]]
+    ];
+  ];
+
+  (* neznáma premenná ostáva ako člen s koeficientom *)
+  emitUnknownTerm[c_, v_] := addTerm[tf[If[Abs[c] === 1, v, Abs[c] v]], Sign[c]];
+
   Do[
     With[{c = row[[i]], v = vars[[i]]},
       If[c =!= 0,
-        If[v === unknownVar,
-          addTerm[tf[If[Abs[c] === 1, v, Abs[c] v]], Sign[c]],
-          If[evalMode,
-            With[{prod = Together[c * solMap[v]]},
-              If[!PossibleZeroQ[prod], addTerm[tf[Abs[prod]], Sign[prod]]]
-            ],
-            addTerm[coeffVal[Abs[c], solMap[v]], Sign[c]]
-          ]
-        ]
+        If[v === unknownVar, emitUnknownTerm[c, v], emitKnownTerm[c, v]]
       ]
     ],
     {i, 1, Length[vars]}
@@ -227,8 +248,12 @@ addCorrectnessCheck[content_, A_, b_, vars_, sol_] := Module[
 ];
 
 (* koeficient · hodnota pre dosadzovanie *)
-coeffVal[coeff_, val_] := Which[coeff === 0, 0, coeff === 1, wrapNegValue[val], coeff === -1, Row[{"-", wrapNegValue[val]}], True, Row[{coeff, " \[CenterDot] ", wrapNegValue[val]}]];
-
+coeffVal[coeff_, val_] := Which[
+  coeff === 0, 0,
+  coeff === 1, wrapNegValue[val],
+  coeff === -1, Row[{"-", wrapNegValue[val]}],
+  True, Row[{tft[coeff], " \[CenterDot] ", wrapNegValue[val]}]
+];
 
 (* kontrola, či sú čísla v povolenom rozsahu *)
 numbersNiceQ[A_, b_, diff_] := Max[Abs @ Join[Flatten[A], Flatten[b]]] <= Lookup[$diffConfig, diff, $diffConfig["MEDIUM"]]["Bound"];
@@ -277,7 +302,7 @@ buildHardDisplay[data_Association, vars_] := Module[
     AppendTo[leftMultAll, lMult];
     AppendTo[rightMultAll, rMult];
 
-    AppendTo[eqDisp, {buildTermsRow[lMult], buildTermsRow[rMult], ""}];, {i, 1, n}
+    AppendTo[eqDisp, {renderTermsRow[lMult], renderTermsRow[rMult], ""}];, {i, 1, n}
   ];
 
   Join[
@@ -369,8 +394,6 @@ eliminationStart2[A_, b_, vars_] := Module[
     {formatEquationLHS[m2 A[[2]], "", vars], m2 b[[2]], ""}
   };
 
-
-
   If[needsMult,
     AppendTo[content, alignedEquations[Join[rows1, rows2], {2}, 1]],
     AppendTo[content, alignedEquations[{
@@ -418,7 +441,6 @@ pickHardMultipliers15[n_] := Module[{ks},
   While[Max[ks] < 4, ks = RandomChoice[Range[5], n]];
   ks
 ];
-
 
 (* redukcia sústavy 3x3 na 2x2 *)
 reduce3to2[A_, b_, vars_] := Module[
@@ -527,7 +549,7 @@ printInfiniteResult[A_, b_, vars_] := Module[
   best = chooseParametrization[A, b, vars];
   If[best === $Failed, Return[$Failed]];
 
-  (*  1/q * (...) -> (...) / q *)
+  (* 1/q * (...) -> (...) / q *)
   exprs = Together /@ best["Exprs"];
 
   exprs = exprs //. {
@@ -576,7 +598,7 @@ generateLinearSystem[dim_, diff_, solType_ : "ONE"] := Module[
   targetZeroCount = If[dim == 3 && diff === "MEDIUM", 1, 0];
   {zeroRow, zeroCol} = If[dim == 3 && diff === "MEDIUM", {RandomInteger[{1, 3}], RandomInteger[{1, 3}]}, {None, None}];
 
-  makeRow3PlannedZero[col_] := Module[{v = makeRow3NoZero[]}, v[[col]] = 0; v];
+  makeRow3PlannedZero[col_] := ReplacePart[makeRow3NoZero[], col -> 0];
 
   makeRow[i_] := Which[
     dim == 2, makeRow2NoZero[],
@@ -934,10 +956,7 @@ renderAddition2[rowMod_, rhsMod_, vars_] := Module[{},
 
 (* vizualizácia normalizácie v 3x3 *)
 hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[
-  {content = {}, ks, leftBase, rightBase, k, lMult, rMult,
-    coeffL, coeffR, constL, constR, addTerms, addNote,
-    rowStd, rhsStd, rowsStd, rhsStdAll, gcds, rowDiv, rhsDiv,
-    rowsFinal, rhsFinal, anyDivQ},
+  {content = {}, ks, leftBase, rightBase, k, lMult, rMult, coeffL, coeffR, constL, constR, addTerms, addNote, rowStd, rhsStd, rowsStd, rhsStdAll, gcds, rowDiv, rhsDiv, rowsFinal, rhsFinal, anyDivQ},
 
   (* z termov spraví { {ax,ay,az}, c } pre dané vars *)
   termsToCoeffsConst[terms_List] := Module[{cVar, cConst},
@@ -1006,7 +1025,7 @@ hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[
       rowsStd[[i]] = rowStd;
       rhsStdAll[[i]] = rhsStd;
 
-      {buildTermsRow[lMult], buildTermsRow[rMult], addNote}, {i, 1, 3}
+      {renderTermsRow[lMult], renderTermsRow[rMult], addNote}, {i, 1, 3}
     ]
   ];
 
@@ -1104,8 +1123,7 @@ reducePair3[rowA_, rhsA_, rowB_, rhsB_, elimCol_, vars_, tagA_, tagB_] := Module
 
 (* ~-~-~ GRAPHICAL VISUALIZATIONS ~-~-~ *)
 visualize2[A_, b_, vars_, sol_] := Module[
-  {x, y, pt, xrange, yrange, seg, center, subtitle, range = 10,
-    lineStyles, lineLabels, extraLegStyles, extraLegLabels, legend},
+  {x, y, pt, xrange, yrange, seg, center, subtitle, range = 10, lineStyles, lineLabels, extraLegStyles, extraLegLabels, legend},
 
   printTextCell[" "];
 
@@ -1150,7 +1168,6 @@ visualize2[A_, b_, vars_, sol_] := Module[
     tf[A[[2, 1]] x + A[[2, 2]] y == b[[2]]]
   };
 
-  (* legenda pre priesečník *)
   {extraLegStyles, extraLegLabels} =
       If[pt =!= None, {
         {Directive[Black]},
@@ -1188,10 +1205,7 @@ visualize2[A_, b_, vars_, sol_] := Module[
   ]
 ];
 visualize3[A_, b_, vars_, sol_] := Module[
-  {x, y, z, range = 15, xmin, xmax, ymin, ymax, zmin, zmax,
-    n1, n2, n3, d1, d2, d3, inter, best, subtitle,
-    planes, mark, plot, eqLbl, planeStyles, planeLabels,
-    extraLegStyles, extraLegLabels, legend},
+  {x, y, z, range = 15, xmin, xmax, ymin, ymax, zmin, zmax, n1, n2, n3, d1, d2, d3, inter, best, subtitle, planes, mark, plot, eqLbl, planeStyles, planeLabels, extraLegStyles, extraLegLabels, legend},
 
   printTextCell[" "];
 
@@ -1215,10 +1229,8 @@ visualize3[A_, b_, vars_, sol_] := Module[
     _,       "Prienik sa nepodarilo jednoznačne určiť."
   ];
 
-  (* rovnako ako v 2D *)
   printTextExprCell[subtitle];
 
-  (* popisy rovín do legendy *)
   eqLbl[row_, rhs_] := tf[row.{x, y, z} == rhs];
   planeLabels = {eqLbl[A[[1]], b[[1]]], eqLbl[A[[2]], b[[2]]], eqLbl[A[[3]], b[[3]]]};
   planeStyles = {Cyan, Magenta, Yellow};
@@ -1237,7 +1249,6 @@ visualize3[A_, b_, vars_, sol_] := Module[
     BoundaryStyle -> None
   ];
 
-  (* zvýraznenie prieniku *)
   mark = Graphics3D @ Switch[inter["Type"],
     "POINT", {Black, PointSize[0.03], Point[N @ inter["Point"]], Black, Sphere[N @ inter["Point"], 0.35]},
     "LINE", Module[{p0, v},
@@ -1256,7 +1267,6 @@ visualize3[A_, b_, vars_, sol_] := Module[
     Method -> {"MouseInteraction" -> {"Rotate" -> True, "Pan" -> False, "Zoom" -> False}}
   ];
 
-  (* legenda pre prienik *)
   {extraLegStyles, extraLegLabels} = Switch[inter["Type"],
     "POINT", {{Black}, {Row[{"prienik: [", Sequence @@ Riffle[TraditionalForm /@ inter["Point"], ", "], "]"}]}},
     "LINE",  {{Black}, {Row[{"priesečník: ", TraditionalForm @ best["Exprs"], ", ", tf[\[FormalT]], "\[Element]", "\[DoubleStruckR]"}]}},
@@ -1281,11 +1291,12 @@ systemIntersection3[A_, b_, vars_] := Module[{rA=MatrixRank[A], rAb=MatrixRank[J
 Gen01[diff_String, mode_String, opts : OptionsPattern[]] := Module[
   {dim, vars, st, data, A, b, steps, sol, genFunc, stepsFunc},
 
-  If[!MemberQ[{"EASY", "MEDIUM", "HARD"}, diff], Message[Gen01::baddiff, diff]; Return[$Failed]];
-  If[!MemberQ[{"TASK", "TASK_RESULT", "TASK_STEPS_RESULT"}, mode], Message[Gen01::badmode, mode]; Return[$Failed]];
+  If[!TrueQ[ValidateDifficulty[diff]], Message[Gen01::baddiff, diff]; Return[$Failed]];
+  If[!TrueQ[ValidateMode[mode]], Message[Gen01::badmode, mode]; Return[$Failed]];
+  If[!TrueQ[ValidateSolutionType[OptionValue[SolutionType]]], Message[Gen01::badst, OptionValue[SolutionType]]; Return[$Failed]];
 
-  st = Replace[OptionValue[SolutionType], Automatic -> RandomChoice[{"ONE", "ONE", "ONE", "NONE", "INFINITE"}]];
-  dim = Switch[diff, "EASY", 2, "MEDIUM" | "HARD", 3];
+  st = ResolveSolutionType[OptionValue[SolutionType]];
+  dim = DimensionByDifficulty["Elimination", diff];
   vars = Take[{x, y, z}, dim];
 
   (* zjednotené generovanie cez jednu funkciu *)

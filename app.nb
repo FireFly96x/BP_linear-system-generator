@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      2735,         67]
-NotebookOptionsPosition[      2330,         51]
-NotebookOutlinePosition[      2779,         69]
-CellTagsIndexPosition[      2736,         66]
+NotebookDataLength[      2773,         66]
+NotebookOptionsPosition[      2332,         49]
+NotebookOutlinePosition[      2817,         68]
+CellTagsIndexPosition[      2774,         65]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -24,12 +24,10 @@ Cell[BoxData[{
    RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
  RowBox[{"<<", "\"\<Common.wl\>\""}], "\n", 
  RowBox[{
-  RowBox[{"<<", "\"\<SubstitutionMatrixGenerator.wl\>\""}], 
-  "\[IndentingNewLine]"}], "\n", 
+  RowBox[{"<<", "\"\<TriangularMatrixGenerator.wl\>\""}], "\n"}], "\[IndentingNewLine]", 
  RowBox[{"Gen01", "[", 
   RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-   RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", " ", 
-   RowBox[{"Visualization", "->", "True"}]}], "]"}]}], "Input",
+   RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}]}], "Input",
  CellChangeTimes->{{3.97480607998942*^9, 3.97480607998942*^9}, {
    3.974810081879202*^9, 3.9748101095887127`*^9}, {3.974820901315119*^9, 
    3.9748209185905113`*^9}, {3.975159960091425*^9, 3.9751599671637154`*^9}, {
@@ -46,11 +44,12 @@ Cell[BoxData[{
    3.9753505889063625`*^9, 3.9753506009301624`*^9}, {3.9753512175123024`*^9, 
    3.975351218358446*^9}, {3.975353103286577*^9, 3.9753531401310234`*^9}, 
    3.9753531905714226`*^9, {3.9753535501980705`*^9, 3.975353569822256*^9}, 
-   3.975398966168314*^9},ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-\
-48f2cc160b32"]
+   3.975398966168314*^9, {3.9754210543659687`*^9, 3.975421062521721*^9}},
+ CellLabel->"",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 },
-WindowSize->{574.8, 568.8},
-WindowMargins->{{0, Automatic}, {Automatic, 0}},
+WindowSize->{1152, 579.6},
+WindowMargins->{{
+  Automatic, -5.399999999999864}, {-5.399999999999977, Automatic}},
 LightDark->"Light",
 Magnification:>0.7 Inherited,
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
@@ -68,7 +67,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 1772, 29, 73, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
+Cell[554, 20, 1774, 27, 73, "Input",ExpressionUUID->"7a1c2fc1-4099-2d4b-afa2-48f2cc160b32"]
 }
 ]
 *)
