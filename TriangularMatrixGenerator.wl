@@ -74,16 +74,14 @@ validateTriangularType[tri_] := TrueQ[tri === Automatic] || MemberQ[{"L", "U"}, 
 
 resolveTriangularType[tri_] := If[tri === Automatic, RandomChoice[{"L", "U"}], tri];
 
-coeffInRangeQ[m_] := Max[Abs @ Flatten[m]] <= $CoeffMax;
 vecInRangeQ[v_, n_] := Max[Abs @ Flatten[v]] <= rhsBoundByN[n];
 
 integersOnlyQ[expr_] := FreeQ[expr, _Rational | _Real];
 
 (* ~-~-~ TASK: EQUATIONS ONLY ~-~-~ *)
-(*
-  Rovnice tlačíme iba v "Zadanie". V krokoch už len matice.
-*)
-buildVars[n_] := Take[{x, y, z, u, v, w}, n];
+
+(* Rovnice tlačíme iba v "Zadanie". V krokoch už len matice. *)
+buildVars[n_] := Take[{a, b, c, d, e, f}, n];
 
 buildTaskEquations[A_, b_, vars_] := Module[{},
   Thread[A.vars == b]
@@ -91,17 +89,9 @@ buildTaskEquations[A_, b_, vars_] := Module[{},
 
 toAugmented[A_, b_] := Join[A, List /@ b, 2];
 
-(* ~-~-~ AUGMENTED MATRIX RENDERER (LOCAL, SIMPLE) ~-~-~ *)
-(*
-  Matričný ekvivalent alignedEquations.
-  - oddeľovač A | b
-  - voliteľný stĺpec poznámok napr. "dosadzujeme x5", "odčítame známe členy"
-  - zvýraznenie: aktívny riadok, pivot (i,i)
-*)
-alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
-  {nRows, nCols, nA, notes2, pivotPos, activeRow, greenCells, bar, rowColor,
-    wrapBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid},
 
+alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
+  {nRows, nCols, nA, notes2, pivotPos, activeRow, greenCells, bar, rowColor, wrapBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid},
   {nRows, nCols} = Dimensions[aug];
   nA = nCols - 1;
 
@@ -113,29 +103,18 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
   bar = Style["|", GrayLevel[.35], FontSize -> 16];
   rowColor = RGBColor[0.90, 0.95, 1];
 
-  (* podfarbenie celého aktívneho riadku *)
-  wrapBg[i_, expr_] := If[IntegerQ[activeRow] && i === activeRow, Item[expr, Background -> rowColor], expr];
+  wrapBg[i_, expr_] := Item[expr, Background -> If[IntegerQ[activeRow] && i === activeRow, rowColor, None]];
 
-  (* bunka: pivot červený, greenCells zelené+bold *)
-  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val]},
-    If[pivotPos === {i, j}, cell = Style[cell, Bold, RGBColor[0.8, 0, 0]]];
-    If[MemberQ[greenCells, {i, j}], cell = Style[cell, Darker[Green], Bold]];
-    wrapBg[i, cell]
+  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen}, (* farby buniek *)
+    isGreen = MemberQ[greenCells, {i, j}] || val === 1;
+    If[isGreen, cell = Style[cell, Darker[Green], Bold], If[pivotPos === {i, j}, cell = Style[cell, Bold, RGBColor[0.8, 0, 0]]]];
+    wrapBg[i, Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}]]
   ];
 
   makeBar[i_] := wrapBg[i, bar];
 
-  leftBracketCell = Item["",
-    Frame -> {{True, False}, {True, True}},
-    FrameStyle -> Directive[GrayLevel[.35], AbsoluteThickness[1.2]],
-    FrameMargins -> {{8, 6}, {4, 4}}
-  ];
-
-  rightBracketCell = Item["",
-    Frame -> {{False, True}, {True, True}},
-    FrameStyle -> Directive[GrayLevel[.35], AbsoluteThickness[1.2]],
-    FrameMargins -> {{6, 8}, {4, 4}}
-  ];
+  leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
+  rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
 
   rows = Table[
     Join[
@@ -143,15 +122,18 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
       Table[makeCell[i, j, aug[[i, j]]], {j, 1, nA}],
       {makeBar[i], makeCell[i, nA + 1, aug[[i, nA + 1]]]},
       {If[i === 1, rightBracketCell, SpanFromAbove]}
-    ],
-    {i, 1, nRows}
+    ], {i, 1, nRows}
   ];
 
   matrixGrid = Grid[
     rows,
     Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center, Right, Center}],
-    Spacings -> {0.9, 1.3},
-    BaseStyle -> {FontSize -> 14}
+    Spacings -> {1, 1},
+    BaseStyle -> {FontSize -> 14},
+    ItemSize -> {
+      Join[{0.2}, ConstantArray[1.2, nA], {0.2, 1.2, 0.2}],
+      Automatic
+    }
   ];
 
   notesGrid = Grid[
@@ -167,15 +149,10 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
   Grid[{{matrixGrid, Spacer[12], notesGrid}}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}]
 ];
 
-(* ~-~-~ DATA GENERATION (SAFE BY CONSTRUCTION) ~-~-~ *)
-(*
-  Zámer: primitívny generátor, ktorý nemôže "zlyhať v krokoch".
-*)
 pickOffDiagNonZero[] := RandomChoice[DeleteCases[Range[$CoeffMin, $CoeffMax], 0]];
 pickDiagNonZero[] := RandomChoice[DeleteCases[Range[$DiagMin, $DiagMax], 0]];
 
-buildTriangularMatrixOne[n_, triType_, diff_] := Module[
-  {A, allowedPos, extraZeroPos = {}, extraZeroSet = <||>, maxExtraZeros},
+buildTriangularMatrix[n_, triType_, diff_] := Module[ {A, allowedPos},
 
   A = ConstantArray[0, {n, n}];
 
@@ -192,47 +169,42 @@ buildTriangularMatrixOne[n_, triType_, diff_] := Module[
   ];
 
   (* vyplnenie povoleného trojuholníka *)
-  Do[
-    Module[{pos = allowedPos[[k]], i, j},
-      i = pos[[1]]; j = pos[[2]];
-      A[[i, j]] = pickOffDiagNonZero[]
-    ],
-    {k, 1, Length[allowedPos]}
-  ];
-
-  A
+  Scan[(A[[#[[1]], #[[2]]]] = pickOffDiagNonZero[]) &, allowedPos]; A
 ];
 
 generateOneData[n_, triType_, diff_] := Module[{A, x, b},
   x = RandomInteger[{-9, 9}, n];
-  A = buildTriangularMatrixOne[n, triType, diff];
+  A = buildTriangularMatrix[n, triType, diff];
   b = A.x;
 
-  If[!coeffInRangeQ[A] || !vecInRangeQ[b, n], Return[$Failed]];
+  If[!vecInRangeQ[b, n], Return[$Failed]];
 
   <|"A" -> A, "b" -> b, "x" -> x, "TriType" -> triType, "SolutionType" -> "ONE"|>
 ];
-
 generateNoneData[n_, triType_, diff_] := Module[{A, b, badRowIdx},
-  A = buildTriangularMatrixOne[n, triType, diff];
+  A = buildTriangularMatrix[n, triType, diff];
   b = RandomInteger[{-9, 9}, n];
 
   badRowIdx = If[triType === "L", 1, n];
   A[[badRowIdx]] = ConstantArray[0, n];
   b[[badRowIdx]] = RandomChoice[DeleteCases[Range[-9, 9], 0]];
 
-  If[!coeffInRangeQ[A] || !vecInRangeQ[b, n], Return[$Failed]];
+  If[!vecInRangeQ[b, n], Return[$Failed]];
 
   <|"A" -> A, "b" -> b, "x" -> "NONE", "TriType" -> triType,
     "SolutionType" -> "NONE", "BadRow" -> badRowIdx|>
 ];
-
-generateInfiniteData[n_, triType_, diff_] := Module[{A, b, zeroRowIdx},
-  A = buildTriangularMatrixOne[n, triType, diff];
-  b = ConstantArray[0, n];
+generateInfiniteData[n_, triType_, diff_] := Module[{A, b, zeroRowIdx, x},
+  A = buildTriangularMatrix[n, triType, diff];
 
   zeroRowIdx = If[triType === "L", 1, n];
   A[[zeroRowIdx]] = ConstantArray[0, n];
+
+  (* zvolíme "parametrické" celočíselné riešenie: parameter je 0.. ale pre konštrukciu stačí hocijaké celé x *)
+  x = RandomInteger[{-3, 3}, n];
+  x[[zeroRowIdx]] = 1;  (* tento index bude parameter *)
+
+  b = A.x;  (* teraz je to konštruované ako v ONE *)
 
   <|"A" -> A, "b" -> b, "x" -> "INFINITE", "TriType" -> triType,
     "SolutionType" -> "INFINITE", "ParamIdx" -> zeroRowIdx|>
@@ -283,8 +255,7 @@ renderBeforeAfter[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[
 
 (* ~-~-~ STEP GENERATION (MATRIX-ONLY) ~-~-~ *)
 
-stepsOneTriangular[data_Association] := Module[
-  {content = {}, n, aug, vars, tri, order, i, before, after, notes, terms, p, sol},
+stepsOneTriangular[data_Association] := Module[ {content = {}, n, aug, vars, tri, order, before, after, notes, terms, p, sol},
 
   n = data["n"]; vars = data["Vars"]; tri = data["TriType"]; aug = data["Aug"];
   sol = ConstantArray[None, n];
@@ -314,8 +285,6 @@ stepsOneTriangular[data_Association] := Module[
       aug = after;
     ];
 
-    (* normalizácia pivotu na 1 *)
-    p = aug[[i, i]]; If[p === 0, Return[$Failed]];
     If[p =!= 1,
       before = aug;
       after = applyRowOpDivide[before, i, p];
@@ -337,16 +306,9 @@ stepsOneTriangular[data_Association] := Module[
       Alignment -> {{Right, Center, Left}}, BaseStyle -> {FontSize -> 16}
     ]];
     AppendTo[content, Spacer[6]];
-
     ,
     {i, order}
   ];
-
-  AppendTo[content, makeStepHeader["Výsledok"]];
-  AppendTo[content, Cell[BoxData @ ToBoxes[
-    Row[{Row[{"(", Riffle[vars, ", "], ")"}], " = ", Row[{"(", Riffle[tft /@ sol, ", "], ")"}]}],
-    StandardForm
-  ], "Text", ShowStringCharacters -> False]];
 
   content = Join[content, verificationSteps[data, sol]];
   <|"Content" -> content, "Solution" -> sol|>
@@ -433,11 +395,7 @@ stepsInfiniteTriangular[data_Association] := Module[
 
   AppendTo[content, makeStepHeader["Záver"]];
   AppendTo[content, "Sústava má nekonečne veľa riešení v tvare:"];
-  AppendTo[content, CellFormula[
-    Row[{
-      "[", Riffle[TraditionalForm /@ solExprs, ", "], "], ", TraditionalForm[\[FormalT]], " \[Element] Z"
-    }]
-  ]];
+  AppendTo[content, CellFormula[Row[{"[", Riffle[TraditionalForm /@ solExprs, ", "], "], ", TraditionalForm[\[FormalT]], " \[Element] Z"}]]];
 
   (* Verification for infinite is tricky to keep simple/didactic, we skip explicit row-by-row check for infinite in this basic skeleton or do symbolic check *)
   AppendTo[content, makeStepHeader["Skúška správnosti (symbolická)"]];
@@ -494,12 +452,7 @@ Gen01[diff_String, mode_String, opts : OptionsPattern[]] := Module[
   printSectionCell["Trojuholníková metóda"];
   printSubsectionCell["Zadanie"];
   printTextCell["Riešte sústavu rovníc v množine celých čísel."];
-
-  printFormulaCell @ Grid[
-    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
-    Alignment -> Left,
-    Spacings -> {0, 0.8}
-  ];
+  printFormulaCell @ Grid[List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]), Alignment -> Left, Spacings -> {0, 0.8}];
 
   printTextCell["Riešte pomocou augmentovanej matice a dosadzovania po riadkoch."];
 
@@ -519,16 +472,11 @@ Gen01[diff_String, mode_String, opts : OptionsPattern[]] := Module[
     Scan[renderStepItem, steps["Content"]];
   ];
 
-  (* výsledok postupu *)
-  If[mode === "TASK_RESULT",
+  If[mode =!= "TASK",
     printSubsectionCell["Výsledok"];
-    If[st === "ONE",
-      printFormulaCell[
-        Row[{"(", Riffle[vars, ", "], ")", " = ", "(", Riffle[tft /@ data["x"], ", "], ")"}]
-      ]
-    ];
+    If[st === "ONE", printFormulaCell[Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ data["x"], ", "], ")"}]]]];
     If[st === "NONE", printTextCell["Sústava nemá riešenie."]];
-    If[st === "INFINITE", printTextCell["Sústava má nekonečne veľa riešení (parametricky). Postup zobraz v režime TASK_STEPS_RESULT."]];
+    If[st === "INFINITE", printTextCell["Sústava má nekonečne veľa riešení."]];
   ];
 ];
 
