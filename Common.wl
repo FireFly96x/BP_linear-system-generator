@@ -59,12 +59,7 @@ WithRetries[f_, max_Integer : 200] := Module[{res = $Failed, i = 0},
 
 (* ~-~-~ COMMON DIMENSION DISPATCH ~-~-~ *)
 
-DimensionByDifficulty[generatorKey_String, diff_String] := Which[
-  MemberQ[{"Elimination", "Substitution"}, generatorKey],
-  Switch[diff, "EASY", 2, "MEDIUM", 3, "HARD", 3, _, 3],
-  True,
-  Switch[diff, "EASY", 4, "MEDIUM", 5, "HARD", 6, _, 4]
-];
+
 
 End[];
 EndPackage[];

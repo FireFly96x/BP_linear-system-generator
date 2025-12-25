@@ -114,9 +114,6 @@ resolveTriangularType[tri_] := If[tri === Automatic, RandomChoice[{"L", "U"}], t
 (* kontrola rozsahu hodnôt vektora *)
 vecInRangeQ[v_, n_] := Max[Abs @ Flatten[v]] <= rhsBound;
 
-(* kontrola či výraz obsahuje len celé čísla *)
-integersOnlyQ[expr_] := FreeQ[expr, _Rational | _Real];
-
 (* ~-~-~ TASK EQUATIONS ~-~-~ *)
 
 (* vytvorenie zoznamu premenných *)
