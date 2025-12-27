@@ -10,14 +10,14 @@ BeginPackage["MojeGeneratory`EquationMethodGenerator`"];
 $CharacterEncoding = "UTF-8";
 
 GenElimination::usage = "GenElimination[diff, mode, opts] vygeneruje príklad riešenia sústavy lineárnych rovníc eliminačnou metódou (sčítaním rovníc).\n\n" <>
-        "diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)\n" <>
-        "mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"\n" <>
-        "opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
+    "diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)\n" <>
+    "mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"\n" <>
+    "opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
 
 GenSubstitution::usage = "GenSubstitution[diff, mode, opts] vygeneruje príklad riešenia sústavy lineárnych rovníc dosadzovacou (substitučnou) metódou.\n\n" <>
-        "diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)\n" <>
-        "mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"\n" <>
-        "opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
+    "diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)\n" <>
+    "mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"\n" <>
+    "opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
 
 GenElimination::baddiff = "Neplatná obtiažnosť `1`. Použi \"EASY\"|\"MEDIUM\"|\"HARD\".";
 GenElimination::badmode = "Neplatný režim `1`. Použi \"TASK\"|\"TASK_RESULT\"|\"TASK_STEPS_RESULT\".";

@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      1708,         53]
-NotebookOptionsPosition[      1303,         37]
-NotebookOutlinePosition[      1753,         55]
-CellTagsIndexPosition[      1710,         52]
+NotebookDataLength[      1907,         56]
+NotebookOptionsPosition[      1502,         40]
+NotebookOutlinePosition[      1952,         58]
+CellTagsIndexPosition[      1909,         55]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -26,13 +26,16 @@ Cell[BoxData[{
   RowBox[{
    RowBox[{"<<", "\"\<EquationMethodGenerator.wl\>\""}], ";"}], 
   "\[IndentingNewLine]"}], "\n", 
- RowBox[{"GenSubstitution", "[", 
+ RowBox[{"GenElimination", "[", 
   RowBox[{"\"\<HARD\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
    RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", " ", 
    RowBox[{"Visualization", " ", "->", " ", "True"}]}], "]"}], "\n"}], "Input",
  CellChangeTimes->{{3.9757009438068523`*^9, 3.9757009438068523`*^9}, 
    3.975701017016773*^9, {3.975701093725874*^9, 3.975701102330042*^9}, {
-   3.975771815716791*^9, 3.975771922639988*^9}},
+   3.975771815716791*^9, 3.975771922639988*^9}, {3.975830313234062*^9, 
+   3.975830343370287*^9}, {3.9758305062425785`*^9, 3.975830508527134*^9}, {
+   3.975834289453476*^9, 3.975834307227375*^9}, {3.975834582065201*^9, 
+   3.9758345836872215`*^9}},
  CellLabel->"",ExpressionUUID->"333e5403-5cdc-a048-bb90-0d89bfd82046"]
 },
 WindowSize->{574.8, 568.8},
@@ -54,7 +57,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 745, 15, 73, "Input",ExpressionUUID->"333e5403-5cdc-a048-bb90-0d89bfd82046"]
+Cell[554, 20, 944, 18, 73, "Input",ExpressionUUID->"333e5403-5cdc-a048-bb90-0d89bfd82046"]
 }
 ]
 *)
