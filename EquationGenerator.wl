@@ -1,11 +1,11 @@
 ﻿(* ::Package:: *)
 
 (*
-  Package: EquationMethodGenerator
+  Package: EquationGenerator
   Description: Generátory príkladov riešenia sústav lineárnych rovníc eliminačnou a dosadzovacou metódou.
 *)
 
-BeginPackage["MojeGeneratory`EquationMethodGenerator`"];
+BeginPackage["MojeGeneratory`EquationGenerator`"];
 
 $CharacterEncoding = "UTF-8";
 
