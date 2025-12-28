@@ -109,13 +109,7 @@ buildTaskEquations[A_, b_, vars_] := MapThread[HoldForm[#1 == #2] &, {A.vars, b}
 toAugmented[A_, b_] := Join[A, List /@ b, 2];
 
 (* ~-~-~ MATRIX VISUALIZATION ~-~-~ *)
-alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
-  {
-    nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, greenCells,
-    bar, rowColor, sourceColor, wrapBg, makeCell, makeBar,
-    leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid
-  },
-
+alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, greenCells, bar, rowColor, sourceColor, boldDiagQ, wrapBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid},
   {nRows, nCols} = Dimensions[aug];
   nA = nCols - 1;
 
@@ -123,25 +117,15 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
   pivotPos = Lookup[hi, "PivotPos", None];
   activeRow = Lookup[hi, "ActiveRow", None];
 
-  (* NOVÉ: zoznam "zdrojových" riadkov, ktoré pricitávame *)
   sourceRows = Lookup[hi, "SourceRows", {}];
-
   greenCells = Lookup[hi, "GreenCells", {}];
+  boldDiagQ = TrueQ @ Lookup[hi, "BoldDiagonal", False];
 
   bar = Style["|", GrayLevel[.35], FontSize -> 16];
 
-  (* doterajšia modrá *)
   rowColor = RGBColor[0.90, 0.95, 1];
-
-  (* NOVÉ: svetlo fialová pre pricitávané riadky *)
   sourceColor = RGBColor[0.95, 0.92, 1.00];
 
-  (* NOVÉ: logika pozadia riadkov:
-     - ActiveRow modrá
-     - SourceRows fialová
-     - inak nič
-     Priorita: ActiveRow > SourceRows
-  *)
   wrapBg[i_, expr_] := Module[{bg = None},
     If[IntegerQ[activeRow] && i === activeRow,
       bg = rowColor,
@@ -151,17 +135,24 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
   ];
 
   makeCell[i_, j_, val_] := Module[
-    {cell = TraditionalForm[val], isGreen, showPivotQ},
+    {cell = TraditionalForm[val], isGreen, showPivotQ, isDiag},
 
     isGreen = MemberQ[greenCells, {i, j}];
+    isDiag = boldDiagQ && (j <= nA) && (i === j);
 
-    (* pivot ukážeme len vtedy, keď je aktívny pivotový riadok *)
-    showPivotQ = ListQ[pivotPos] && IntegerQ[activeRow] && activeRow === pivotPos[[1]];
+    showPivotQ = ListQ[pivotPos] &&
+        (
+          (IntegerQ[activeRow] && activeRow === pivotPos[[1]]) ||
+              MemberQ[sourceRows, pivotPos[[1]]]
+        );
 
     If[isGreen,
       cell = Style[cell, Darker[Green], Bold],
       If[showPivotQ && pivotPos === {i, j},
-        cell = Style[cell, Bold, RGBColor[0.8, 0, 0]]
+        cell = Style[cell, Bold],
+        If[isDiag,
+          cell = Style[cell, Bold]
+        ]
       ]
     ];
 
@@ -188,7 +179,10 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
     Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center, Right, Center}],
     Spacings -> {1, 1},
     BaseStyle -> {FontSize -> 14},
-    ItemSize -> {Join[{0.2}, ConstantArray[1.2, nA], {0.2, 1.2, 0.2}], Automatic}
+    ItemSize -> {
+      ({#, Automatic} & /@ Join[{0.2}, ConstantArray[1.2, nA], {0.2, 1.2, 0.2}]),
+      Automatic
+    }
   ];
 
   notesGrid = Grid[
@@ -209,11 +203,13 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
 
 (* malé rozsahy pre generovanie – hranice riešime len výberom malých čísel *)
 $bRange = {-10, 10};
-$kSet = DeleteCases[Range[-5, 5], 0];
-$mSet = DeleteCases[Range[-4, 4], 0];
+
+(* koeficienty pre riadkové operácie *)
+kSetByN[n_] := If[n <= 4, DeleteCases[Range[-5, 5], 0], DeleteCases[Range[-2, 2], 0]];
+mSetByN[n_] := If[n <= 4, DeleteCases[Range[-4, 4], 0], {-2, -1, 1, 2}];
+
 $rhsNonzeroRange = Join[Range[-10, -1], Range[1, 10]];
 $paramSet = DeleteCases[Range[-3, 3], 0];
-
 
 (* náhodný nenulový prvok z množiny *)
 randomNonzeroFromSet[set_List] := RandomChoice[set];
@@ -239,12 +235,12 @@ makeSolvedAugmented[n_Integer, solType_String, triType_String] := Module[
 
     If[triType === "U",
       Do[
-        A[[i, idx]] = randomNonzeroFromSet[$kSet],
+        A[[i, idx]] = randomNonzeroFromSet[kSetByN[n]],
         {i, 1, idx - 1}
       ],
       (* triType === "L" *)
       Do[
-        A[[i, idx]] = randomNonzeroFromSet[$kSet],
+        A[[i, idx]] = randomNonzeroFromSet[kSetByN[n]],
         {i, idx + 1, n}
       ]
     ];
@@ -306,12 +302,12 @@ scrambleAugmented[aug0_, triType_String] := Module[
     (* U: nechaj presne ako doteraz fungovalo *)
     Do[
       Do[
-        k = randomNonzeroFromSet[$kSet];
+        k = randomNonzeroFromSet[kSetByN[n]];
         aug = rowAddMultiple[aug, r, i, k],
         {r, 1, i - 1}
       ];
 
-      m = randomNonzeroFromSet[$mSet];
+      m = randomNonzeroFromSet[mSetByN[n]];
       aug = rowScale[aug, i, m];
       ,
       {i, 1, n}
@@ -319,12 +315,12 @@ scrambleAugmented[aug0_, triType_String] := Module[
     (* L: iba zmeň smer pivotov (zdola hore) *)
     Do[
       Do[
-        k = randomNonzeroFromSet[$kSet];
+        k = randomNonzeroFromSet[kSetByN[n]];
         aug = rowAddMultiple[aug, r, i, k],
         {r, i + 1, n}
       ];
 
-      m = randomNonzeroFromSet[$mSet];
+      m = randomNonzeroFromSet[mSetByN[n]];
       aug = rowScale[aug, i, m];
       ,
       {i, n, 1, -1}
@@ -342,7 +338,7 @@ scrambleAugmentedGauss[aug0_, triType_String] := Module[
   Do[
     Do[
       If[RandomReal[] < 0.65,
-        k = randomNonzeroFromSet[$kSet];
+        k = randomNonzeroFromSet[kSetByN[n]];
         aug = rowAddMultiple[aug, r, i, k];
         aug = normalizeAugRow[aug, r];
       ],
@@ -697,25 +693,70 @@ stepsGauss[data_Association] := Module[
 
   addHeader["Tvar po Gaussovej eliminácii"];
   addText["Dostali sme hornú trojuholníkovú sústavu. Premenné dopočítame v rovniciach spätným dosadzovaním."];
-  addMatrix[aug];
+  addMatrix[aug, {}, <|"BoldDiagonal" -> True|>];
 
   addHeader["Dopočet riešenia v rovniciach (spätné dosadzovanie)"];
   solLocal = ConstantArray[0, n];
 
-  Do[
-    rhs = aug[[i, n + 1]];
-    sum = Sum[aug[[i, j]]*solLocal[[j]], {j, i + 1, n}];
-    solLocal[[i]] = (rhs - sum)/aug[[i, i]];
+  Do[ Module[{row, pivot, rhsVal, terms, symExpr, subExpr, sumProducts, numVal},
 
-    AppendTo[content, Spacer[6]];
-    AppendTo[content, highlightGrid @ Grid[
-      {{tf[vars[[i]]], "=", tft[solLocal[[i]]]}},
-      Alignment -> {{Right, Center, Left}}, BaseStyle -> {FontSize -> 16}
-    ]];
-    AppendTo[content, Spacer[6]];
-    ,
+      row = aug[[i]];
+      pivot = row[[i]];
+      rhsVal = row[[n + 1]];
+      terms = Select[Table[{row[[j]], vars[[j]], solLocal[[j]]}, {j, i + 1, n}], #[[1]] =!= 0 &];
+      boldNum[val_] := Style[If[val < 0, Row[{"(", tft[val], ")"}], tft[val]], Bold];
+      coeffTimes[a_, x_] := If[a === 1, x, Row[{tf[a], "\[CenterDot]", x}]];
+
+
+      symExpr = Row @ Flatten @ Join[
+        {tft[rhsVal]},
+        Table[
+          With[{a = terms[[k, 1]], v = Style[tf[terms[[k, 2]]], Bold]},
+            {If[a > 0, " - ", " + "], coeffTimes[Abs[a], v]}
+          ],
+          {k, Length[terms]}
+        ]
+      ];
+
+      If[i < n,
+
+        AppendTo[content,
+        Which[pivot === 1, Row[{tf[vars[[i]]], " = ", symExpr}],
+          pivot === -1, Row[{tf[vars[[i]]], " = -(", symExpr, ")"}],
+          True, Row[{tf[vars[[i]]], " = (", symExpr, ")/", tf[pivot]}]
+        ]
+      ];
+
+      subExpr = Row @ Flatten @ Join[
+        {tft[rhsVal]},
+        Table[
+          With[{a = terms[[k, 1]], val = boldNum[terms[[k, 3]]]},
+            {If[a > 0, " - ", " + "], coeffTimes[Abs[a], val]}
+          ], {k, Length[terms]}
+        ]
+      ];
+
+      AppendTo[content,
+        Which[pivot === 1, Row[{tf[vars[[i]]], " = ", subExpr}],
+          pivot === -1, Row[{tf[vars[[i]]], " = -(", subExpr, ")"}],
+          True, Row[{tf[vars[[i]]], " = (", subExpr, ")/", tf[pivot]}]
+        ]
+      ];
+      ];
+
+      sumProducts = Total[terms[[All, 1]]*terms[[All, 3]]];
+      numVal = (rhsVal - sumProducts)/pivot;
+      solLocal[[i]] = numVal;
+
+      AppendTo[content, highlightGrid @ Grid[
+        {{tf[vars[[i]]], "=", tft[numVal]}},
+        Alignment -> {{Right, Center, Left}},
+        BaseStyle -> {FontSize -> 16}
+      ]];
+    ],
     {i, n, 1, -1}
   ];
+
 
 addHeader["Skúška správnosti"];
 addText["Overíme porovnaním A \[CenterDot] x s pravou stranou b (po riadkoch)."];
@@ -941,7 +982,7 @@ verificationSteps[data_Association, sol_List] := Module[
     AppendTo[content,
       Grid[
         {
-          {Row[{"Riadok ", i, ":  ", tf[A[[i]]], " \[CenterDot] ", tf[sol], " = ", tft[lhs]}]},
+          {Row[{"LS", i, ":  ", tf[A[[i]]], " \[CenterDot] ", tf[sol], " = ", tft[lhs]}]},
           {Row[{"PS", i, " = ", tft[b[[i]]]}]},
           {If[lhs === b[[i]], Style["ĽS = PS (OK)", Darker[Green]], Style["ĽS \[NotEqual] PS (CHYBA)", Red]]}
         },
