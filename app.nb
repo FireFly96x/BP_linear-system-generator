@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      3233,         73]
-NotebookOptionsPosition[      2828,         57]
-NotebookOutlinePosition[      3277,         75]
-CellTagsIndexPosition[      3234,         72]
+NotebookDataLength[      3859,         81]
+NotebookOptionsPosition[      3454,         65]
+NotebookOutlinePosition[      3903,         83]
+CellTagsIndexPosition[      3860,         80]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -24,10 +24,9 @@ Cell[BoxData[{
    RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
  RowBox[{
   RowBox[{
-   RowBox[{"<<", "\"\<MatrixGenerator.wl\>\""}], ";"}], 
-  "\[IndentingNewLine]"}], "\n", 
- RowBox[{"GenGaussJordanPivot", "[", 
-  RowBox[{"\"\<HARD\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+   RowBox[{"<<", "\"\<MatrixGenerator.wl\>\""}], ";"}], "\n"}], "\[IndentingNewLine]", 
+ RowBox[{"GenGaussJordan", "[", 
+  RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
    RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n"}], "Input",
  CellChangeTimes->{{3.9757009438068523`*^9, 3.9757009438068523`*^9}, 
    3.975701017016773*^9, {3.975701093725874*^9, 3.975701102330042*^9}, {
@@ -52,7 +51,16 @@ Cell[BoxData[{
    3.9759323094618816`*^9, 3.9759323101193447`*^9}, {3.9759323943648453`*^9, 
    3.9759324212667465`*^9}, 3.975932495729851*^9, {3.975933411190979*^9, 
    3.9759334517541733`*^9}, {3.9759335868259735`*^9, 3.975933597855049*^9}, {
-   3.9759355677723904`*^9, 3.9759355718426495`*^9}},
+   3.9759355677723904`*^9, 3.9759355718426495`*^9}, {3.975998085687788*^9, 
+   3.975998086256237*^9}, {3.9760002914156055`*^9, 3.9760002987063484`*^9}, {
+   3.976000902282398*^9, 3.976000909584158*^9}, {3.9760023377332954`*^9, 
+   3.9760023382837334`*^9}, {3.976002758770273*^9, 3.9760027601144295`*^9}, {
+   3.976004156047682*^9, 3.9760041674699707`*^9}, {3.976009617647854*^9, 
+   3.9760096185133038`*^9}, {3.976024467261814*^9, 3.976024492750145*^9}, {
+   3.976024688289871*^9, 3.976024688915674*^9}, {3.9760247464857445`*^9, 
+   3.9760247470616264`*^9}, {3.9760251939933224`*^9, 
+   3.9760251997706356`*^9}, {3.976026280414402*^9, 3.976026280922407*^9}, 
+   3.9760272699076595`*^9},
  CellLabel->"",ExpressionUUID->"333e5403-5cdc-a048-bb90-0d89bfd82046"]
 },
 WindowSize->{574.8, 568.8},
@@ -74,7 +82,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 2270, 35, 73, "Input",ExpressionUUID->"333e5403-5cdc-a048-bb90-0d89bfd82046"]
+Cell[554, 20, 2896, 43, 73, "Input",ExpressionUUID->"333e5403-5cdc-a048-bb90-0d89bfd82046"]
 }
 ]
 *)
