@@ -66,7 +66,7 @@ Options[GenGauss] = $CommonGeneratorOptions;
 Options[GenGaussJordan] = $CommonGeneratorOptions;
 Options[GenGaussJordanPivot] = $CommonGeneratorOptions;
 
-$FailedScrambleCount = 0;
+$FailedScrambleCount;
 
 Begin["`Private`"];
 
@@ -95,6 +95,71 @@ highlightTerm[term_] := Style[term, Bold, RGBColor[0.8, 0, 0]];
 tf[val_] := TraditionalForm[val];
 tft[val_] := tf[Together[val]];
 
+(* rovnice pre dosadzovanie v gauss *)
+gaussBackSubstEquations[aug_, vars_, sol0_, skipIdx_, content_] := Module[
+  {n = Length[aug], sol = sol0, row, pivot, rhsVal, terms, symExpr, subExpr, sumProducts, exprVal, boldVal, coeffTimes, out = content, paramPrintedQ = False},
+
+  boldVal[val_] := Style[
+    If[IntegerQ[val] && val < 0, Row[{"(", tft[val], ")"}],
+      If[IntegerQ[val], tft[val], TraditionalForm[val]]
+    ],
+    Bold
+  ];
+  coeffTimes[a_, x_] := If[a === 1, x, Row[{tf[a], "\[CenterDot]", x}]];
+
+  Do[
+    If[IntegerQ[skipIdx] && i === skipIdx, Continue[]];
+
+    row = aug[[i]]; pivot = row[[i]]; rhsVal = row[[n + 1]];
+    If[pivot === 0, Continue[]];
+
+    terms = Select[Table[{row[[j]], sol[[j]]}, {j, i + 1, n}], #[[1]] =!= 0 &];
+
+    symExpr = Row @ Flatten @ Join[
+      {tft[rhsVal]},
+      Table[
+        With[{a = row[[j]], v = Style[tf[vars[[j]]], Bold]},
+          {If[a > 0, " - ", " + "], coeffTimes[Abs[a], v]}
+        ],
+        {j, i + 1, n}
+      ]
+    ];
+    AppendTo[out, Which[
+      pivot === 1, Row[{tf[vars[[i]]], " = ", symExpr}],
+      pivot === -1, Row[{tf[vars[[i]]], " = -(", symExpr, ")"}],
+      True, Row[{tf[vars[[i]]], " = (", symExpr, ")/", tf[pivot]}]
+    ]];
+
+    subExpr = Row @ Flatten @ Join[
+      {tft[rhsVal]},
+      Table[
+        With[{a = row[[j]], val = boldVal[sol[[j]]]},
+          {If[a > 0, " - ", " + "], coeffTimes[Abs[a], val]}
+        ],
+        {j, i + 1, n}
+      ]
+    ];
+    AppendTo[out, Which[
+      pivot === 1, Row[{tf[vars[[i]]], " = ", subExpr}],
+      pivot === -1, Row[{tf[vars[[i]]], " = -(", subExpr, ")"}],
+      True, Row[{tf[vars[[i]]], " = (", subExpr, ")/", tf[pivot]}]
+    ]];
+
+    sumProducts = Total[terms[[All, 1]]*terms[[All, 2]]];
+    exprVal = Together[(rhsVal - sumProducts)/pivot];
+    sol[[i]] = exprVal;
+
+    AppendTo[out, highlightGrid @ Grid[
+      {{tf[vars[[i]]], "=", TraditionalForm[exprVal]}},
+      Alignment -> {{Right, Center, Left}}, BaseStyle -> {FontSize -> 16}
+    ]];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  {sol, out}
+];
+
 (* ~-~-~ STEP RENDERING ~-~-~ *)
 
 withStepCounter[renderFn_] := Block[{stepsCounter = 0}, renderFn[]];
@@ -110,7 +175,8 @@ renderStepItem[item_] := Which[
 buildVars[n_] := Take[{a, b, c, d, e, f}, n];
 
 (* pre output vypis infinte ↓, neskor vymyslim inak *)
-infiniteSolutionFromSolvedAug[data_Association] := Module[{n = data["n"], augS, A, b, idx, solExprs},
+infiniteSolutionFromSolvedAug[data_Association] := Module[
+  {n = data["n"], augS, A, b, idx, solExprs, pivot},
   augS = data["SolvedAug"];
   A = augS[[All, 1 ;; n]];
   b = augS[[All, n + 1]];
@@ -119,13 +185,137 @@ infiniteSolutionFromSolvedAug[data_Association] := Module[{n = data["n"], augS, 
   solExprs = ConstantArray[0, n];
   solExprs[[idx]] = \[FormalT];
 
-  Do[If[i =!= idx, solExprs[[i]] = Expand[b[[i]] - A[[i, idx]]*\[FormalT]]], {i, 1, n}];
+  Do[
+    If[i === idx, Continue[]];
+    pivot = A[[i, i]];
+    solExprs[[i]] = Expand[(b[[i]] - A[[i, idx]]*\[FormalT])/pivot];
+    ,
+    {i, 1, n}
+  ];
 
   solExprs
 ];
 
 buildTaskEquations[A_, b_, vars_] := MapThread[HoldForm[#1 == #2] &, {A . vars, b}];
 augFromAb[A_, b_] := Join[A, List /@ b, 2];
+
+
+(* ~-~-~ ROW OPERATIONS - delenie, kombinácia ~-~-~ *)
+
+(* note pre delenie riadku *)
+rowNoteDivide[i_, p_] := Row[{"R", i, " ← R", i, " / ", tf[p]}];
+rowApplyDivide[aug_, i_Integer, p_Integer] := ReplacePart[aug, i -> (aug[[i]]/p)];
+
+(* note pre kombináciu riadkov *)
+rowNoteCombine[i_, terms_List] := Module[{base = Row[{"R", i, " ← R", i}]},
+  Row @ Prepend[(Row[{If[#2 < 0, " - ", " + "], tf[Abs[#2]], "\[CenterDot]R", #1}] & @@@ terms), base]
+];
+
+rowApplyCombine[aug_, i_Integer, terms_List] := Module[{row = aug[[i]]},
+  ReplacePart[aug,  i -> (row + Total[terms[[All, 2]] aug[[terms[[All, 1]]]]])]
+];
+
+augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[{{
+  alignedAugmentedMatrix[before, notes, hiBefore], Spacer[18],
+  alignedAugmentedMatrix[after, {}, hiAfter]}},
+  Alignment -> {Left, Center, Left}, Spacings -> {0, 0}
+];
+
+augRender3[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[
+  {{alignedAugmentedMatrix[before, notes1, hi1],
+    Spacer[18], alignedAugmentedMatrix[mid, notes2, hi2],   (* "/gcd" *)
+    Spacer[18], alignedAugmentedMatrix[after, {}, hi3]      (* final *)
+  }}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}
+];
+
+SetAttributes[rowAppendElimStep, HoldFirst];
+
+rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[{notes, notes2, mid, after2, hi1, hi2, hi3},
+  notes = ConstantArray["", n];
+  notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
+
+  hi1 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}|>];
+  hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "GreenCells" -> {{r, i}}|>];
+  hi3 = hi2;
+
+  If[elimRes["DivG"] > 1,
+    mid = elimRes["AugRaw"];
+    after2 = elimRes["Aug"];
+
+    notes2 = ConstantArray["", n];
+    notes2[[r]] = rowNoteDivide[r, elimRes["DivG"]];
+
+    AppendTo[content,
+      augRender3[before, mid, after2, notes, notes2, hi1, hi2, hi3]
+    ];
+    after2
+    ,
+    after2 = elimRes["Aug"];
+    AppendTo[content,
+      augRender2[before, after2, notes, hi1, hi2]
+    ];
+    after2
+  ]
+  ];
+
+(* ~-~-~ MATRIX ROW HELPERS ~-~-~ *)
+
+rowAbsGCD[row_List] := Module[{g = Apply[GCD, Abs[row]]}, If[g === 0, 1, g]];
+
+normalizeRow[row_List] := Module[{g = rowAbsGCD[row]}, If[g > 1, row/g, row]];
+
+choosePivotRow[aug_, i_Integer] := Module[{n = Length[aug], candidates, best},
+  candidates = Select[Range[i, n], aug[[#, i]] =!= 0 &];
+  If[candidates === {},
+    i,
+    best = First @ MinimalBy[candidates, {Abs[aug[[#, i]]], Total[Abs[aug[[#]]]]} &];
+    best
+  ]
+];
+
+(* obmedzené "pivotovanie" pre obyčajny gauss *)
+choosePivotRowIfZero[aug_, i_Integer] := Module[{n = Length[aug], candidates},
+  If[aug[[i, i]] =!= 0, Return[i]];
+  candidates = Select[Range[i + 1, n], aug[[#, i]] =!= 0 &];
+  If[candidates === {}, i, First[candidates]]
+];
+
+rowNoteSwap[i_, k_] := Row[{"R", i, " ↔ R", k}];
+
+rowApplySwap[aug_, i_Integer, k_Integer] := ReplacePart[aug, {i -> aug[[k]], k -> aug[[i]]}];
+
+rowNoteElim[r_, i_, p2_, a2_] := Module[{leftPart, rightPart, op},
+  leftPart = If[p2 === 1, Row[{"R", r}], Row[{tf[p2], "\[CenterDot]", "R", r}]];
+  rightPart = If[Abs[a2] === 1, Row[{"R", i}], Row[{tf[Abs[a2]], "\[CenterDot]", "R", i}]];
+  op = If[a2 < 0, " + ", " - "];
+
+  Row[{"R", r, " ← ", leftPart, op, rightPart}]
+];
+
+rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{p, a, g1, p2, a2, rowRaw, g2, rowFinal, augRaw, augFinal},
+  p = aug[[i, i]]; a = aug[[r, i]];
+
+  If[a === 0,
+    <|"Aug" -> aug, "AugRaw" -> aug, "p2" -> 0, "a2" -> 0, "DivG" -> 1|>,
+    g1 = GCD[p, a];
+    p2 = p/g1;
+    a2 = a/g1;
+
+    (* medzi-krok *)
+    rowRaw = p2*aug[[r]] - a2*aug[[i]];
+    g2 = rowAbsGCD[rowRaw];
+
+    rowFinal = If[g2 > 1, rowRaw/g2, rowRaw];
+    augRaw = ReplacePart[aug, r -> rowRaw];
+    augFinal = ReplacePart[aug, r -> rowFinal];
+
+    <|"Aug" -> augFinal, "AugRaw" -> augRaw, "p2" -> p2, "a2" -> a2, "DivG" -> g2|>
+  ]
+];
+
+(* pre INFINITE a NONE *)
+contradictionRowQ[row_List] := Module[{lhs = Most[row], rhs = Last[row]}, (AllTrue[lhs, # === 0 &] && rhs =!= 0)];
+findContradictionRow[aug_] := Module[{idx = FirstCase[Range[Length[aug]], i_ /; contradictionRowQ[aug[[i]]], Missing["NotFound"]]}, idx];
 
 (* ~-~-~ MATRIX VISUALIZATION ~-~-~ *)
 
@@ -211,49 +401,58 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{
 
 $bRange = {-10, 10};
 nonzeroRange[min_, max_] := DeleteCases[Range[min, max], 0];
-boundsByDifficulty[diff_String] := Switch[diff, "EASY", 40, "MEDIUM", 35, "HARD", 30];
-rowOpMultipliers := nonzeroRange[-5, 5]; (* pre triangular *)
+boundsByDifficulty[diff_String] := Switch[diff, "EASY", 50, "MEDIUM", 45, "HARD", 40];
+kSetTri := nonzeroRange[-4, 7];
+kSetGauss := nonzeroRange[-2, 3];
 
 lowerNonzeroCount[m_] := Count[LowerTriangularize[m, -1], x_ /; x =!= 0, {2}];
 
+
 (* vytvorenie vyriešenej augmentovanej matice *)
-makeSolvedAug[diff_String, n_Integer, solType_String, triType_String] := Module[
-  {A, b, x, idx, paramIdx, badRow, diag, xInt, bVec},
+makeDiagonalAug[diff_String, n_Integer, solType_String, triType_String] := Module[
+  {A, b, x, idx, paramIdx, badRow, rhsNonzero},
 
-  (* diagonálne pivoty: nie jednotky, aby diagonála nebola len ±1 *)
-  diag = RandomChoice[nonzeroRange[-4, 4], n];
-  A = DiagonalMatrix[diag];
+  rhsNonzero = DeleteCases[Range[$bRange[[1]], $bRange[[2]]], 0];
 
-  idx = RandomInteger[{1, n}];
+  (* štart: I|b *)
+  A = IdentityMatrix[n];
+  b = RandomInteger[$bRange, n];
+  x = b;
+
+  (* pri vašom smere „upper“ (zdola nahor) dávame špeciálny riadok dole *)
+  idx = n;
   paramIdx = Missing["NotApplicable"];
   badRow = Missing["NotApplicable"];
 
   Switch[solType,
-
-    "ONE", xInt = RandomInteger[$bRange, n];
-  bVec = A . xInt;
-  x = xInt;
-  b = bVec;
+    "ONE", Null
     ,
-    "INFINITE",  A[[idx]] = ConstantArray[0, n];
-  b = RandomInteger[$bRange, n];
-  b[[idx]] = 0;
+    "INFINITE",
+    (* posledný riadok 0 = 0 *)
+    A[[idx]] = ConstantArray[0, n];
+    b[[idx]] = 0;
 
-  (* navyšovanie ostatných riadkov, aby sa zachoval trojuholníkový tvar *)
-  If[triType === "U",
-    Do[A[[i, idx]] = RandomChoice[rowOpMultipliers], {i, 1, idx - 1}],
-    Do[A[[i, idx]] = RandomChoice[rowOpMultipliers], {i, idx + 1, n}]
-  ];
+    Module[{paramCol, rows, k},
+      paramCol = RandomInteger[{1, n}];
+      rows = RandomSample[Range[1, n - 1], RandomInteger[{1, Max[1, n - 1]}]];
+      Do[
+        k = RandomChoice[kSetTri];
+        A[[r, paramCol]] = k;
+        ,
+        {r, rows}
+      ];
+      paramIdx = idx;
+    ];
 
-  x = "INFINITE";
-  paramIdx = idx;
+    x = "INFINITE";
     ,
-    "NONE", A[[idx]] = ConstantArray[0, n];
-  b = RandomInteger[$bRange, n];
-  b[[idx]] = RandomInteger[$bRange /. {0 -> Sequence[]}];
+    "NONE",
+    (* posledný riadok 0 = c, c != 0 *)
+    A[[idx]] = ConstantArray[0, n];
+    b[[idx]] = RandomChoice[rhsNonzero];
 
-  x = "NONE";
-  badRow = idx;
+    x = "NONE";
+    badRow = idx;
   ];
 
   <|"Aug" -> augFromAb[A, b], "x" -> x, "BadRow" -> badRow, "ParamIdx" -> paramIdx|>
@@ -261,7 +460,7 @@ makeSolvedAug[diff_String, n_Integer, solType_String, triType_String] := Module[
 
 (* generovanie dát aby postup bol bez zlomkov *)
 generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{solved, augSolved, augTask, A, b, vars},
-  solved = makeSolvedAug[diff, n, solType, triType];
+  solved = makeDiagonalAug[diff, n, solType, triType];
   augSolved = solved["Aug"];
   augTask = scrambleFn[diff, augSolved, triType, solType];
 
@@ -274,220 +473,104 @@ generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{solved
     "BadRow" -> solved["BadRow"], "ParamIdx" -> solved["ParamIdx"]|>
 ];
 
-genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
-  {aug = aug0, n, k, bnd, rowNew},
-
-  n = Length[aug];
+genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Gauss_ : True] := Module[{aug = aug0, n = Length[aug0], bnd, kSet, withinQ, protectedLastRowQ, chooseK, chooseS, i, r, k, s},
   bnd = boundsByDifficulty[diff];
+  kSet = If[TrueQ[Gauss], kSetGauss, kSetTri];
+  withinQ[row_] := Max[Abs[row]] <= bnd;
 
-  If[triType === "U",
-    Do[
-      Do[
-        k = RandomChoice[rowOpMultipliers];
-        rowNew = aug[[r]] + k aug[[i]];
-        If[Max[Abs[rowNew]] <= bnd,
-          aug = ReplacePart[aug, r -> normalizeRow[rowNew]],
-          $FailedScrambleCount++
-        ];
-        ,
-        {r, 1, i - 1}
-      ];
-      ,
-      {i, 1, n}
-    ],
-    Do[
-      Do[
-        k = RandomChoice[rowOpMultipliers];
-        rowNew = aug[[r]] + k aug[[i]];
-        If[Max[Abs[rowNew]] <= bnd,
-          aug = ReplacePart[aug, r -> normalizeRow[rowNew]],
-          $FailedScrambleCount++
-        ];
-        ,
-        {r, i + 1, n}
-      ];
-      ,
-      {i, n, 1, -1}
-    ]
+  protectedLastRowQ[rowIdx_] := (solType === "NONE" || solType === "INFINITE") && (rowIdx === n);
+
+  (* násobok - zvyšné koeficienty *)
+  chooseK[target_, src_] := Module[{k0, cand, ks},
+    k0 = RandomChoice[kSet];
+    cand = target + k0*src; If[withinQ[cand], Return[k0]];
+    cand = target - k0*src; If[withinQ[cand], Return[-k0]];
+    ks = SortBy[kSet, Abs];
+    Do[ cand = target + kk*src; If[withinQ[cand], Return[kk]]; cand = target - kk*src; If[withinQ[cand], Return[-kk]];
+      , {kk, ks}
+    ]; 0
   ];
 
-  Map[normalizeRow, aug]
+  (* scaling - koeficient pivotu *)
+  chooseS[row_] := Module[{s0, cand, ss},
+    If[!TrueQ[Gauss], Return[1]];
+    s0 = RandomChoice[kSet];
+    cand = s0*row; If[withinQ[cand], Return[s0]];
+    cand = -s0*row; If[withinQ[cand], Return[-s0]];
+    ss = SortBy[kSet, Abs];
+    Do[ cand = t*row; If[withinQ[cand], Return[t]]; cand = -t*row; If[withinQ[cand], Return[-t]];
+      , {t, ss}
+    ]; 1
+  ];
+
+  If[triType === "L",
+    For[i = n, i >= 1, i--,
+      If[solType =!= "NONE" || !TrueQ@contradictionRowQ[aug[[i]]],
+        For[r = i + 1, r <= n, r++,
+          If[protectedLastRowQ[r], Continue[]];
+          k = chooseK[aug[[r]], aug[[i]]];
+          If[k =!= 0, aug[[r]] = aug[[r]] + k*aug[[i]]];
+        ]
+      ];
+      s = chooseS[aug[[i]]];
+      If[s =!= 1, aug[[i]] = s*aug[[i]]];
+    ],
+    For[i = 1, i <= n, i++,
+      If[solType =!= "NONE" || !TrueQ@contradictionRowQ[aug[[i]]],
+        For[r = i - 1, r >= 1, r--,
+          k = chooseK[aug[[r]], aug[[i]]];
+          If[k =!= 0, aug[[r]] = aug[[r]] + k*aug[[i]]];
+        ]
+      ];
+      s = chooseS[aug[[i]]];
+      If[s =!= 1, aug[[i]] = s*aug[[i]]];
+    ]
+  ];
+  aug
 ];
 
 genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{n, pairs, chosenPairs, kSet, bnd, maxAttempts, maxKTries, aug, r, i, k, rowNew, currentLower, okQ},
   n = Length[aug0];
   pairs = Flatten[Table[{r, i}, {i, 1, n - 1}, {r, i + 1, n}], 1];
 
-  kSet = nonzeroRange[-3, 3];
+  kSet = kSetGauss;
   bnd = boundsByDifficulty[diff];
 
   maxAttempts = 40;   (* koľkokrát reštartovať celý scramble *)
   maxKTries = 5;     (* koľko rôznych k skúsiť pre jeden pár *)
 
   Do[
-    aug = genScrambleTriang[diff, aug0, "U", solType];
+    aug = genScrambleTriang[diff, aug0, "U", solType, False];
     aug = Map[normalizeRow, aug];
 
     chosenPairs = RandomSample[pairs, Length[pairs]];
 
     Do[
       {r, i} = pair;
-
       okQ = False;
       Do[
         k = RandomChoice[kSet];
         rowNew = aug[[r]] + k aug[[i]];
-
-        If[Max[Abs[rowNew]] <= bnd,
-          aug = ReplacePart[aug, r -> normalizeRow[rowNew]];
-          okQ = True;
-          Break[];
-        ];
+        rowNew = normalizeRow[rowNew];
+        If[Max[Abs[rowNew]] <= bnd, aug[[r]] = rowNew; okQ = True; Break[];];
         ,
         {t, 1, maxKTries}
       ];
-      ,
-      {pair, chosenPairs}
+      , {pair, chosenPairs}
     ];
-
     currentLower = lowerNonzeroCount[aug[[All, 1 ;; n]]];
-
-    If[currentLower == Length[pairs],
-      Return[aug],
-      $FailedScrambleCount++
-    ];
-    ,
-    {attempt, 1, maxAttempts}
+    If[currentLower == Length[pairs], Return[aug]];
+    , {attempt, 1, maxAttempts}
   ];
-
   aug
 ];
-
-(* ~-~-~ ROW OPERATIONS - delenie, kombinácia ~-~-~ *)
-
-(* note pre delenie riadku *)
-rowNoteDivide[i_, p_] := Row[{"R", i, " ← R", i, " / ", tf[p]}];
-rowApplyDivide[aug_, i_Integer, p_Integer] := ReplacePart[aug, i -> (aug[[i]]/p)];
-
-(* note pre kombináciu riadkov *)
-rowNoteCombine[i_, terms_List] := Module[{base = Row[{"R", i, " ← R", i}]},
-  Row @ Prepend[(Row[{If[#2 < 0, " - ", " + "], tf[Abs[#2]], "\[CenterDot]R", #1}] & @@@ terms), base]
-];
-
-rowApplyCombine[aug_, i_Integer, terms_List] := Module[{row = aug[[i]]},
-  ReplacePart[aug,  i -> (row + Total[terms[[All, 2]] aug[[terms[[All, 1]]]]])]
-];
-
-augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[
-  {{alignedAugmentedMatrix[before, notes, hiBefore], Spacer[18], alignedAugmentedMatrix[after, {}, hiAfter]}},
-  Alignment -> {Left, Center, Left}, Spacings -> {0, 0}
-];
-
-augRender3[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[
-  {{alignedAugmentedMatrix[before, notes1, hi1],
-    Spacer[18],
-    alignedAugmentedMatrix[mid, notes2, hi2],   (* "/gcd" *)
-    Spacer[18],
-    alignedAugmentedMatrix[after, {}, hi3]      (* final *)
-  }}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}
-];
-
-SetAttributes[rowAppendElimStep, HoldFirst];
-
-rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] :=
-    Module[{notes, notes2, mid, after2, hi1, hi2, hi3},
-      notes = ConstantArray["", n];
-      notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
-
-      hi1 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}|>];
-      hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "GreenCells" -> {{r, i}}|>];
-      hi3 = hi2;
-
-      If[elimRes["DivG"] > 1,
-        mid = elimRes["AugRaw"];
-        after2 = elimRes["Aug"];
-
-        notes2 = ConstantArray["", n];
-        notes2[[r]] = rowNoteDivide[r, elimRes["DivG"]];
-
-        AppendTo[content,
-          augRender3[before, mid, after2, notes, notes2, hi1, hi2, hi3]
-        ];
-        after2
-        ,
-        after2 = elimRes["Aug"];
-        AppendTo[content,
-          augRender2[before, after2, notes, hi1, hi2]
-        ];
-        after2
-      ]
-    ];
-
-(* ~-~-~ MATRIX ROW HELPERS ~-~-~ *)
-
-rowAbsGCD[row_List] := Module[{g = Apply[GCD, Abs[row]]}, If[g === 0, 1, g]];
-
-normalizeRow[row_List] := Module[{g = rowAbsGCD[row]}, If[g > 1, row/g, row]];
-
-choosePivotRow[aug_, i_Integer] := Module[{n = Length[aug], candidates, best},
-  candidates = Select[Range[i, n], aug[[#, i]] =!= 0 &];
-  If[candidates === {},
-    i,
-    best = First @ MaximalBy[candidates, {Abs[aug[[#, i]]], -Total[Abs[aug[[#]]]]} &];
-    best
-  ]
-];
-
-(* obmedzené "pivotovanie" pre obyčajny gauss *)
-choosePivotRowIfZero[aug_, i_Integer] := Module[{n = Length[aug], candidates},
-  If[aug[[i, i]] =!= 0, Return[i]];
-  candidates = Select[Range[i + 1, n], aug[[#, i]] =!= 0 &];
-  If[candidates === {}, i, First[candidates]]
-];
-
-
-rowNoteSwap[i_, k_] := Row[{"R", i, " ↔ R", k}];
-
-rowApplySwap[aug_, i_Integer, k_Integer] := ReplacePart[aug, {i -> aug[[k]], k -> aug[[i]]}];
-
-rowNoteElim[r_, i_, p2_, a2_] := Module[{leftPart, rightPart, op},
-  leftPart = If[p2 === 1, Row[{"R", r}], Row[{tf[p2], "\[CenterDot]", "R", r}]];
-  rightPart = If[Abs[a2] === 1, Row[{"R", i}], Row[{tf[Abs[a2]], "\[CenterDot]", "R", i}]];
-  op = If[a2 < 0, " + ", " - "];
-
-  Row[{"R", r, " ← ", leftPart, op, rightPart}]
-];
-
-rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{p, a, g1, p2, a2, rowRaw, g2, rowFinal, augRaw, augFinal},
-  p = aug[[i, i]]; a = aug[[r, i]];
-
-  If[a === 0,
-    <|"Aug" -> aug, "AugRaw" -> aug, "p2" -> 0, "a2" -> 0, "DivG" -> 1|>,
-    g1 = GCD[p, a];
-    p2 = p/g1;
-    a2 = a/g1;
-
-    (* medzi-krok *)
-    rowRaw = p2*aug[[r]] - a2*aug[[i]];
-    g2 = rowAbsGCD[rowRaw];
-
-    rowFinal = If[g2 > 1, rowRaw/g2, rowRaw];
-    augRaw = ReplacePart[aug, r -> rowRaw];
-    augFinal = ReplacePart[aug, r -> rowFinal];
-
-    <|"Aug" -> augFinal, "AugRaw" -> augRaw, "p2" -> p2, "a2" -> a2, "DivG" -> g2|>
-  ]
-];
-
-(* pre INFINITE a NONE *)
-contradictionRowQ[row_List] := Module[{lhs = Most[row], rhs = Last[row]}, (AllTrue[lhs, # === 0 &] && rhs =!= 0)];
-findContradictionRow[aug_] := Module[{idx = FirstCase[Range[Length[aug]], i_ /; contradictionRowQ[aug[[i]]], Missing["NotFound"]]}, idx];
 
 (* ~-~-~ STEP GENERATION ~-~-~ *)
 
 stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st, order, addHeader, addText, addMatrix, addConclusion, addCheckHeader, notes, result, sol},
-  n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; tri = data["TriType"]; st = data["SolutionType"];
-  order = If[tri === "U", Range[n, 1, -1], Range[1, n]];
+  n = data["n"]; aug = data["Aug"]; vars = data["Vars"];
+  tri = data["TriType"]; st = data["SolutionType"];
+  order = If[tri === "U", Range[n, 1, -1],Range[1, n]];
 
   addHeader[text_] := AppendTo[content, makeStepHeader[text]];
   addText[text_] := AppendTo[content, text];
@@ -496,16 +579,16 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
   addCheckHeader[extra_List : {}] := (addHeader["Skúška správnosti"]; Scan[addText, extra]);
 
   addHeader["Prepis sústavy do augmentovanej matice"];
-  addText["Zapíšeme sústavu do augmentovanej matice a ďalej pracujeme už len s maticou."];
+  addText["Sústavu najprv prepíšeme do augmentovanej matice. Od tohto momentu pracujeme už len s maticou a vykonávame ekvivalentné riadkové úpravy."];
   addMatrix[aug];
 
   result = Switch[st,
     "ONE",
-    Module[{before, after, terms, p, solLocal},
+    Module[{terms, solLocal},
       solLocal = ConstantArray[None, n];
 
       addHeader["Riadkové úpravy"];
-      addText["Postupne upravujeme riadky tak, aby sa dali premenné dopočítať dosadzovaním po riadkoch."];
+      addText["Riadky upravujeme tak, aby v každom kroku zostala v riadku iba jedna nová neznáma. Najprv odstránime členy s už známymi premennými a potom (ak je to potrebné) riadok vydelíme pivotom, aby sme dostali jednoduchý tvar rovnice."];
 
       Do[
         terms = If[tri === "U",
@@ -517,7 +600,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
 
           before0 = aug;
 
-          (* 1) kombinácia (ak treba) *)
+          (* kombinácia (ak treba) *)
           If[terms =!= {},
             mid0 = rowApplyCombine[before0, i, terms];
             notes1 = ConstantArray["", n];
@@ -532,7 +615,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
             hi2 = hi1;
           ];
 
-          (* 2) delenie (ak treba) *)
+          (* delenie (ak treba) *)
           p = mid0[[i, i]];
           If[p =!= 1,
             after0 = rowApplyDivide[mid0, i, p];
@@ -541,7 +624,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
 
             hi3 = <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "GreenCells" -> {{i, i}, {i, n + 1}}|>;
 
-            (* ak bola aj kombinácia, zobraz 3-panely; inak stačí 2-panely *)
+            (* ak bola aj kombinácia, zobraz 3; inak stačí 2 stlpce *)
             If[terms =!= {},
               AppendTo[content, augRender3[before0, mid0, after0, notes1, notes2, hi1, hi2, hi3]],
               AppendTo[content, augRender2[mid0, after0, notes2, hi2, hi3]]
@@ -549,7 +632,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
 
             aug = after0;
             ,
-            (* bez delenia: ak bola kombinácia, nechaj 2-panely; ak nebola ani kombinácia ani delenie, nič nerob *)
+            (* bez delenia v medzikroku *)
             If[terms =!= {},
               AppendTo[content, augRender2[before0, mid0, notes1, hi1, hi2]];
               aug = mid0;
@@ -579,7 +662,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       badIdx = data["BadRow"];
 
       addHeader["Analýza riadkov"];
-      addText["Hľadáme riadok, ktorý predstavuje spor (nulové koeficienty, ale nenulová pravá strana)."];
+      addText["Hľadáme riadok, v ktorom sú všetky koeficienty pri neznámych nulové, ale pravá strana je nenulová. Takýto riadok predstavuje spor tvaru 0 = k, kde k \[NotEqual] 0."];
 
       notes = ReplacePart[ConstantArray["", n], badIdx -> "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]]];
       addMatrix[aug, notes, <|"ActiveRow" -> badIdx|>];
@@ -595,7 +678,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       paramIdx = data["ParamIdx"];
 
       addHeader["Analýza riadkov"];
-      addText["Nulový riadok znamená, že jedna premenná môže byť voľná (parameter)."];
+      addText["Ak sa objaví nulový riadok, znamená to, že jedna z premenných nie je určená jednoznačne. Túto premennú zvolíme ako voľný parameter a ostatné premenné vyjadríme pomocou neho."];
 
       notes = ReplacePart[ConstantArray["", n], paramIdx -> "nulový riadok -> parameter"];
       addMatrix[aug, notes, <|"ActiveRow" -> paramIdx|>];
@@ -610,7 +693,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       ];
       AppendTo[content, Spacer[6]];
 
-      addHeader["Vyjadrenie ostatných premenných"];
+      addHeader["Vyjadrenie ostatných premenných pomocou parametra"];
 
       solExprs = ConstantArray[0, n];
       solExprs[[paramIdx]] = \[FormalT];
@@ -668,7 +751,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
   <|"Content" -> content, "Solution" -> sol|>
 ];
 
-stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, idx},
+stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, idx, solLocal, paramIdx, tmp},
   n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
 
   addHeader[text_] := AppendTo[content, makeStepHeader[text]];
@@ -676,11 +759,11 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
 
   addHeader["Prepis sústavy do augmentovanej matice"];
-  addText["Zapíšeme sústavu do augmentovanej matice a vykonáme doprednú elimináciu (Gauss)."];
+  addText["Sústavu prepíšeme do augmentovanej matice a následne vykonáme Gaussovu elimináciu, aby sme zrušili prvky pod hlavnou diagonálou."];
   addMatrix[aug];
 
   addHeader["Dopredná eliminácia (na horný trojuholník)"];
-  addText["Nulujeme prvky pod diagonálou celočíselne. Koeficienty redukujeme cez gcd a riadky priebežne normalizujeme."];
+  addText["Postupujeme po stĺpcoch zľava doprava. V každom kroku zvolíme pivot (ak treba, prehodíme riadky) a následne rušíme prvky pod pivotom celočíselnými riadkovými úpravami. Koeficienty priebežne skracujeme pomocou gcd a riadky normalizujeme."];
 
   Do[
     kPivot = choosePivotRowIfZero[aug, i];
@@ -709,11 +792,12 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
   ];
 
   addHeader["Tvar po Gaussovej eliminácii"];
-  addText["Dostali sme hornú trojuholníkovú sústavu."];
+  addText["Po doprednej eliminácii dostaneme hornú trojuholníkovú sústavu. Teraz môžeme určiť neznáme spätným dosadzovaním, začíname od posledného riadku."];
+  addMatrix[aug, {}, <|"BoldDiagonal" -> True|>];
 
   If[st === "NONE",
     idx = FirstCase[Range[n], k_ /; aug[[k, k]] === 0 && aug[[k, n + 1]] =!= 0, Missing["NotFound"]];
-    addText["Na diagonále sa nachádza nulový pivot. Pri spätnom dosadzovaní by vznikla rovnica tvaru 0 = k, kde k \[NotEqual] 0, čo je spor."];
+    addText["Na diagonále sa nachádza nulový pivot a zároveň je v príslušnom riadku nenulová pravá strana. To vedie k rovnici tvaru 0 = k, kde k \[NotEqual] 0, takže sústava nemá riešenie."];
     If[IntegerQ[idx],
       notes = ConstantArray["", n]; notes[[idx]] = "pivot = 0";
       addMatrix[aug, notes, <|"ActiveRow" -> idx, "BoldDiagonal" -> True|>],
@@ -730,32 +814,41 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
     Return[<|"Content" -> content, "Solution" -> "NONE"|>];
   ];
 
-  If[st === "INFINITE",
-    idx = FirstCase[Range[n], k_ /; aug[[k, k]] === 0 && aug[[k, n + 1]] === 0, Missing["NotFound"]];
-    addText["Na diagonále sa nachádza nulový pivot. Pri spätnom dosadzovaní by jedna premenná chýbala (bola by voľná), takže sústava má nekonečne veľa riešení."];
-    If[IntegerQ[idx],
-      notes = ConstantArray["", n]; notes[[idx]] = "pivot = 0";
-      addMatrix[aug, notes, <|"ActiveRow" -> idx, "BoldDiagonal" -> True|>],
-      addMatrix[aug, {}, <|"BoldDiagonal" -> True|>]
-    ];
+  If[st === "ONE",
+    addHeader["Spätné dosadzovanie v rovniciach"];
+    tmp = gaussBackSubstEquations[aug, vars, ConstantArray[0, n], None, content];
+    solLocal = tmp[[1]];
+    content = tmp[[2]];
 
     addHeader["Skúška správnosti"];
-    addText["Overíme pomocou Frobeniovej vety (porovnanie hodností)."];
-    content = Join[content, verificationStepsInfiniteRank[data]];
+    addText["Overíme porovnaním A \[CenterDot] x s pravou stranou b (po riadkoch)."];
+    content = Join[content, verificationSteps[data, solLocal]];
+    Return[<|"Content" -> content, "Solution" -> solLocal|>];
+  ];
+
+  If[st === "INFINITE",
+    paramIdx = FirstCase[Range[n], k_ /; aug[[k, k]] === 0 && aug[[k, n + 1]] === 0, None];
+
+    addHeader["Spätné dosadzovanie s parametrom"];
+    solLocal = ConstantArray[0, n];
+    If[IntegerQ[paramIdx], solLocal[[paramIdx]] = \[FormalT]];
+    tmp = gaussBackSubstEquations[aug, vars, solLocal, paramIdx, content];
+    solLocal = tmp[[1]];
+    content = tmp[[2]];
+
+    addHeader["Skúška správnosti"];
+    addText["Dosadíme parametrické riešenie do pôvodných rovníc. Po úprave musí v každom riadku vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."];
+    content = Join[content, verificationStepsInfinite[data, solLocal]];
 
     addHeader["Záver"];
     addText["Sústava má nekonečne veľa riešení."];
-
     Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
   ];
 
-  addHeader["Skúška správnosti"];
-  addText["Overíme porovnaním A \[CenterDot] x s pravou stranou b (po riadkoch)."];
-  content = Join[content, verificationSteps[data, aug[[All, n + 1]]]];
 
   <|"Content" -> content, "Solution" -> aug[[All, n + 1]]|>
 ];
-(* gauss s aj bez pivotovania ↓ *)
+
 stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
   {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow,
     solLocal, paramIdx, solExprs, row, pivot, knownTerm, pivotRowFn},
@@ -769,11 +862,13 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
 
   addHeader["Prepis sústavy do augmentovanej matice"];
-  addText["Zapíšeme sústavu do augmentovanej matice a prevedieme ju na jednotkovú maticu (Gauss-Jordan)."];
+  addText["Sústavu prepíšeme do augmentovanej matice a vykonáme Gaussovu–Jordanovu elimináciu tak, aby sa ľavá časť zmenila na jednotkovú maticu."];
   addMatrix[aug];
 
   addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
-  addText["Nulujeme prvky pod diagonálou celočíselne, s redukciou cez gcd a normalizáciou riadkov."];
+  addText[
+    "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme pivot ako nenulový prvok s najmenšou absolútnou hodnotou a prípadne prehodíme riadky. Pomocou pivotového riadku potom nulujeme prvky pod ním celočíselnými úpravami. Po každom kroku riadky skracujeme pomocou najväčšieho spoločného deliteľa (gcd) a normalizujeme."
+  ];
 
   Do[
     kPivot = pivotRowFn[aug, i];
@@ -802,7 +897,7 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
   ];
 
   addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
-  addText["Nulujeme prvky nad diagonálou rovnakým stabilným celočíselným krokom."];
+  addText["Potom zrušíme prvky nad diagonálou, aby sme v ľavej časti dostali jednotkovú maticu."];
 
   Do[
     pNow = aug[[i, i]];
@@ -821,7 +916,7 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
     Module[{badIdx},
       badIdx = findContradictionRow[aug];
       addHeader["Analýza riadkov"];
-      addText["Hľadáme riadok, ktorý predstavuje spor (nulové koeficienty, ale nenulová pravá strana)."];
+      addText["Hľadáme riadok, v ktorom sú všetky koeficienty pri neznámych nulové, ale pravá strana je nenulová. Takýto riadok znamená spor tvaru 0 = k, kde k \[NotEqual] 0."];
       notes = ConstantArray["", n];
       If[IntegerQ[badIdx], notes[[badIdx]] = "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]]];
       addMatrix[aug, notes, <|"ActiveRow" -> If[IntegerQ[badIdx], badIdx, None]|>];
@@ -837,7 +932,7 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
     ];
   ];
 
-  addHeader["Normalizácia pivotov"];
+  addHeader["Normalizácia pivotov na 1"];
 
   Do[
     pNow = aug[[i, i]];
@@ -873,11 +968,11 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
     paramIdx = data["ParamIdx"];
 
     addHeader["Analýza riadkov"];
-    addText["Nulový riadok znamená, že jedna premenná môže byť voľná (parameter)."];
+    addText["Ak sa objaví nulový riadok, znamená to, že jedna z premenných nie je určená jednoznačne. Túto premennú zvolíme ako voľný parameter a ostatné premenné vyjadríme pomocou neho."];
     notes = ReplacePart[ConstantArray["", n], paramIdx -> "nulový riadok -> parameter"];
     addMatrix[aug, notes, <|"ActiveRow" -> paramIdx|>];
 
-    addText[Row[{"Premennú ", vars[[paramIdx]], " zvolíme za parameter ", TraditionalForm[\[FormalT]], "."}]];
+    addText[Row[{"Premennú ", vars[[paramIdx]], " zvolíme za parameter ", TraditionalForm[\[FormalT]], " a ponecháme ju v riešení ako symbol."}]];
     AppendTo[content, Spacer[6]];
     AppendTo[content, highlightGrid @ Grid[
       {{tf[vars[[paramIdx]]], "=", TraditionalForm[\[FormalT]]}},
@@ -886,7 +981,7 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
     ]];
     AppendTo[content, Spacer[6]];
 
-    addHeader["Vyjadrenie ostatných premenných"];
+    addHeader["Vyjadrenie ostatných premenných pomocou parametra"];
 
     solExprs = ConstantArray[0, n];
     solExprs[[paramIdx]] = \[FormalT];
@@ -1043,8 +1138,6 @@ verificationStepsInfiniteRank[data_Association] := Module[{content = {}, A = dat
 (* ~-~-~ MAIN CONTROLLER ~-~-~ *)
 
 runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPattern[]] := Module[{n, vars, st, tri, data, steps, validateExtraQ, resolveExtra, sectionTitle, stepFn, scrambleFn},
-  $FailedScrambleCount = 0;
-
   (* spoločné validácie *)
   If[!TrueQ[ValidateDifficulty[diff]], Message[spec["MsgPrefix"]::baddiff, diff]; Return[]];
   If[!TrueQ[ValidateMode[mode]], Message[spec["MsgPrefix"]::badmode, mode]; Return[]];
@@ -1056,14 +1149,14 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
 
   (* špecifické validácie *)
   validateExtraQ = Lookup[spec, "ValidateExtra", (True &)];
-  If[!TrueQ[validateExtraQ[spec, opts]], Return[]];
+  If[!TrueQ[validateExtraQ[spec, {opts}]], Return[]];
 
   (* riešenie typu sústavy *)
   st = ResolveSolutionType[OptionValue[spec["EntryFn"], {opts}, SolutionType]];
 
   (* špecifické riešenie parametrov *)
   resolveExtra = Lookup[spec, "ResolveExtra", (Missing["NotUsed"] &)];
-  tri = resolveExtra[spec, opts];
+  tri = resolveExtra[spec, {opts}];
 
   (* rozmery *)
   n = DimensionByDifficulty[diff];
@@ -1072,9 +1165,6 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
   (* dáta *)
   scrambleFn = spec["ScrambleFn"];
   data = generateData[diff, n, st, tri, scrambleFn];
-
-  (* info o generovaní *)
-  printTextCell["Počet neúspešných pokusov o generovanie: " <> ToString[$FailedScrambleCount]];
 
   (* tlač zadania *)
   sectionTitle = spec["SectionTitle"];
@@ -1128,17 +1218,15 @@ GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec
     "EntryFn" -> GenTriangular, "MsgPrefix" -> GenTriangular, "DimKey" -> "Triangular", "SectionTitle" -> "Trojuholníková metóda",
     "ScrambleFn" -> genScrambleTriang, "StepsFn" -> stepsTriangular,
     "ValidateExtra" -> Function[{specLocal, passedOpts},
-      With[{triOpt = OptionValue[specLocal["EntryFn"], {passedOpts}, TriangularType]},
+      With[{triOpt = OptionValue[specLocal["EntryFn"], passedOpts, TriangularType]},
         If[!TrueQ[validateTriangularType[triOpt]],
           Message[specLocal["MsgPrefix"]::badtri, triOpt];
-          False,
-          True
+          False, True
         ]
       ]
     ],
-    "ResolveExtra" -> Function[{specLocal, passedOpts}, resolveTriangularType[OptionValue[specLocal["EntryFn"], {passedOpts}, TriangularType]]]
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, resolveTriangularType[OptionValue[specLocal["EntryFn"], passedOpts, TriangularType]]]
   |>;
-
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
