@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      8297,        177]
-NotebookOptionsPosition[      7889,        161]
-NotebookOutlinePosition[      8339,        179]
-CellTagsIndexPosition[      8296,        176]
+NotebookDataLength[      8509,        183]
+NotebookOptionsPosition[      8101,        167]
+NotebookOutlinePosition[      8551,        185]
+CellTagsIndexPosition[      8508,        182]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -57,6 +57,9 @@ Cell[BoxData[
     RowBox[{
      RowBox[{"SetDirectory", "[", 
       RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "Input"], 
+   StyleBox["\[IndentingNewLine]", "Input"], 
+   RowBox[{
+    RowBox[{"$CharacterEncoding", "=", "\"\<UTF-8\>\""}], ";"}], "\n", 
    StyleBox["\n", "Input"], 
    StyleBox[
     RowBox[{
@@ -104,7 +107,7 @@ Cell[BoxData[
     RowBox[{"GenGaussJordanPivot", "[", 
      RowBox[{"\"\<HARD\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
       RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}], 
-    "Input"], "\n", "\n"}]}]], "Input",
+    "Input"]}]}]], "Input",
  CellChangeTimes->{{3.9757009438068523`*^9, 3.9757009438068523`*^9}, 
    3.975701017016773*^9, {3.975701093725874*^9, 3.975701102330042*^9}, {
    3.975771815716791*^9, 3.975771922639988*^9}, {3.975830313234062*^9, 
@@ -156,8 +159,11 @@ Cell[BoxData[
    3.9763544148589497`*^9}, {3.9763545179447937`*^9, 3.976354559421652*^9}, {
    3.97635459050169*^9, 3.9763546484524784`*^9}, 3.976354726987854*^9, {
    3.9763547600024357`*^9, 3.9763549256346245`*^9}, {3.9763550316962795`*^9, 
-   3.9763550683319263`*^9}, {3.9763551058905544`*^9, 3.9763551100561123`*^9}},
- CellLabel->"",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
+   3.9763550683319263`*^9}, {3.9763551058905544`*^9, 
+   3.9763551100561123`*^9}, {3.976356067034313*^9, 3.9763560694868317`*^9}, {
+   3.976356106433647*^9, 
+   3.9763561070256233`*^9}},ExpressionUUID->"ea76dedc-d940-d548-8915-\
+5556628c3d25"]
 },
 WindowSize->{1141.2, 568.8},
 WindowMargins->{{0, Automatic}, {Automatic, 0}},
@@ -178,7 +184,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 7331, 139, 350, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
+Cell[554, 20, 7543, 145, 350, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
 }
 ]
 *)
