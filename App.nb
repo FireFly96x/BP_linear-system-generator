@@ -10,104 +10,28 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      8509,        183]
-NotebookOptionsPosition[      8101,        167]
-NotebookOutlinePosition[      8551,        185]
-CellTagsIndexPosition[      8508,        182]
+NotebookDataLength[      5918,        110]
+NotebookOptionsPosition[      5513,         94]
+NotebookOutlinePosition[      5962,        112]
+CellTagsIndexPosition[      5919,        109]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
-Cell[BoxData[
- RowBox[{
-  RowBox[{"(*", "\n", 
-   StyleBox[
-    RowBox[{
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"diff", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"EASY", "/", "MEDIUM"}], "/", "HARD"}]}]}], "\n", 
-     RowBox[{
-      RowBox[{"\[Bullet]", " ", 
-       RowBox[{"mode", " ", ":", " ", "TASK"}]}], ";", "  ", "TASK_RESULT", ";",
-       " ", 
-      RowBox[{"TASK_STEPS", " ", "_RESULT"}]}], "\n", 
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"SolutionType", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"ONE", "/", "NONE"}], "/", "INFINITE"}]}]}], "\n", 
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"Visualization", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"True", "/", "False"}], " ", 
-        RowBox[{"(", 
-         RowBox[{
-         "iba", " ", "pre", " ", "GenElimination", " ", "a", " ", 
-          "GenSubstitution"}], ")"}]}]}]}], "\n", 
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"TriangularType", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"U", "/", "L"}], " ", 
-        RowBox[{"(", 
-         RowBox[{"iba", " ", "pre", " ", "GenTriangular"}], ")"}]}]}]}]}], 
-    "Item"], 
-   StyleBox["\[IndentingNewLine]", "Item"], "*)"}], "\n", "\n", 
+Cell[BoxData[{
+ StyleBox[
   RowBox[{
-   StyleBox[
-    RowBox[{
-     RowBox[{"SetDirectory", "[", 
-      RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "Input"], 
-   StyleBox["\[IndentingNewLine]", "Input"], 
-   RowBox[{
-    RowBox[{"$CharacterEncoding", "=", "\"\<UTF-8\>\""}], ";"}], 
-   StyleBox["\n", "Input"], "\n", 
-   StyleBox[
-    RowBox[{
-     RowBox[{"<<", " ", "\"\<EquationGenerator.wl\>\""}], ";"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenElimination", "[", 
-     RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}], ",", " ", 
-      RowBox[{"Visualization", " ", "->", " ", "True"}]}], "]"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenSubstitution", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<INFINITE\>\""}], ",", " ", 
-      RowBox[{"Visualization", " ", "->", " ", "True"}]}], "]"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{
-     RowBox[{"<<", " ", "\"\<MatrixGenerator.wl\>\""}], ";"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenTriangular", "[", 
-     RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<NONE\>\""}], ",", " ", 
-      RowBox[{"TriangularType", " ", "->", " ", "\"\<L\>\""}]}], "]"}], 
-    "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenGauss", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}], 
-    "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenGaussJordan", "[", 
-     RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}], 
-    "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenGaussJordanPivot", "[", 
-     RowBox[{"\"\<HARD\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}], 
-    "Input"]}]}]], "Input",
+   RowBox[{"SetDirectory", "[", 
+    RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "Input"], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"$CharacterEncoding", "=", "\"\<UTF-8\>\""}], ";"}], "\n"}], "\n", 
+ StyleBox[
+  RowBox[{
+   RowBox[{"<<", " ", "\"\<MatrixGenerator.wl\>\""}], ";"}], "Input"], "\[IndentingNewLine]", 
+ RowBox[{"GenGauss", "[", 
+  RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
+   RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}]}], "Input",
  CellChangeTimes->{{3.9757009438068523`*^9, 3.9757009438068523`*^9}, 
    3.975701017016773*^9, {3.975701093725874*^9, 3.975701102330042*^9}, {
    3.975771815716791*^9, 3.975771922639988*^9}, {3.975830313234062*^9, 
@@ -161,12 +85,15 @@ Cell[BoxData[
    3.9763547600024357`*^9, 3.9763549256346245`*^9}, {3.9763550316962795`*^9, 
    3.9763550683319263`*^9}, {3.9763551058905544`*^9, 
    3.9763551100561123`*^9}, {3.976356067034313*^9, 3.9763560694868317`*^9}, {
-   3.976356106433647*^9, 
-   3.9763561070256233`*^9}},ExpressionUUID->"ea76dedc-d940-d548-8915-\
-5556628c3d25"]
+   3.976356106433647*^9, 3.9763561070256233`*^9}, {3.982126839164322*^9, 
+   3.9821268859478188`*^9}, {3.9821269239636326`*^9, 
+   3.9821269738880367`*^9}, {3.9821270447326374`*^9, 3.982127084275776*^9}, {
+   3.9821272962329025`*^9, 3.982127297064888*^9}, {3.982127332051676*^9, 
+   3.9821273323478775`*^9}, {3.98230040395866*^9, 3.982300411165222*^9}},
+ CellLabel->"",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
 },
-WindowSize->{1141.2, 568.8},
-WindowMargins->{{0, Automatic}, {Automatic, 0}},
+WindowSize->{574.8, 568.8},
+WindowMargins->{{Automatic, 0}, {Automatic, 0}},
 LightDark->"Light",
 Magnification:>0.9 Inherited,
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
@@ -184,7 +111,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 7543, 145, 350, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
+Cell[554, 20, 4955, 72, 93, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
 }
 ]
 *)

@@ -235,11 +235,11 @@ verificationStepsEquation[A_, b_, vars_, sol_] := Module[
     AppendTo[content,
       Grid[
         {
-          {Row[{"\:013dS", i, " = ", prodRow, " = ", sumRow, " = ", Style[tft[lhs], Bold]}]},
+          {Row[{"LS", i, " = ", prodRow, " = ", sumRow, " = ", Style[tft[lhs], Bold]}]},
           {Row[{"PS", i, " = ", Style[tft[b[[i]]], Bold]}]},
           {If[lhs === b[[i]],
-            Style[Row[{"\:013dS", i, " = PS", i, " (OK)"}], Darker[Green]],
-            Style[Row[{"\:013dS", i, " \[NotEqual] PS", i, " (CHYBA)"}], Red]
+            Style[Row[{"LS", i, " = PS", i, " (OK)"}], Darker[Green]],
+            Style[Row[{"LS", i, " \[NotEqual] PS", i, " (CHYBA)"}], Red]
           ]}
         },
         Alignment -> Left,
