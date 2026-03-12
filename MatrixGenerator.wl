@@ -392,64 +392,378 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{
   Grid[{{matrixGrid, Spacer[12], notesGrid}}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}]
 ];
 
+(* renderovanie pre tvar (A|E)                                            *)
+alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[
+  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, greenCells,
+    bar, rowColor, sourceColor, boldIdentityQ, wrapBg, makeCell, makeBar,
+    leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, showPivotQ},
+
+  {nRows, nCols} = Dimensions[aug];
+  nA = Quotient[nCols, 2];
+
+  notes2 = If[notes === {}, ConstantArray["", nRows], PadRight[notes, nRows, ""]];
+  pivotPos = Lookup[hi, "PivotPos", None];
+  activeRow = Lookup[hi, "ActiveRow", None];
+  sourceRows = Lookup[hi, "SourceRows", {}];
+  greenCells = Lookup[hi, "GreenCells", {}];
+  boldIdentityQ = TrueQ @ Lookup[hi, "BoldIdentity", False];
+
+  bar = Style["|", GrayLevel[.35], FontSize -> 16];
+  rowColor = RGBColor[0.90, 0.95, 1];
+  sourceColor = RGBColor[0.95, 0.92, 1.00];
+
+  wrapBg[i_, expr_] := Module[{bg = None},
+    If[IntegerQ[activeRow] && i === activeRow, bg = rowColor,
+      If[MemberQ[sourceRows, i], bg = sourceColor]
+    ];
+    Item[expr, Background -> bg]
+  ];
+
+  showPivotQ = ListQ[pivotPos] && ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
+
+  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isIdentity},
+    isGreen = MemberQ[greenCells, {i, j}];
+    isIdentity = boldIdentityQ && j > nA && i === j - nA && val === 1;
+
+    If[isGreen,
+      cell = Style[cell, Darker[Green], Bold],
+      If[showPivotQ && pivotPos === {i, j},
+        cell = Style[cell, Bold],
+        If[isIdentity, cell = Style[cell, Bold]]
+      ]
+    ];
+
+    wrapBg[i, Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}]]
+  ];
+
+  makeBar[i_] := wrapBg[i, bar];
+
+  leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
+  rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
+
+  rows = Table[
+    Join[
+      {If[i === 1, leftBracketCell, SpanFromAbove]},
+      Table[makeCell[i, j, aug[[i, j]]], {j, 1, nA}],
+      {makeBar[i]},
+      Table[makeCell[i, j, aug[[i, j]]], {j, nA + 1, nCols}],
+      {If[i === 1, rightBracketCell, SpanFromAbove]}
+    ],
+    {i, 1, nRows}
+  ];
+
+  matrixGrid = Grid[
+    rows,
+    Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center}, ConstantArray[Right, nA], {Center}],
+    Spacings -> {1, 1},
+    BaseStyle -> {FontSize -> 14},
+    ItemSize -> {Join[{0.2}, ConstantArray[1.2, nA], {0.2}, ConstantArray[1.2, nA], {0.2}], Automatic}
+  ];
+
+  notesGrid = Grid[
+    List /@ (
+      Item[
+        Pane[Style[#, GrayLevel[.35], FontSize -> 13], {170, Automatic}, Alignment -> Left],
+        Background -> White
+      ] & /@ notes2
+    ),
+    Alignment -> Left,
+    Spacings -> {0, 1.15},
+    BaseStyle -> {FontSize -> 14}
+  ];
+
+  Grid[{{matrixGrid, Spacer[12], notesGrid}}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}]
+];
+
+augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[{{
+  alignedAugmentedMatrixInverse[before, notes, hiBefore], Spacer[18],
+  alignedAugmentedMatrixInverse[after, {}, hiAfter]
+}},
+  Alignment -> {Left, Center, Left},
+  Spacings -> {0, 0}
+];
+
+augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[{{
+  alignedAugmentedMatrixInverse[before, notes1, hi1], Spacer[18],
+  alignedAugmentedMatrixInverse[mid, notes2, hi2], Spacer[18],
+  alignedAugmentedMatrixInverse[after, {}, hi3]
+}},
+  Alignment -> {Left, Center, Left},
+  Spacings -> {0, 0}
+];
+
+SetAttributes[rowAppendElimStepInverse, HoldFirst];
+
+rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[
+  {notes, notes2, mid, after2, hi1, hi2, hi3},
+
+  notes = ConstantArray["", n];
+  notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
+
+  hi1 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}|>];
+  hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "GreenCells" -> {{r, i}}|>];
+  hi3 = hi2;
+
+  If[elimRes["DivG"] > 1,
+    mid = elimRes["AugRaw"];
+    after2 = elimRes["Aug"];
+
+    notes2 = ConstantArray["", n];
+    notes2[[r]] = rowNoteDivide[r, elimRes["DivG"]];
+
+    AppendTo[content, augRender3Inverse[before, mid, after2, notes, notes2, hi1, hi2, hi3]];
+    after2
+    ,
+    after2 = elimRes["Aug"];
+    AppendTo[content, augRender2Inverse[before, after2, notes, hi1, hi2]];
+    after2
+  ]
+];
+
 (* ~-~-~ MATRIX GENERATION ~-~-~ *)
 
 $bRange = {-10, 10};
 nonzeroRange[min_, max_] := DeleteCases[Range[min, max], 0];
-$Bounds = 50;
-$MaxBounds = 120;
+$Bounds = 20;
+$MaxBounds = 40;
 $MaxRetryCount = 50;
 
 matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
 
-forwardEliminationWithinBoundsQ[data_Association, pivotMode_: "ZERO"] := Module[
-  {aug, n, i, r, kPivot, pNow, elimRes, pivotRowFn},
+(* spoločný trace pre doprednú elimináciu *)
+collectForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[
+  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
 
-  aug = data["Aug"];
-  n = data["n"];
+  workAug = aug;
+  n = Length[workAug];
 
   pivotRowFn = Switch[pivotMode,
     "MIN", choosePivotRow,
     _, choosePivotRowIfZero
   ];
 
-  If[matrixMaxAbs[aug] > $MaxBounds, Return[False]];
+  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
 
   Do[
-    kPivot = pivotRowFn[aug, i];
+    pivotRow = pivotRowFn[workAug, i];
 
-    If[kPivot =!= i,
-      aug = rowApplySwap[aug, i, kPivot];
-      If[matrixMaxAbs[aug] > $MaxBounds, Return[False]];
+    If[pivotRow =!= i,
+      workAug = rowApplySwap[workAug, i, pivotRow];
+      AppendTo[trace, <|
+        "Type" -> "Swap",
+        "PivotCol" -> i,
+        "Row" -> i,
+        "SourceRow" -> pivotRow,
+        "Matrix" -> workAug
+      |>];
     ];
 
-    pNow = aug[[i, i]];
-    If[pNow === 0, Continue[]];
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
 
     Do[
-      If[aug[[r, i]] =!= 0,
-        elimRes = rowApplyElimStable[aug, r, i];
+      If[workAug[[r, i]] =!= 0,
+        elimRes = rowApplyElimStable[workAug, r, i];
 
-        If[matrixMaxAbs[elimRes["AugRaw"]] > $MaxBounds, Return[False]];
-        If[matrixMaxAbs[elimRes["Aug"]] > $MaxBounds, Return[False]];
+        If[elimRes["DivG"] > 1,
+          AppendTo[trace, <|
+            "Type" -> "ElimRaw",
+            "PivotCol" -> i,
+            "Row" -> r,
+            "Matrix" -> elimRes["AugRaw"]
+          |>]
+        ];
 
-        aug = elimRes["Aug"];
+        workAug = elimRes["Aug"];
+        AppendTo[trace, <|
+          "Type" -> "ElimFinal",
+          "PivotCol" -> i,
+          "Row" -> r,
+          "Matrix" -> workAug
+        |>];
       ],
       {r, i + 1, n}
     ],
     {i, 1, n - 1}
   ];
 
-  True
+  <|
+    "FinalAug" -> workAug,
+    "Trace" -> trace
+  |>
 ];
 
-generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, pivotMode_: "ZERO"] := Module[
-  {data, retries = 0},
+forwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[
+  {traceData, limit},
+
+  limit = $MaxBounds;
+  traceData = collectForwardEliminationTrace[aug, pivotMode];
+
+  AllTrue[
+    traceData["Trace"],
+    matrixMaxAbs[#["Matrix"]] <= limit &
+  ]
+];
+
+collectInverseEliminationTrace[aug_, pivotMode_: "MIN"] := Module[
+  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}, after},
+
+  workAug = aug;
+  n = Length[workAug];
+
+  pivotRowFn = Switch[pivotMode,
+    "MIN", choosePivotRow,
+    _, choosePivotRowIfZero
+  ];
+
+  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
+
+  (* dopredná eliminácia *)
+  Do[
+    pivotRow = pivotRowFn[workAug, i];
+
+    If[pivotRow =!= i,
+      workAug = rowApplySwap[workAug, i, pivotRow];
+      AppendTo[trace, <|
+        "Type" -> "Swap",
+        "Phase" -> "Forward",
+        "PivotCol" -> i,
+        "Row" -> i,
+        "SourceRow" -> pivotRow,
+        "Matrix" -> workAug
+      |>];
+    ];
+
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    Do[
+      If[workAug[[r, i]] =!= 0,
+        elimRes = rowApplyElimStable[workAug, r, i];
+
+        If[elimRes["DivG"] > 1,
+          AppendTo[trace, <|
+            "Type" -> "ElimRaw",
+            "Phase" -> "Forward",
+            "PivotCol" -> i,
+            "Row" -> r,
+            "Matrix" -> elimRes["AugRaw"]
+          |>]
+        ];
+
+        workAug = elimRes["Aug"];
+        AppendTo[trace, <|
+          "Type" -> "ElimFinal",
+          "Phase" -> "Forward",
+          "PivotCol" -> i,
+          "Row" -> r,
+          "Matrix" -> workAug
+        |>];
+      ],
+      {r, i + 1, n}
+    ],
+    {i, 1, n - 1}
+  ];
+
+  (* spätná eliminácia *)
+  Do[
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    Do[
+      If[workAug[[r, i]] =!= 0,
+        elimRes = rowApplyElimStable[workAug, r, i];
+
+        If[elimRes["DivG"] > 1,
+          AppendTo[trace, <|
+            "Type" -> "ElimRaw",
+            "Phase" -> "Backward",
+            "PivotCol" -> i,
+            "Row" -> r,
+            "Matrix" -> elimRes["AugRaw"]
+          |>]
+        ];
+
+        workAug = elimRes["Aug"];
+        AppendTo[trace, <|
+          "Type" -> "ElimFinal",
+          "Phase" -> "Backward",
+          "PivotCol" -> i,
+          "Row" -> r,
+          "Matrix" -> workAug
+        |>];
+      ],
+      {r, 1, i - 1}
+    ],
+    {i, n, 2, -1}
+  ];
+
+  (* normalizácia pivotov *)
+  Do[
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    If[pivotValue =!= 1,
+      after = rowApplyDivide[workAug, i, pivotValue];
+      workAug = after;
+
+      AppendTo[trace, <|
+        "Type" -> "Divide",
+        "Phase" -> "Normalize",
+        "Row" -> i,
+        "Matrix" -> workAug
+      |>];
+    ],
+    {i, 1, n}
+  ];
+
+  <|
+    "FinalAug" -> workAug,
+    "Trace" -> trace
+  |>
+];
+
+inverseEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[
+  {traceData, limit},
+
+  limit = $MaxBounds;
+  traceData = collectInverseEliminationTrace[aug, pivotMode];
+
+  AllTrue[
+    traceData["Trace"],
+    matrixMaxAbs[#["Matrix"]] <= limit &
+  ]
+];
+
+generateDataWithBounds[
+  diff_String,
+  n_Integer,
+  solType_,
+  triType_,
+  scrambleFn_,
+  pivotMode_: "ZERO",
+  boundAugFn_: Automatic,
+  boundCheckFn_: Automatic
+] := Module[
+  {data, retries = 0, augForCheck, resolvedBoundAugFn, resolvedBoundCheckFn},
+
+  resolvedBoundAugFn = If[
+    boundAugFn === Automatic,
+    Function[d, d["Aug"]],
+    boundAugFn
+  ];
+
+  resolvedBoundCheckFn = If[
+    boundCheckFn === Automatic,
+    forwardEliminationWithinBoundsQ,
+    boundCheckFn
+  ];
 
   While[retries < $MaxRetryCount,
     data = generateData[diff, n, solType, triType, scrambleFn];
+    augForCheck = resolvedBoundAugFn[data];
 
-    If[TrueQ[forwardEliminationWithinBoundsQ[data, pivotMode]],
+    If[TrueQ[resolvedBoundCheckFn[augForCheck, pivotMode]],
       Return[Append[data, "RetryCount" -> retries]]
     ];
 
@@ -905,7 +1219,10 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
   <|"Content" -> content, "Solution" -> aug[[All, n + 1]]|>
 ];
 
-stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[{content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, solLocal, paramIdx, solExprs, row, pivot, knownTerm, pivotRowFn},
+stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
+  {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after,
+    kPivot, elimRes, pNow, solLocal, paramIdx, solExprs, row, pivot, knownTerm, pivotRowFn},
+
   n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
 
   pivotRowFn = If[pivotQ, choosePivotRow, choosePivotRowIfZero];
@@ -920,7 +1237,10 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[{content = {}, n,
 
   addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
   addText[
-    "Postupujeme po st\:013apcoch zľava doprava. V každom st\:013apci vyberieme pivot ako nenulový prvok s najmenšou absolútnou hodnotou a prípadne prehodíme riadky. Pomocou pivotového riadku potom nulujeme prvky pod ním celočíselnými úpravami. Po každom kroku riadky skracujeme pomocou najväčšieho spoločného deliteľa (gcd) a normalizujeme."
+    If[pivotQ,
+      "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme pivot ako nenulový prvok s najmenšou absolútnou hodnotou a prípadne prehodíme riadky. Pomocou pivotového riadku potom nulujeme prvky pod ním celočíselnými úpravami. Po každom kroku riadky skracujeme pomocou najväčšieho spoločného deliteľa (gcd) a normalizujeme.",
+      "Postupujeme po stĺpcoch zľava doprava. Ak je aktuálny pivot nulový, prehodíme riadok s niektorým nižším riadkom, ktorý má v danom stĺpci nenulový prvok. Potom pomocou pivotového riadku nulujeme prvky pod ním celočíselnými úpravami. Po každom kroku riadky skracujeme pomocou najväčšieho spoločného deliteľa (gcd) a normalizujeme."
+    ]
   ];
 
   Do[
@@ -945,8 +1265,10 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[{content = {}, n,
         before = aug;
         elimRes = rowApplyElimStable[before, r, i];
         aug = rowAppendElimStep[content, before, elimRes, r, i, n, <|"SourceRows" -> {i}|>];
-      ], {r, i + 1, n}
-    ], {i, 1, n - 1}
+      ],
+      {r, i + 1, n}
+    ],
+    {i, 1, n - 1}
   ];
 
   addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
@@ -961,8 +1283,10 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[{content = {}, n,
         before = aug;
         elimRes = rowApplyElimStable[before, r, i];
         aug = rowAppendElimStep[content, before, elimRes, r, i, n, <||>];
-      ], {r, 1, i - 1}
-    ], {i, n, 2, -1}
+      ],
+      {r, 1, i - 1}
+    ],
+    {i, n, 2, -1}
   ];
 
   If[st === "NONE",
@@ -1011,7 +1335,8 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[{content = {}, n,
       BaseStyle -> {FontSize -> 16}
     ]];
     AppendTo[content, Spacer[6]];
-    , {i, 1, n}
+    ,
+    {i, 1, n}
   ];
 
   addHeader["Hotový tvar (I | x)"];
@@ -1064,7 +1389,8 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[{content = {}, n,
         BaseStyle -> {FontSize -> 16}
       ]];
       AppendTo[content, Spacer[6]];
-      , {i, n, 1, -1}
+      ,
+      {i, n, 1, -1}
     ];
 
     addHeader["Skúška správnosti"];
@@ -1086,440 +1412,6 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[{content = {}, n,
   <|"Content" -> content, "Solution" -> solLocal|>
 ];
 
-(* ~-~-~ VERIFICATION STEPS ~-~-~ *)
-
-verificationSteps[data_Association, sol_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs},
-  Do[
-    lhs = A[[i]] . sol;
-    AppendTo[content,
-      Grid[
-        {
-          {Row[{"LS", i, ":  ", tf[A[[i]]], " \[CenterDot] ", tf[sol], " = ", tft[lhs]}]},
-          {Row[{"PS", i, " = ", tft[b[[i]]]}]},
-          {If[lhs === b[[i]], Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]}
-        },
-        Alignment -> Left,
-        Spacings -> {0, 0.4},
-        BaseStyle -> {FontSize -> 13}
-      ]
-    ], {i, 1, n}
-  ];
-
-  content
-];
-verificationStepsNone[data_Association] := Module[{content = {}, A = data["A"], b = data["b"], aug0, rA, rAug, n, badIdx, rhsVal},
-
-  n = Length[b];
-  aug0 = augFromAb[A, b];
-  rA = MatrixRank[A];
-  rAug = MatrixRank[aug0];
-
-  AppendTo[content,
-    Grid[
-      {
-        {Row[{"hodnosť(A) = ", rA}]},
-        {Row[{"hodnosť([A|b]) = ", rAug}]},
-        {If[rA < rAug,
-          Style["hodnosť(A) < hodnosť([A|b])  \[Rule]  sústava nemá riešenie (OK)", Darker[Green]],
-          Style["hodnosti sa nerovnajú tak, ako majú pre spor - over postup (CHYBA)", Red]
-        ]}
-      },
-      Alignment -> Left,
-      Spacings -> {0, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-  content
-];
-verificationStepsInfinite[data_Association, solExprs_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs, diff, okQ, coeffs},
-  Do[
-    lhs = Together[A[[i]] . solExprs];
-    diff = Together[lhs - b[[i]]];
-
-    okQ = If[diff === 0,
-      True,
-      If[PolynomialQ[diff, \[FormalT]],
-        coeffs = CoefficientList[Expand[diff], \[FormalT]];
-        AllTrue[coeffs, # === 0 &],
-        False
-      ]
-    ];
-
-    AppendTo[content,
-      Grid[
-        {
-          {Row[{"Riadok ", i, ":  ", tf[A[[i]]], " \[CenterDot] ", TraditionalForm[solExprs], " = ", TraditionalForm[lhs]}]},
-          {Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}]},
-          {Row[{"LS - PS = ", TraditionalForm[diff]}]},
-          {If[okQ, Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]}
-        },
-        Alignment -> Left,
-        Spacings -> {0, 0.4},
-        BaseStyle -> {FontSize -> 13}
-      ]
-    ], {i, 1, n}
-  ];
-
-  content
-];
-
-verificationStepsInfiniteRank[data_Association] := Module[{content = {}, A = data["A"], b = data["b"], n, aug0, rA, rAug},
-  n = Length[b];
-  aug0 = augFromAb[A, b];
-  rA = MatrixRank[A];
-  rAug = MatrixRank[aug0];
-
-  AppendTo[content,
-    Grid[
-      {
-        {Row[{"hodnosť(A) = ", rA}]},
-        {Row[{"hodnosť([A|b]) = ", rAug}]},
-        {If[rA === rAug && rA < n,
-          Style["hodnosť(A) = hodnosť([A|b]) < n  \[Rule]  sústava má nekonečne veľa riešení (OK)", Darker[Green]],
-          Style["hodnosti nesp\:013aňajú podmienku pre nekonečne veľa riešení - over postup (CHYBA)", Red]
-        ]}
-      },
-      Alignment -> Left, Spacings -> {0, 0.4}, BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-  content
-];
-
-
-(* ~-~-~ MAIN CONTROLLER ~-~-~ *)
-printDefaultTask[data_Association, vars_List] := Module[{},
-  printTextCell["Riešte sústavu rovníc v množine celých čísel."];
-  printFormulaCell @ Grid[
-    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
-    Alignment -> Left,
-    Spacings -> {0, 0.8}
-  ];
-  printTextCell["Riešte pomocou augmentovanej matice."];
-];
-
-printDefaultResult[data_Association, vars_List, st_] := Module[{},
-  If[st === "ONE",
-    printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ data["x"], ", "], ")"}]]
-    ]
-  ];
-
-  If[st === "NONE",
-    printTextCell["Sústava nemá riešenie."]
-  ];
-
-  If[st === "INFINITE",
-    printTextCell["Sústava má nekonečne veľa riešení."];
-    Module[{solExprs = infiniteSolutionFromSolvedAug[data]},
-      printFormulaCell[
-        Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalT], " \[Element] ", Integers, " }"}]
-      ];
-    ];
-  ];
-];
-
-runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPattern[]] := Module[
-  {n, vars, st, tri, data, steps = Missing["NotComputed"], validateExtraQ, resolveExtra,
-    sectionTitle, stepFn, scrambleFn, taskPrinter, resultPrinter, useRetryQ, pivotMode},
-
-  (* spoločné validácie *)
-  If[!TrueQ[ValidateDifficulty[diff]],
-    Message[spec["MsgPrefix"]::baddiff, diff];
-    Return[]
-  ];
-
-  If[!TrueQ[ValidateMode[mode]],
-    Message[spec["MsgPrefix"]::badmode, mode];
-    Return[]
-  ];
-
-  With[{stOpt = OptionValue[spec["EntryFn"], {opts}, SolutionType]},
-    If[!TrueQ[ValidateSolutionType[stOpt]],
-      Message[spec["MsgPrefix"]::badst, stOpt];
-      Return[]
-    ];
-  ];
-
-  (* špecifické validácie *)
-  validateExtraQ = Lookup[spec, "ValidateExtra", (True &)];
-  If[!TrueQ[validateExtraQ[spec, {opts}]],
-    Return[]
-  ];
-
-  (* riešenie typu sústavy *)
-  st = ResolveSolutionType[OptionValue[spec["EntryFn"], {opts}, SolutionType]];
-
-  (* špecifické riešenie parametrov *)
-  resolveExtra = Lookup[spec, "ResolveExtra", (Missing["NotUsed"] &)];
-  tri = resolveExtra[spec, {opts}];
-
-  (* rozmery *)
-  n = DimensionByDifficulty[diff];
-  vars = buildVars[n];
-
-  (* dáta *)
-  scrambleFn = spec["ScrambleFn"];
-  useRetryQ = TrueQ @ Lookup[spec, "UseForwardBoundRetry", False];
-  pivotMode = Lookup[spec, "ForwardPivotMode", "ZERO"];
-
-  data = If[useRetryQ,
-    generateDataWithBounds[diff, n, st, tri, scrambleFn, pivotMode],
-    generateData[diff, n, st, tri, scrambleFn]
-  ];
-
-  If[data === $Failed,
-    Message[spec["MsgPrefix"]::fail];
-    Return[]
-  ];
-
-  (* tlač zadania *)
-  sectionTitle = spec["SectionTitle"];
-  printSectionCell[sectionTitle];
-  printSubsectionCell["Zadanie"];
-
-  taskPrinter = Lookup[spec, "TaskPrinter", Automatic];
-  If[taskPrinter === Automatic,
-    printDefaultTask[data, vars],
-    taskPrinter[data, vars]
-  ];
-
-  If[KeyExistsQ[data, "RetryCount"],
-    printTextCell["Max num of retries: " <> ToString[data["RetryCount"]]];
-  ];
-
-  (* postup *)
-  If[mode === "TASK_STEPS_RESULT",
-    withStepCounter @ Function[Null,
-      printSubsectionCell["Postup"];
-      stepFn = Lookup[spec, "StepsFn", None];
-
-      If[stepFn === None,
-        printTextCell["Postup pre túto metódu zatiaľ nie je dopracovaný v tomto balíku."],
-        steps = stepFn[data];
-        Scan[renderStepItem, steps["Content"]];
-      ];
-    ]
-  ];
-
-  (* výsledok *)
-  If[mode =!= "TASK",
-    If[!(mode === "TASK_STEPS_RESULT" && TrueQ @ Lookup[spec, "InlineSolutionQ", False]),
-      printSubsectionCell["Výsledok"];
-
-      resultPrinter = Lookup[spec, "ResultPrinter", Automatic];
-      If[resultPrinter === Automatic,
-        printDefaultResult[data, vars, st],
-        If[steps === Missing["NotComputed"] && mode === "TASK_RESULT",
-          stepFn = Lookup[spec, "StepsFn", None];
-          If[stepFn =!= None,
-            steps = stepFn[data]
-          ];
-        ];
-        resultPrinter[data, vars, st, steps]
-      ];
-    ];
-  ];
-];
-
-GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
-  spec = <|
-    "EntryFn" -> GenTriangular, "MsgPrefix" -> GenTriangular, "DimKey" -> "Triangular", "SectionTitle" -> "Trojuholníková metóda",
-    "ScrambleFn" -> genScrambleTriang, "StepsFn" -> stepsTriangular,
-    "ValidateExtra" -> Function[{specLocal, passedOpts},
-      With[{triOpt = OptionValue[specLocal["EntryFn"], passedOpts, TriangularType]},
-        If[!TrueQ[validateTriangularType[triOpt]],
-          Message[specLocal["MsgPrefix"]::badtri, triOpt];
-          False, True
-        ]
-      ]
-    ],
-    "ResolveExtra" -> Function[{specLocal, passedOpts}, resolveTriangularType[OptionValue[specLocal["EntryFn"], passedOpts, TriangularType]]]
-  |>;
-  runMatrixGenerator[spec, diff, mode, opts]
-];
-
-GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
-  spec = <|
-    "EntryFn" -> GenGauss,
-    "MsgPrefix" -> GenGauss,
-    "DimKey" -> "Gauss",
-    "SectionTitle" -> "Gaussova eliminačná metóda",
-    "ScrambleFn" -> genScrambleGauss,
-    "StepsFn" -> stepsGauss,
-    "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
-    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
-    "UseForwardBoundRetry" -> True,
-    "ForwardPivotMode" -> "ZERO"
-  |>;
-  runMatrixGenerator[spec, diff, mode, opts]
-];
-
-GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
-  spec = <|
-    "EntryFn" -> GenGaussJordan,
-    "MsgPrefix" -> GenGaussJordan,
-    "DimKey" -> "GaussJordan",
-    "SectionTitle" -> "Gauss-Jordanova metóda",
-    "ScrambleFn" -> genScrambleGauss,
-    "StepsFn" -> (stepsGaussJordan[#, False] &),
-    "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
-    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
-    "UseForwardBoundRetry" -> True,
-    "ForwardPivotMode" -> "ZERO"
-  |>;
-  runMatrixGenerator[spec, diff, mode, opts]
-];
-
-GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
-  spec = <|
-    "EntryFn" -> GenGaussJordanPivot,
-    "MsgPrefix" -> GenGaussJordanPivot,
-    "DimKey" -> "GaussJordanPivot",
-    "SectionTitle" -> "Gauss-Jordanova metóda s pivotovaním",
-    "ScrambleFn" -> genScrambleGauss,
-    "StepsFn" -> (stepsGaussJordan[#, True] &),
-    "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
-    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
-    "UseForwardBoundRetry" -> True,
-    "ForwardPivotMode" -> "MIN"
-  |>;
-  runMatrixGenerator[spec, diff, mode, opts]
-];
-
-
-
-(* nove *)
-
-
-(* renderovanie pre tvar (A|E)                                            *)
-alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[
-  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, greenCells,
-    bar, rowColor, sourceColor, boldIdentityQ, wrapBg, makeCell, makeBar,
-    leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, showPivotQ},
-
-  {nRows, nCols} = Dimensions[aug];
-  nA = Quotient[nCols, 2];
-
-  notes2 = If[notes === {}, ConstantArray["", nRows], PadRight[notes, nRows, ""]];
-  pivotPos = Lookup[hi, "PivotPos", None];
-  activeRow = Lookup[hi, "ActiveRow", None];
-  sourceRows = Lookup[hi, "SourceRows", {}];
-  greenCells = Lookup[hi, "GreenCells", {}];
-  boldIdentityQ = TrueQ @ Lookup[hi, "BoldIdentity", False];
-
-  bar = Style["|", GrayLevel[.35], FontSize -> 16];
-  rowColor = RGBColor[0.90, 0.95, 1];
-  sourceColor = RGBColor[0.95, 0.92, 1.00];
-
-  wrapBg[i_, expr_] := Module[{bg = None},
-    If[IntegerQ[activeRow] && i === activeRow, bg = rowColor,
-      If[MemberQ[sourceRows, i], bg = sourceColor]
-    ];
-    Item[expr, Background -> bg]
-  ];
-
-  showPivotQ = ListQ[pivotPos] && ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
-
-  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isIdentity},
-    isGreen = MemberQ[greenCells, {i, j}];
-    isIdentity = boldIdentityQ && j > nA && i === j - nA && val === 1;
-
-    If[isGreen,
-      cell = Style[cell, Darker[Green], Bold],
-      If[showPivotQ && pivotPos === {i, j},
-        cell = Style[cell, Bold],
-        If[isIdentity, cell = Style[cell, Bold]]
-      ]
-    ];
-
-    wrapBg[i, Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}]]
-  ];
-
-  makeBar[i_] := wrapBg[i, bar];
-
-  leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
-  rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
-
-  rows = Table[
-    Join[
-      {If[i === 1, leftBracketCell, SpanFromAbove]},
-      Table[makeCell[i, j, aug[[i, j]]], {j, 1, nA}],
-      {makeBar[i]},
-      Table[makeCell[i, j, aug[[i, j]]], {j, nA + 1, nCols}],
-      {If[i === 1, rightBracketCell, SpanFromAbove]}
-    ],
-    {i, 1, nRows}
-  ];
-
-  matrixGrid = Grid[
-    rows,
-    Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center}, ConstantArray[Right, nA], {Center}],
-    Spacings -> {1, 1},
-    BaseStyle -> {FontSize -> 14},
-    ItemSize -> {Join[{0.2}, ConstantArray[1.2, nA], {0.2}, ConstantArray[1.2, nA], {0.2}], Automatic}
-  ];
-
-  notesGrid = Grid[
-    List /@ (
-      Item[
-        Pane[Style[#, GrayLevel[.35], FontSize -> 13], {170, Automatic}, Alignment -> Left],
-        Background -> White
-      ] & /@ notes2
-    ),
-    Alignment -> Left,
-    Spacings -> {0, 1.15},
-    BaseStyle -> {FontSize -> 14}
-  ];
-
-  Grid[{{matrixGrid, Spacer[12], notesGrid}}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}]
-];
-
-augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[{{
-  alignedAugmentedMatrixInverse[before, notes, hiBefore], Spacer[18],
-  alignedAugmentedMatrixInverse[after, {}, hiAfter]
-}},
-  Alignment -> {Left, Center, Left},
-  Spacings -> {0, 0}
-];
-
-augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[{{
-  alignedAugmentedMatrixInverse[before, notes1, hi1], Spacer[18],
-  alignedAugmentedMatrixInverse[mid, notes2, hi2], Spacer[18],
-  alignedAugmentedMatrixInverse[after, {}, hi3]
-}},
-  Alignment -> {Left, Center, Left},
-  Spacings -> {0, 0}
-];
-
-SetAttributes[rowAppendElimStepInverse, HoldFirst];
-
-rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[
-  {notes, notes2, mid, after2, hi1, hi2, hi3},
-
-  notes = ConstantArray["", n];
-  notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
-
-  hi1 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}|>];
-  hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "GreenCells" -> {{r, i}}|>];
-  hi3 = hi2;
-
-  If[elimRes["DivG"] > 1,
-    mid = elimRes["AugRaw"];
-    after2 = elimRes["Aug"];
-
-    notes2 = ConstantArray["", n];
-    notes2[[r]] = rowNoteDivide[r, elimRes["DivG"]];
-
-    AppendTo[content, augRender3Inverse[before, mid, after2, notes, notes2, hi1, hi2, hi3]];
-    after2
-    ,
-    after2 = elimRes["Aug"];
-    AppendTo[content, augRender2Inverse[before, after2, notes, hi1, hi2]];
-    after2
-  ]
-];
-
-(* kroky riešenia                                                         *)
 stepsInverseMatrix[data_Association] := Module[
   {content = {}, n, A, b, vars, augInv, invMatrix, xResult,
     addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow},
@@ -1685,7 +1577,337 @@ stepsInverseMatrix[data_Association] := Module[
   <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
 ];
 
-(* hlavná funkcia                                                         *)
+(* ~-~-~ VERIFICATION STEPS ~-~-~ *)
+
+verificationSteps[data_Association, sol_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs},
+  Do[
+    lhs = A[[i]] . sol;
+    AppendTo[content,
+      Grid[
+        {
+          {Row[{"LS", i, ":  ", tf[A[[i]]], " \[CenterDot] ", tf[sol], " = ", tft[lhs]}]},
+          {Row[{"PS", i, " = ", tft[b[[i]]]}]},
+          {If[lhs === b[[i]], Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]}
+        },
+        Alignment -> Left,
+        Spacings -> {0, 0.4},
+        BaseStyle -> {FontSize -> 13}
+      ]
+    ], {i, 1, n}
+  ];
+
+  content
+];
+verificationStepsNone[data_Association] := Module[{content = {}, A = data["A"], b = data["b"], aug0, rA, rAug, n, badIdx, rhsVal},
+
+  n = Length[b];
+  aug0 = augFromAb[A, b];
+  rA = MatrixRank[A];
+  rAug = MatrixRank[aug0];
+
+  AppendTo[content,
+    Grid[
+      {
+        {Row[{"hodnosť(A) = ", rA}]},
+        {Row[{"hodnosť([A|b]) = ", rAug}]},
+        {If[rA < rAug,
+          Style["hodnosť(A) < hodnosť([A|b])  \[Rule]  sústava nemá riešenie (OK)", Darker[Green]],
+          Style["hodnosti sa nerovnajú tak, ako majú pre spor - over postup (CHYBA)", Red]
+        ]}
+      },
+      Alignment -> Left,
+      Spacings -> {0, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+  content
+];
+verificationStepsInfinite[data_Association, solExprs_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs, diff, okQ, coeffs},
+  Do[
+    lhs = Together[A[[i]] . solExprs];
+    diff = Together[lhs - b[[i]]];
+
+    okQ = If[diff === 0,
+      True,
+      If[PolynomialQ[diff, \[FormalT]],
+        coeffs = CoefficientList[Expand[diff], \[FormalT]];
+        AllTrue[coeffs, # === 0 &],
+        False
+      ]
+    ];
+
+    AppendTo[content,
+      Grid[
+        {
+          {Row[{"Riadok ", i, ":  ", tf[A[[i]]], " \[CenterDot] ", TraditionalForm[solExprs], " = ", TraditionalForm[lhs]}]},
+          {Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}]},
+          {Row[{"LS - PS = ", TraditionalForm[diff]}]},
+          {If[okQ, Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]}
+        },
+        Alignment -> Left,
+        Spacings -> {0, 0.4},
+        BaseStyle -> {FontSize -> 13}
+      ]
+    ], {i, 1, n}
+  ];
+
+  content
+];
+
+verificationStepsInfiniteRank[data_Association] := Module[{content = {}, A = data["A"], b = data["b"], n, aug0, rA, rAug},
+  n = Length[b];
+  aug0 = augFromAb[A, b];
+  rA = MatrixRank[A];
+  rAug = MatrixRank[aug0];
+
+  AppendTo[content,
+    Grid[
+      {
+        {Row[{"hodnosť(A) = ", rA}]},
+        {Row[{"hodnosť([A|b]) = ", rAug}]},
+        {If[rA === rAug && rA < n,
+          Style["hodnosť(A) = hodnosť([A|b]) < n  \[Rule]  sústava má nekonečne veľa riešení (OK)", Darker[Green]],
+          Style["hodnosti nesp\:013aňajú podmienku pre nekonečne veľa riešení - over postup (CHYBA)", Red]
+        ]}
+      },
+      Alignment -> Left, Spacings -> {0, 0.4}, BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+  content
+];
+
+
+(* ~-~-~ MAIN CONTROLLER ~-~-~ *)
+printDefaultTask[data_Association, vars_List] := Module[{},
+  printTextCell["Riešte sústavu rovníc v množine celých čísel."];
+  printFormulaCell @ Grid[
+    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
+    Alignment -> Left,
+    Spacings -> {0, 0.8}
+  ];
+  printTextCell["Riešte pomocou augmentovanej matice."];
+];
+
+printTaskInverse[data_Association, vars_List] := Module[{},
+  printTextCell["Vypočítajte inverznú maticu k matici sústavy a následne pomocou nej určte riešenie sústavy v množine celých čísel."];
+  printFormulaCell @ Grid[
+    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
+    Alignment -> Left,
+    Spacings -> {0, 0.8}
+  ];
+  printTextCell["Použite postup cez augmentovanú maticu v tvare (A | E)."];
+];
+
+printDefaultResult[data_Association, vars_List, st_] := Module[{},
+  If[st === "ONE",
+    printFormulaCell[
+      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ data["x"], ", "], ")"}]]
+    ]
+  ];
+
+  If[st === "NONE",
+    printTextCell["Sústava nemá riešenie."]
+  ];
+
+  If[st === "INFINITE",
+    printTextCell["Sústava má nekonečne veľa riešení."];
+    Module[{solExprs = infiniteSolutionFromSolvedAug[data]},
+      printFormulaCell[
+        Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalT], " \[Element] ", Integers, " }"}]
+      ];
+    ];
+  ];
+];
+
+printResultInverse[data_Association, vars_List, st_, steps_] := Module[
+  {solution, invMatrix},
+
+  solution = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
+    KeyExistsQ[data, "x"], data["x"],
+    True, Missing["NotAvailable"]
+  ];
+
+  invMatrix = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "InverseMatrix"], steps["InverseMatrix"],
+    True, Missing["NotAvailable"]
+  ];
+
+  If[MatrixQ[invMatrix],
+    printTextCell["Inverzná matica:"];
+    printFormulaCell[TraditionalForm[MatrixForm[invMatrix]]];
+  ];
+
+  If[ListQ[solution],
+    printTextCell["Riešenie sústavy:"];
+    printFormulaCell[
+      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
+    ];
+  ];
+];
+
+runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPattern[]] := Module[
+  {n, vars, st, tri, data, steps = Missing["NotComputed"], validateExtraQ, resolveExtra,
+    sectionTitle, stepFn, scrambleFn, taskPrinter, resultPrinter, useRetryQ, pivotMode,
+    boundAugFn, boundCheckFn},
+
+  If[!TrueQ[ValidateDifficulty[diff]],
+    Message[spec["MsgPrefix"]::baddiff, diff];
+    Return[]
+  ];
+
+  If[!TrueQ[ValidateMode[mode]],
+    Message[spec["MsgPrefix"]::badmode, mode];
+    Return[]
+  ];
+
+  With[{stOpt = OptionValue[spec["EntryFn"], {opts}, SolutionType]},
+    If[!TrueQ[ValidateSolutionType[stOpt]],
+      Message[spec["MsgPrefix"]::badst, stOpt];
+      Return[]
+    ];
+  ];
+
+  validateExtraQ = Lookup[spec, "ValidateExtra", (True &)];
+  If[!TrueQ[validateExtraQ[spec, {opts}]],
+    Return[]
+  ];
+
+  st = ResolveSolutionType[OptionValue[spec["EntryFn"], {opts}, SolutionType]];
+
+  resolveExtra = Lookup[spec, "ResolveExtra", (Missing["NotUsed"] &)];
+  tri = resolveExtra[spec, {opts}];
+
+  n = DimensionByDifficulty[diff];
+  vars = buildVars[n];
+
+  scrambleFn = spec["ScrambleFn"];
+  useRetryQ = TrueQ @ Lookup[spec, "UseForwardBoundRetry", False];
+  pivotMode = Lookup[spec, "ForwardPivotMode", "ZERO"];
+  boundAugFn = Lookup[spec, "ForwardBoundAugFn", Automatic];
+  boundCheckFn = Lookup[spec, "ForwardBoundCheckFn", Automatic];
+
+  data = If[useRetryQ,
+    generateDataWithBounds[diff, n, st, tri, scrambleFn, pivotMode, boundAugFn, boundCheckFn],
+    generateData[diff, n, st, tri, scrambleFn]
+  ];
+
+  If[data === $Failed,
+    Message[spec["MsgPrefix"]::fail];
+    Return[]
+  ];
+
+  sectionTitle = spec["SectionTitle"];
+  printSectionCell[sectionTitle];
+  printSubsectionCell["Zadanie"];
+
+  taskPrinter = Lookup[spec, "TaskPrinter", Automatic];
+  If[taskPrinter === Automatic,
+    printDefaultTask[data, vars],
+    taskPrinter[data, vars]
+  ];
+
+  If[KeyExistsQ[data, "RetryCount"],
+    printTextCell["Počet pregenerovaní: " <> ToString[data["RetryCount"]]];
+  ];
+
+  If[mode === "TASK_STEPS_RESULT",
+    withStepCounter @ Function[Null,
+      printSubsectionCell["Postup"];
+      stepFn = Lookup[spec, "StepsFn", None];
+
+      If[stepFn === None,
+        printTextCell["Postup pre túto metódu zatiaľ nie je dopracovaný v tomto balíku."],
+        steps = stepFn[data];
+        Scan[renderStepItem, steps["Content"]];
+      ];
+    ]
+  ];
+
+  If[mode =!= "TASK",
+    If[!(mode === "TASK_STEPS_RESULT" && TrueQ @ Lookup[spec, "InlineSolutionQ", False]),
+      printSubsectionCell["Výsledok"];
+
+      resultPrinter = Lookup[spec, "ResultPrinter", Automatic];
+      If[resultPrinter === Automatic,
+        printDefaultResult[data, vars, st],
+        If[steps === Missing["NotComputed"] && mode === "TASK_RESULT",
+          stepFn = Lookup[spec, "StepsFn", None];
+          If[stepFn =!= None,
+            steps = stepFn[data]
+          ];
+        ];
+        resultPrinter[data, vars, st, steps]
+      ];
+    ];
+  ];
+];
+
+GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+  spec = <|
+    "EntryFn" -> GenTriangular, "MsgPrefix" -> GenTriangular, "DimKey" -> "Triangular", "SectionTitle" -> "Trojuholníková metóda",
+    "ScrambleFn" -> genScrambleTriang, "StepsFn" -> stepsTriangular,
+    "ValidateExtra" -> Function[{specLocal, passedOpts},
+      With[{triOpt = OptionValue[specLocal["EntryFn"], passedOpts, TriangularType]},
+        If[!TrueQ[validateTriangularType[triOpt]],
+          Message[specLocal["MsgPrefix"]::badtri, triOpt];
+          False, True
+        ]
+      ]
+    ],
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, resolveTriangularType[OptionValue[specLocal["EntryFn"], passedOpts, TriangularType]]]
+  |>;
+  runMatrixGenerator[spec, diff, mode, opts]
+];
+
+GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+  spec = <|
+    "EntryFn" -> GenGauss,
+    "MsgPrefix" -> GenGauss,
+    "DimKey" -> "Gauss",
+    "SectionTitle" -> "Gaussova eliminačná metóda",
+    "ScrambleFn" -> genScrambleGauss,
+    "StepsFn" -> stepsGauss,
+    "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
+    "UseForwardBoundRetry" -> True,
+    "ForwardPivotMode" -> "ZERO"
+  |>;
+  runMatrixGenerator[spec, diff, mode, opts]
+];
+
+GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+  spec = <|
+    "EntryFn" -> GenGaussJordan,
+    "MsgPrefix" -> GenGaussJordan,
+    "DimKey" -> "GaussJordan",
+    "SectionTitle" -> "Gauss-Jordanova metóda",
+    "ScrambleFn" -> genScrambleGauss,
+    "StepsFn" -> (stepsGaussJordan[#, False] &),
+    "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
+    "UseForwardBoundRetry" -> True,
+    "ForwardPivotMode" -> "ZERO"
+  |>;
+  runMatrixGenerator[spec, diff, mode, opts]
+];
+
+GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+  spec = <|
+    "EntryFn" -> GenGaussJordanPivot,
+    "MsgPrefix" -> GenGaussJordanPivot,
+    "DimKey" -> "GaussJordanPivot",
+    "SectionTitle" -> "Gauss-Jordanova metóda s pivotovaním",
+    "ScrambleFn" -> genScrambleGauss,
+    "StepsFn" -> (stepsGaussJordan[#, True] &),
+    "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
+    "UseForwardBoundRetry" -> True,
+    "ForwardPivotMode" -> "MIN"
+  |>;
+  runMatrixGenerator[spec, diff, mode, opts]
+];
+
 GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   spec = <|
     "EntryFn" -> GenInverse,
@@ -1707,7 +1929,9 @@ GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "TaskPrinter" -> printTaskInverse,
     "ResultPrinter" -> printResultInverse,
     "UseForwardBoundRetry" -> True,
-    "ForwardPivotMode" -> "MIN"
+    "ForwardPivotMode" -> "MIN",
+    "ForwardBoundAugFn" -> Function[data, Join[data["A"], IdentityMatrix[data["n"]], 2]],
+    "ForwardBoundCheckFn" -> inverseEliminationWithinBoundsQ
   |>;
   runMatrixGenerator[spec, diff, mode, opts]
 ];
