@@ -34,6 +34,10 @@ diff: \"EASY\" (4x4), \"MEDIUM\" (5x5), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože inverzná matica existuje len pre regulárnu maticu)";
 
+GenLU::usage = "GenLU[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou LU rozkladu (Doolittle).
+diff: \"EASY\" (4x4), \"MEDIUM\" (5x5), \"HARD\" (6x6)
+mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
+opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože pre Doolittle bez pivotovania vyžadujeme regulárnu maticu s nenulovými hlavnými pivotmi počas rozkladu)";
 
 GenTriangular::baddiff  = "Neplatná úroveň obtiažnosti `1`. Použiť \"EASY\"|\"MEDIUM\"|\"HARD\".";
 GenTriangular::badmode  = "Neplatný režim výstupu `1`. Použiť \"TASK\"|\"TASK_RESULT\"|\"TASK_STEPS_RESULT\".";
@@ -57,6 +61,10 @@ GenInverse::baddiff = GenTriangular::baddiff;
 GenInverse::badmode = GenTriangular::badmode;
 GenInverse::badst = GenTriangular::badst;
 GenInverse::fail = "Nepodarilo sa vygenerovať regulárnu maticu pre výpočet inverznej matice.";
+GenLU::baddiff = GenTriangular::baddiff;
+GenLU::badmode = GenTriangular::badmode;
+GenLU::badst   = GenTriangular::badst;
+GenLU::fail    = "Nepodarilo sa vygenerovať sústavu vhodnú pre LU rozklad bez pivotovania.";
 
 $CommonGeneratorOptions = {SolutionType -> Automatic, TriangularType -> Automatic};
 
@@ -65,6 +73,7 @@ Options[GenGauss] = $CommonGeneratorOptions;
 Options[GenGaussJordan] = $CommonGeneratorOptions;
 Options[GenGaussJordanPivot] = $CommonGeneratorOptions;
 Options[GenInverse] = {SolutionType -> "ONE"};
+Options[GenLU] = {SolutionType -> "ONE"};
 
 $FailedScrambleCount;
 
@@ -520,13 +529,182 @@ rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_In
   ]
 ];
 
+luEntrySymbol[sym_String, i_, j_] := Subscript[Style[sym, Italic], Row[{i, ",", j}]];
+luScalarSymbol[sym_String, i_] := Subscript[Style[sym, Italic], i];
+
+luFactorDisplay[val_] := If[NumberQ[val] && val < 0, Row[{"(", tft[val], ")"}], tft[val]];
+
+luCoeffTimes[a_, x_] := Which[
+  a === 1, x,
+  a === -1, Row[{"-", x}],
+  True, Row[{tft[a], "\[CenterDot]", x}]
+];
+
+luSignedScalarSum[vals_List] := Module[{clean, first, rest},
+  clean = Select[Together /@ vals, # =!= 0 &];
+  If[clean === {}, Return[tft[0]]];
+
+  first = First[clean];
+  rest = Rest[clean];
+
+  Row @ Flatten @ Join[
+    {
+      If[first < 0, Row[{"-", tft[Abs[first]]}], tft[first]]
+    },
+    Table[
+      If[val < 0,
+        {" - ", tft[Abs[val]]},
+        {" + ", tft[val]}
+      ],
+      {val, rest}
+    ]
+  ]
+];
+
+luSumDisplay[terms_List] := luSignedScalarSum[Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &]];
+
+luLinearCombinationDisplay[terms_List] := Module[{clean, first, rest},
+  clean = Select[terms, #[[1]] =!= 0 &];
+  If[clean === {}, Return[tft[0]]];
+
+  first = First[clean];
+  rest = Rest[clean];
+
+  Row @ Flatten @ Join[
+    {
+      If[first[[1]] < 0,
+        luCoeffTimes[Abs[first[[1]]], first[[2]]] /. Row[{"-", x_}] :> Row[{"-", x}],
+        luCoeffTimes[first[[1]], first[[2]]]
+      ]
+    },
+    Table[
+      If[term[[1]] < 0,
+        {" - ", luCoeffTimes[Abs[term[[1]]], term[[2]]]},
+        {" + ", luCoeffTimes[term[[1]], term[[2]]]}
+      ],
+      {term, rest}
+    ]
+  ]
+];
+
+luMatrixPairGrid[L_, U_] := highlightGrid @ Grid[
+  {{
+    Style["L =", Bold, FontSize -> 16],
+    TraditionalForm[MatrixForm[L]],
+    Spacer[20],
+    Style["U =", Bold, FontSize -> 16],
+    TraditionalForm[MatrixForm[U]]
+  }},
+  Alignment -> Left,
+  Spacings -> {2, 1}
+];
+
+luVectorGrid[label_String, vec_List] := highlightGrid @ Grid[
+  {{
+    Style[label <> " =", Bold, FontSize -> 16],
+    TraditionalForm[MatrixForm[vec]]
+  }},
+  Alignment -> {{Right, Left}},
+  Spacings -> {2, 1}
+];
+
+luGeneralMatricesGrid[n_Integer] := Module[{Lsym, Usym},
+  Lsym = Table[
+    Which[
+      i < j, 0,
+      i == j, 1,
+      True, luEntrySymbol["l", i, j]
+    ],
+    {i, 1, n}, {j, 1, n}
+  ];
+  Usym = Table[
+    Which[
+      i > j, 0,
+      True, luEntrySymbol["u", i, j]
+    ],
+    {i, 1, n}, {j, 1, n}
+  ];
+  luMatrixPairGrid[Lsym, Usym]
+];
+
+luFormulaUGeneral[i_Integer, j_Integer] := If[i === 1,
+  Row[{luEntrySymbol["u", i, j], " = ", luEntrySymbol["a", i, j]}],
+  Row[{
+    luEntrySymbol["u", i, j], " = ",
+    luEntrySymbol["a", i, j], " - ",
+    Underoverscript["\[Sum]", Row[{k, " = 1"}], i - 1],
+    Row[{luEntrySymbol["l", i, k], luEntrySymbol["u", k, j]}]
+  }]
+];
+
+luFormulaLGeneral[j_Integer, i_Integer] := If[i === 1,
+  Row[{luEntrySymbol["l", j, i], " = ", luEntrySymbol["a", j, i], "/", luEntrySymbol["u", i, i]}],
+  Row[{
+    luEntrySymbol["l", j, i], " = (",
+    luEntrySymbol["a", j, i], " - ",
+    Underoverscript["\[Sum]", Row[{k, " = 1"}], i - 1],
+    Row[{luEntrySymbol["l", j, k], luEntrySymbol["u", k, i]}],
+    ")/", luEntrySymbol["u", i, i]
+  }]
+];
+
+luEquationForwardDisplay[row_List, rhs_, vars_List, idx_Integer] := Module[{terms},
+  terms = Table[{row[[j]], vars[[j]]}, {j, 1, idx}];
+  Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
+];
+
+luEquationBackwardDisplay[row_List, rhs_, vars_List, idx_Integer, n_Integer] := Module[{terms},
+  terms = Table[{row[[j]], vars[[j]]}, {j, idx, n}];
+  Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
+];
+
+luMatrixProductDisplay[left_, right_] := Module[{rawMatrix, evalMatrix, finalMatrix, terms, vals},
+  rawMatrix = Table[
+    terms = Select[Transpose[{left[[i]], right[[All, j]]}], #[[1]] =!= 0 && #[[2]] =!= 0 &];
+    If[terms === {},
+      0,
+      Row @ Riffle[(Row[{luFactorDisplay[#[[1]]], "\[CenterDot]", luFactorDisplay[#[[2]]]}] & /@ terms), " + "]
+    ],
+    {i, 1, Length[left]}, {j, 1, Length[right[[1]]]}
+  ];
+
+  evalMatrix = Table[
+    vals = Select[Times @@@ Transpose[{left[[i]], right[[All, j]]}], # =!= 0 &];
+    If[vals === {},
+      0,
+      luSignedScalarSum[vals]
+    ],
+    {i, 1, Length[left]}, {j, 1, Length[right[[1]]]}
+  ];
+
+  finalMatrix = Together[left . right];
+
+  highlightGrid @ Grid[
+    {{
+      TraditionalForm[MatrixForm[left]],
+      Style["·", Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[right]],
+      Style["=", Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[rawMatrix]],
+      Style["=", Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[evalMatrix]],
+      Style["=", Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[finalMatrix]]
+    }},
+    Alignment -> Center,
+    Spacings -> {1, 1},
+    BaseStyle -> {FontSize -> 14}
+  ]
+];
+
 (* ~-~-~ MATRIX GENERATION ~-~-~ *)
 
 $bRange = {-10, 10};
 nonzeroRange[min_, max_] := DeleteCases[Range[min, max], 0];
-$Bounds = 20;
-$MaxBounds = 40;
-$MaxRetryCount = 50;
+
+$MaxBounds = 99; (*väčšie číslo sa nemôže ukázať*)
+$Bounds = Quotient[$MaxBounds, 2.5]; (*väčšie číslo sa nemôže vygenerovať*)
+$MaxRetryCount = 150;
 
 matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
 
@@ -735,6 +913,76 @@ inverseEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[
   ]
 ];
 
+luSolveData[A_, b_] := Module[
+  {n, L, U, y, x, i, j, terms, sumTerm, pivotValue},
+
+  n = Length[A];
+  L = IdentityMatrix[n];
+  U = ConstantArray[0, {n, n}];
+  y = ConstantArray[0, n];
+  x = ConstantArray[0, n];
+
+  Do[
+    Do[
+      terms = Table[L[[i, k]]*U[[k, j]], {k, 1, i - 1}];
+      sumTerm = Total[terms];
+      U[[i, j]] = Together[A[[i, j]] - sumTerm];
+      ,
+      {j, i, n}
+    ];
+
+    pivotValue = Together[U[[i, i]]];
+    If[pivotValue === 0, Return[$Failed]];
+
+    Do[
+      terms = Table[L[[j, k]]*U[[k, i]], {k, 1, i - 1}];
+      sumTerm = Total[terms];
+      L[[j, i]] = Together[(A[[j, i]] - sumTerm)/pivotValue];
+      ,
+      {j, i + 1, n}
+    ];
+    ,
+    {i, 1, n}
+  ];
+
+  Do[
+    terms = Table[L[[i, k]]*y[[k]], {k, 1, i - 1}];
+    sumTerm = Total[terms];
+    y[[i]] = Together[b[[i]] - sumTerm];
+    ,
+    {i, 1, n}
+  ];
+
+  Do[
+    pivotValue = Together[U[[i, i]]];
+    If[pivotValue === 0, Return[$Failed]];
+
+    terms = Table[U[[i, k]]*x[[k]], {k, i + 1, n}];
+    sumTerm = Total[terms];
+    x[[i]] = Together[(y[[i]] - sumTerm)/pivotValue];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  <|"L" -> L, "U" -> U, "Y" -> y, "X" -> x|>
+];
+
+luDecompositionWithinBoundsQ[data_Association] := Module[
+  {luData, limit},
+
+  limit = $MaxBounds;
+  luData = luSolveData[data["A"], data["b"]];
+
+  If[luData === $Failed,
+    Return[False]
+  ];
+
+  AllTrue[
+    {data["A"], data["b"], luData["L"], luData["U"], luData["Y"], luData["X"]},
+    matrixMaxAbs[#] <= limit &
+  ]
+];
+
 generateDataWithBounds[
   diff_String,
   n_Integer,
@@ -933,6 +1181,40 @@ genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := 
     , {attempt, 1, maxAttempts}
   ];
   aug
+];
+
+genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
+  {n, x, L, U, A, b, valueLimit, diagLimit, lowerPool, upperPool, diagPool},
+
+  n = Length[aug0];
+  x = aug0[[All, n + 1]];
+
+  valueLimit = Max[1, Quotient[$Bounds, Switch[diff, "EASY", 4, "MEDIUM", 6, "HARD", 8]]];  diagLimit = Max[2, valueLimit];
+
+  lowerPool = Join[Range[-valueLimit, -1], Range[valueLimit], Range[valueLimit], Range[valueLimit]];
+  upperPool = Join[Range[-valueLimit, -1], Range[valueLimit], Range[valueLimit], Range[valueLimit]];
+  diagPool = DeleteCases[Range[-diagLimit, diagLimit], -1 | 0 | 1];
+
+  L = IdentityMatrix[n];
+  Do[
+    L[[i, j]] = RandomChoice[lowerPool];
+    , {i, 2, n}, {j, 1, i - 1}
+  ];
+
+  U = ConstantArray[0, {n, n}];
+  Do[
+    U[[i, i]] = RandomChoice[diagPool];
+    Do[
+      U[[i, j]] = RandomChoice[upperPool];
+      , {j, i + 1, n}
+    ];
+    , {i, 1, n}
+  ];
+
+  A = Together[L . U];
+  b = Together[A . x];
+
+  augFromAb[A, b]
 ];
 
 (* ~-~-~ STEP GENERATION ~-~-~ *)
@@ -1577,6 +1859,290 @@ stepsInverseMatrix[data_Association] := Module[
   <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
 ];
 
+stepsLU[data_Association] := Module[{content = {}, n, A, b, vars, luData, L, U, y, x, addHeader, addText, addMatrixPair, addVector, addFormula, i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck, xSymbols, lhsRow},
+  n = data["n"];
+  A = data["A"];
+  b = data["b"];
+  vars = data["Vars"];
+  xSymbols = vars;
+
+  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addText[text_] := AppendTo[content, text];
+  addMatrixPair[l_, u_] := AppendTo[content, luMatrixPairGrid[l, u]];
+  addVector[label_, vec_] := AppendTo[content, luVectorGrid[label, vec]];
+  addFormula[expr_] := AppendTo[content, expr];
+
+  addHeader["Prepis sústavy do maticového tvaru"];
+  addText["Sústavu najprv prepíšeme do maticového tvaru A · x = b. Pri Doolittleho LU rozklade chceme maticu A rozložiť na súčin A = L · U, kde L je dolná trojuholníková matica s jednotkami na diagonále a U je horná trojuholníková matica."];
+  AppendTo[content, highlightGrid @ Grid[
+    {{
+      Style["A =", Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[A]],
+      Spacer[18],
+      Style["x =", Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[xSymbols]],
+      Spacer[18],
+      Style["b =", Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[b]]
+    }},
+    Alignment -> Left,
+    Spacings -> {2, 1}
+  ]];
+  AppendTo[content, highlightGrid @ Grid[
+    {
+      {Style["A · x = b", Bold]},
+      {Style["A = L · U  ⇒  L · U · x = b", Bold]},
+      {Style["Označme U · x = y.", Bold]},
+      {Style["Potom riešime najprv L · y = b a následne U · x = y.", Bold]}
+    },
+    Alignment -> Left,
+    Spacings -> {1, 0.6}
+  ]];
+
+  luData = luSolveData[A, b];
+
+  (* debug - vypisanie L a U *)
+  Print[Row[{"L = ", MatrixForm[luData["L"]]}]];
+  Print[Row[{"U = ", MatrixForm[luData["U"]]}]];
+
+
+  If[luData === $Failed,
+    addHeader["Záver"];
+    addText["Pri tejto matici sa počas Doolittleho rozkladu objavil nulový pivot, takže LU rozklad bez pivotovania nemožno použiť."];
+    Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
+  ];
+
+  L = IdentityMatrix[n];
+  U = ConstantArray[0, {n, n}];
+
+  addHeader["Všeobecný tvar matíc L a U"];
+  addText["Pri Doolittleho rozklade má matica L na diagonále samé jednotky. Neznáme prvky pod diagonálou označíme l_(i,j) a neznáme prvky matice U označíme u_(i,j)."];
+  AppendTo[content, luGeneralMatricesGrid[n]];
+
+  addHeader["Inicializácia matíc"];
+  addText["Na začiatku poznáme len to, že L má jednotkovú diagonálu. Ostatné prvky budeme dopočítavať postupne po riadkoch matice U a po stĺpcoch matice L."];
+  addMatrixPair[L, U];
+
+  addHeader["Výpočet rozkladu A = L · U"];
+  addText["V každom kroku najprv vypočítame prvky i-teho riadku matice U a potom prvky i-teho stĺpca matice L pod diagonálou. Pri každom prvku si ukážeme všeobecný vzorec, konkrétne dosadenie aj výsledok."];
+
+  Do[
+    addHeader["Výpočet " <> ToString[i] <> ". riadku matice U a " <> ToString[i] <> ". stĺpca matice L"];
+    addText["Najprv určíme prvky u_(" <> ToString[i] <> ",j), potom s použitím pivotu u_(" <> ToString[i] <> "," <> ToString[i] <> ") dopočítame prvky l_(j," <> ToString[i] <> ") pod diagonálou."];
+
+    Do[
+      terms = Table[{L[[i, k]], U[[k, j]]}, {k, 1, i - 1}];
+      sumTerm = Total[Times @@@ terms];
+      U[[i, j]] = Together[A[[i, j]] - sumTerm];
+
+      addText["Výpočet prvku matice U:"];
+      addFormula[luFormulaUGeneral[i, j]];
+      addFormula[
+        If[terms === {},
+          Row[{luEntrySymbol["u", i, j], " = ", tft[A[[i, j]]], " = ", tft[U[[i, j]]]}],
+          Row[{
+            luEntrySymbol["u", i, j], " = ", tft[A[[i, j]]],
+            " - (", luSumDisplay[terms], ") = ", tft[U[[i, j]]]
+          }]
+        ]
+      ];
+      AppendTo[content, highlightGrid @ Grid[
+        {{luEntrySymbol["u", i, j], "=", tft[U[[i, j]]]}},
+        Alignment -> {{Right, Center, Left}},
+        BaseStyle -> {FontSize -> 16}
+      ]];
+      ,
+      {j, i, n}
+    ];
+
+    pivotValue = Together[U[[i, i]]];
+    addText["Z diagonálneho prvku dostávame pivot tohto kroku:"];
+    AppendTo[content, highlightGrid @ Grid[
+      {{luEntrySymbol["u", i, i], "=", tft[pivotValue]}},
+      Alignment -> {{Right, Center, Left}},
+      BaseStyle -> {FontSize -> 16}
+    ]];
+
+    Do[
+      terms = Table[{L[[j, k]], U[[k, i]]}, {k, 1, i - 1}];
+      sumTerm = Total[Times @@@ terms];
+      L[[j, i]] = Together[(A[[j, i]] - sumTerm)/pivotValue];
+
+      addText["Výpočet prvku matice L:"];
+      addFormula[luFormulaLGeneral[j, i]];
+      addFormula[
+        If[terms === {},
+          Row[{
+            luEntrySymbol["l", j, i], " = ", tft[A[[j, i]]], "/", tft[pivotValue],
+            " = ", tft[L[[j, i]]]
+          }],
+          Row[{
+            luEntrySymbol["l", j, i], " = (", tft[A[[j, i]]],
+            " - (", luSumDisplay[terms], "))/", tft[pivotValue],
+            " = ", tft[L[[j, i]]]
+          }]
+        ]
+      ];
+      AppendTo[content, highlightGrid @ Grid[
+        {{luEntrySymbol["l", j, i], "=", tft[L[[j, i]]]}},
+        Alignment -> {{Right, Center, Left}},
+        BaseStyle -> {FontSize -> 16}
+      ]];
+      ,
+      {j, i + 1, n}
+    ];
+
+    addText["Po dokončení tohto kroku majú matice L a U tvar:"];
+    addMatrixPair[L, U];
+    ,
+    {i, 1, n}
+  ];
+
+  addHeader["Hotový rozklad A = L · U"];
+  addText["Po dokončení výpočtu máme maticu L s jednotkovou diagonálou a hornú trojuholníkovú maticu U."];
+  addMatrixPair[L, U];
+
+  luProduct = Together[L . U];
+  addText["Každý prvok súčinu L · U vzniká ako skalárny súčin príslušného riadku matice L a stĺpca matice U. Najprv si ukážeme dosadenie, potom vypočítané súčiny a nakoniec výsledný prvok."];
+  AppendTo[content, luMatrixProductDisplay[L, U]];
+  AppendTo[content, Grid[
+    {{
+      Style["L · U =", FontSize -> 13],
+      TraditionalForm[MatrixForm[luProduct]],
+      If[luProduct === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+    }},
+    Alignment -> Left,
+    Spacings -> {1, 0.4},
+    BaseStyle -> {FontSize -> 13}
+  ]];
+
+  addHeader["Riešenie pomocnej sústavy L · y = b"];
+  addText["Keďže L je dolná trojuholníková matica s jednotkami na diagonále, pomocný vektor y určujeme dopredným dosadzovaním zhora nadol. V každom riadku najprv zapíšeme rovnicu, potom dosadíme už známe hodnoty a nakoniec vyjadríme novú neznámu."];
+
+  y = ConstantArray[0, n];
+  Do[
+    terms = Table[{L[[i, k]], y[[k]]}, {k, 1, i - 1}];
+    sumTerm = Total[Times @@@ terms];
+    y[[i]] = Together[b[[i]] - sumTerm];
+
+    lhsRow = luEquationForwardDisplay[L[[i]], b[[i]], Table[luScalarSymbol["y", k], {k, 1, n}], i];
+    addText["Rovnica z " <> ToString[i] <> ". riadku:"];
+    addFormula[lhsRow];
+    addFormula[
+      If[terms === {},
+        Row[{luScalarSymbol["y", i], " = ", tft[b[[i]]], " = ", tft[y[[i]]]}],
+        Row[{
+          luScalarSymbol["y", i], " = ", tft[b[[i]]],
+          " - (", luSumDisplay[terms], ") = ", tft[y[[i]]]
+        }]
+      ]
+    ];
+
+    AppendTo[content, highlightGrid @ Grid[
+      {{luScalarSymbol["y", i], "=", tft[y[[i]]]}},
+      Alignment -> {{Right, Center, Left}},
+      BaseStyle -> {FontSize -> 16}
+    ]];
+    ,
+    {i, 1, n}
+  ];
+
+  addVector["y", y];
+
+  addHeader["Riešenie trojuholníkovej sústavy U · x = y"];
+  addText["Po určení pomocného vektora y riešime hornú trojuholníkovú sústavu U · x = y spätným dosadzovaním od poslednej rovnice. Opäť vždy zapíšeme rovnicu, dosadenie známych hodnôt a výsledok."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[U, y], {}, <|"BoldDiagonal" -> True|>]];
+
+  x = ConstantArray[0, n];
+  Do[
+    terms = Table[{U[[i, k]], x[[k]]}, {k, i + 1, n}];
+    sumTerm = Total[Times @@@ terms];
+    x[[i]] = Together[(y[[i]] - sumTerm)/U[[i, i]]];
+
+    lhsRow = luEquationBackwardDisplay[U[[i]], y[[i]], vars, i, n];
+    addText["Rovnica z " <> ToString[i] <> ". riadku:"];
+    addFormula[lhsRow];
+    addFormula[
+      If[terms === {},
+        Row[{vars[[i]], " = ", tft[y[[i]]], "/", tft[U[[i, i]]], " = ", tft[x[[i]]]}],
+        Row[{
+          vars[[i]], " = (", tft[y[[i]]], " - (", luSumDisplay[terms], "))/", tft[U[[i, i]]],
+          " = ", tft[x[[i]]]
+        }]
+      ]
+    ];
+
+    AppendTo[content, highlightGrid @ Grid[
+      {{tf[vars[[i]]], "=", tft[x[[i]]]}},
+      Alignment -> {{Right, Center, Left}},
+      BaseStyle -> {FontSize -> 16}
+    ]];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  addHeader["Skúška správnosti"];
+  addText["Overíme najprv rozklad A = L · U, potom pomocnú sústavu L · y = b a nakoniec pôvodnú sústavu A · x = b."];
+
+  lowerCheck = Together[L . y];
+  upperCheck = Together[U . x];
+
+  AppendTo[content, Grid[
+    {{
+      Style["L · U =", FontSize -> 13],
+      TraditionalForm[MatrixForm[luProduct]],
+      Style["A =", FontSize -> 13],
+      TraditionalForm[MatrixForm[A]],
+      If[luProduct === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+    }},
+    Alignment -> Left,
+    Spacings -> {1, 0.4},
+    BaseStyle -> {FontSize -> 13}
+  ]];
+
+  AppendTo[content, Spacer[6]];
+  AppendTo[content, Grid[
+    {{
+      Style["L · y =", FontSize -> 13],
+      TraditionalForm[MatrixForm[lowerCheck]],
+      Style["b =", FontSize -> 13],
+      TraditionalForm[MatrixForm[b]],
+      If[lowerCheck === b, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+    }},
+    Alignment -> Left,
+    Spacings -> {1, 0.4},
+    BaseStyle -> {FontSize -> 13}
+  ]];
+
+  AppendTo[content, Spacer[6]];
+  AppendTo[content, Grid[
+    {{
+      Style["U · x =", FontSize -> 13],
+      TraditionalForm[MatrixForm[upperCheck]],
+      Style["y =", FontSize -> 13],
+      TraditionalForm[MatrixForm[y]],
+      If[upperCheck === y, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+    }},
+    Alignment -> Left,
+    Spacings -> {1, 0.4},
+    BaseStyle -> {FontSize -> 13}
+  ]];
+
+  AppendTo[content, Spacer[6]];
+  content = Join[content, verificationSteps[data, x]];
+
+  addHeader["Záver"];
+  addText["Sústava bola vyriešená pomocou Doolittleho LU rozkladu bez pivotovania. Najprv sme zostrojili rozklad A = L · U, potom sme vyriešili pomocnú sústavu L · y = b a napokon trojuholníkovú sústavu U · x = y."];
+
+  <|
+    "Content" -> content,
+    "Solution" -> x,
+    "L" -> L,
+    "U" -> U,
+    "Y" -> y
+  |>
+];
+
 (* ~-~-~ VERIFICATION STEPS ~-~-~ *)
 
 verificationSteps[data_Association, sol_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs},
@@ -1698,6 +2264,16 @@ printTaskInverse[data_Association, vars_List] := Module[{},
   printTextCell["Použite postup cez augmentovanú maticu v tvare (A | E)."];
 ];
 
+printTaskLU[data_Association, vars_List] := Module[{},
+  printTextCell["Rozložte maticu sústavy pomocou LU rozkladu (Doolittle, bez pivotovania) v tvare A = L · U, kde L má jednotky na diagonále. Potom vyriešte pomocnú sústavu L · y = b a následne U · x = y."];
+  printFormulaCell @ Grid[
+    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
+    Alignment -> Left,
+    Spacings -> {0, 0.8}
+  ];
+  printTextCell["Pracujte priamo s maticami L a U bez pivotovania."];
+];
+
 printDefaultResult[data_Association, vars_List, st_] := Module[{},
   If[st === "ONE",
     printFormulaCell[
@@ -1736,6 +2312,53 @@ printResultInverse[data_Association, vars_List, st_, steps_] := Module[
   If[MatrixQ[invMatrix],
     printTextCell["Inverzná matica:"];
     printFormulaCell[TraditionalForm[MatrixForm[invMatrix]]];
+  ];
+
+  If[ListQ[solution],
+    printTextCell["Riešenie sústavy:"];
+    printFormulaCell[
+      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
+    ];
+  ];
+];
+
+printResultLU[data_Association, vars_List, st_, steps_] := Module[
+  {solution, lMatrix, uMatrix, yVector},
+
+  solution = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
+    KeyExistsQ[data, "x"], data["x"],
+    True, Missing["NotAvailable"]
+  ];
+
+  lMatrix = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "L"], steps["L"],
+    True, Missing["NotAvailable"]
+  ];
+
+  uMatrix = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "U"], steps["U"],
+    True, Missing["NotAvailable"]
+  ];
+
+  yVector = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "Y"], steps["Y"],
+    True, Missing["NotAvailable"]
+  ];
+
+  If[MatrixQ[lMatrix],
+    printTextCell["Matica L:"];
+    printFormulaCell[TraditionalForm[MatrixForm[lMatrix]]];
+  ];
+
+  If[MatrixQ[uMatrix],
+    printTextCell["Matica U:"];
+    printFormulaCell[TraditionalForm[MatrixForm[uMatrix]]];
+  ];
+
+  If[ListQ[yVector],
+    printTextCell["Pomocný vektor y:"];
+    printFormulaCell[TraditionalForm[MatrixForm[yVector]]];
   ];
 
   If[ListQ[solution],
@@ -1932,6 +2555,33 @@ GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "ForwardPivotMode" -> "MIN",
     "ForwardBoundAugFn" -> Function[data, Join[data["A"], IdentityMatrix[data["n"]], 2]],
     "ForwardBoundCheckFn" -> inverseEliminationWithinBoundsQ
+  |>;
+  runMatrixGenerator[spec, diff, mode, opts]
+];
+
+GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+  spec = <|
+    "EntryFn" -> GenLU,
+    "MsgPrefix" -> GenLU,
+    "DimKey" -> "LU",
+    "SectionTitle" -> "LU rozklad (Doolittle)",
+    "ScrambleFn" -> genScrambleLU,
+    "StepsFn" -> stepsLU,
+    "ValidateExtra" -> Function[{specLocal, passedOpts},
+      With[{stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
+        If[stOpt =!= "ONE",
+          Message[specLocal["MsgPrefix"]::badst, stOpt];
+          False,
+          True
+        ]
+      ]
+    ],
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
+    "TaskPrinter" -> printTaskLU,
+    "ResultPrinter" -> printResultLU,
+    "UseForwardBoundRetry" -> True,
+    "ForwardBoundAugFn" -> Function[data, data],
+    "ForwardBoundCheckFn" -> luDecompositionWithinBoundsQ
   |>;
   runMatrixGenerator[spec, diff, mode, opts]
 ];
