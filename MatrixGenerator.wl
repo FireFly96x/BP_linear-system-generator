@@ -567,6 +567,19 @@ luSignedScalarSum[vals_List] := Module[{clean, first, rest},
 
 luSumDisplay[terms_List] := luSignedScalarSum[Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &]];
 
+luSumNeedsParensQ[terms_List] := Module[{vals, sumVal},
+  vals = Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &];
+  If[vals === {}, Return[False]];
+  If[Length[vals] > 1, Return[True]];
+  sumVal = Together[First[vals]];
+  NumericQ[sumVal] && sumVal < 0
+];
+
+luWrappedSumDisplay[terms_List] := Module[{sumDisp},
+  sumDisp = luSumDisplay[terms];
+  If[luSumNeedsParensQ[terms], Row[{"(", sumDisp, ")"}], sumDisp]
+];
+
 luLinearCombinationDisplay[terms_List] := Module[{clean, first, rest},
   clean = Select[terms, #[[1]] =!= 0 &];
   If[clean === {}, Return[tft[0]]];
@@ -676,21 +689,55 @@ luEquationBackwardDisplay[row_List, rhs_, vars_List, idx_Integer, n_Integer] := 
   Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
 ];
 
-luMatrixProductDisplay[left_, right_] := Module[{rawMatrix, evalMatrix, finalMatrix, terms, vals},
-  rawMatrix = Table[
-    terms = Select[Transpose[{left[[i]], right[[All, j]]}], #[[1]] =!= 0 && #[[2]] =!= 0 &];
-    If[terms === {},
-      0,
-      Row @ Riffle[(Row[{luFactorDisplay[#[[1]]], "\[CenterDot]", luFactorDisplay[#[[2]]]}] & /@ terms), " + "]
-    ],
-    {i, 1, Length[left]}, {j, 1, Length[right[[1]]]}
-  ];
+luMatrixProductDisplay[left_, right_] := Module[
+  {rawMatrix, finalMatrix, terms, firstTerm, restTerms, shortExpr, tooltipExpr},
 
-  evalMatrix = Table[
-    vals = Select[Times @@@ Transpose[{left[[i]], right[[All, j]]}], # =!= 0 &];
-    If[vals === {},
+  rawMatrix = Table[
+    terms = Select[
+      Transpose[{left[[i]], right[[All, j]]}],
+      #[[1]] =!= 0 && #[[2]] =!= 0 &
+    ];
+
+    If[
+      terms === {},
       0,
-      luSignedScalarSum[vals]
+      firstTerm = Row[{
+        luFactorDisplay[terms[[1, 1]]],
+        "\[CenterDot]",
+        luFactorDisplay[terms[[1, 2]]]
+      }];
+
+      If[
+        Length[terms] == 1,
+        firstTerm,
+        restTerms = Rest[terms];
+
+        tooltipExpr = Row @ Riffle[
+          (Row[{luFactorDisplay[#[[1]]], "\[CenterDot]", luFactorDisplay[#[[2]]]}] & /@ restTerms),
+          " + "
+        ];
+
+        shortExpr = Row[{
+          firstTerm,
+          " + ",
+          MouseAppearance[
+            Tooltip[
+              Style["...", Blue],
+              Framed[
+                tooltipExpr,
+                Background -> White,
+                FrameStyle -> GrayLevel[0.8],
+                RoundingRadius -> 4,
+                FrameMargins -> 5
+              ],
+              TooltipStyle -> {CellFrame -> 0}
+            ],
+            "LinkHand"
+          ]
+        }];
+
+        shortExpr
+      ]
     ],
     {i, 1, Length[left]}, {j, 1, Length[right[[1]]]}
   ];
@@ -700,12 +747,10 @@ luMatrixProductDisplay[left_, right_] := Module[{rawMatrix, evalMatrix, finalMat
   highlightGrid @ Grid[
     {{
       TraditionalForm[MatrixForm[left]],
-      Style["·", Bold, FontSize -> 16],
+      Style["\[CenterDot]", Bold, FontSize -> 16],
       TraditionalForm[MatrixForm[right]],
       Style["=", Bold, FontSize -> 16],
       TraditionalForm[MatrixForm[rawMatrix]],
-      Style["=", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[evalMatrix]],
       Style["=", Bold, FontSize -> 16],
       TraditionalForm[MatrixForm[finalMatrix]]
     }},
@@ -715,14 +760,13 @@ luMatrixProductDisplay[left_, right_] := Module[{rawMatrix, evalMatrix, finalMat
   ]
 ];
 
-
 (* ~-~-~ MATRIX GENERATION ~-~-~ *)
 
 $bRange = {-10, 10};
 nonzeroRange[min_, max_] := DeleteCases[Range[min, max], 0];
 
-$MaxBounds = 99; (*väčšie číslo sa nemôže ukázať*)
-$Bounds = Quotient[$MaxBounds, 2.5]; (*väčšie číslo sa nemôže vygenerovať*)
+$MaxBounds = 50; (*väčšie číslo sa nemôže ukázať*)
+$Bounds = Quotient[$MaxBounds, 1.4 + 0.156 Sqrt[$MaxBounds]];
 $MaxRetryCount = 150;
 
 matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
@@ -2032,13 +2076,12 @@ stepsLU[data_Association] := Module[
         }],
         Row[{
           lhsStyle[luEntrySymbol["u", i, j]], " = ",
-          tft[A[[i, j]]], " - (", luSumDisplay[terms], ") = ",
+          tft[A[[i, j]]], " - ", luWrappedSumDisplay[terms], " = ",
           resultStyle[tft[value]]
         }]
       }
     ]
   ];
-
   (* riadky výpočtu pre prvok L *)
   buildLFormulaLines[j_, i_, terms_, pivot_, value_] := Module[
     {symbolicTerms},
@@ -2072,13 +2115,12 @@ stepsLU[data_Association] := Module[
         }],
         Row[{
           lhsStyle[luEntrySymbol["l", j, i]], " = (",
-          tft[A[[j, i]]], " - (", luSumDisplay[terms], ")) / ", tft[pivot],
+          tft[A[[j, i]]], " - ", luWrappedSumDisplay[terms], ") / ", tft[pivot],
           " = ", resultStyle[tft[value]]
         }]
       }
     ]
   ];
-
   buildYFormulaLines[i_, terms_, value_] := Module[{},
     If[terms === {},
       {
@@ -2095,13 +2137,12 @@ stepsLU[data_Association] := Module[
         }],
         Row[{
           lhsStyle[luScalarSymbol["y", i]], " = ",
-          tft[b[[i]]], " - (", luSumDisplay[terms], ") = ",
+          tft[b[[i]]], " - ", luWrappedSumDisplay[terms], " = ",
           resultStyle[tft[value]]
         }]
       }
     ]
   ];
-
   addHeader["Prepis sústavy do maticového tvaru"];
   addText["Sústavu zapíšeme v maticovom tvare A \[CenterDot] x = b."];
 
@@ -2245,6 +2286,7 @@ stepsLU[data_Association] := Module[
 
   addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
   addText["Keďže L je dolná trojuholníková matica s jednotkami na diagonále, pomocný vektor y určujeme dopredným dosadzovaním zhora nadol."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
 
   y = ConstantArray[0, n];
   Do[
@@ -2262,7 +2304,6 @@ stepsLU[data_Association] := Module[
   ];
 
   addVector["y", y];
-
   addHeader["Riešenie sústavy U \[CenterDot] x = y"];
   addText["Po určení pomocného vektora y riešime hornú trojuholníkovú sústavu U \[CenterDot] x = y spätným dosadzovaním od poslednej rovnice."];
   AppendTo[content, alignedAugmentedMatrix[augFromAb[U, y], {}, <|"BoldDiagonal" -> True|>]];
@@ -2280,7 +2321,7 @@ stepsLU[data_Association] := Module[
         terms === {},
         Row[{lhsStyle[vars[[i]]], " = ", tft[y[[i]]], " / ", tft[U[[i, i]]], " = ", resultStyle[tft[x[[i]]]]}],
         Row[{
-          lhsStyle[vars[[i]]], " = (", tft[y[[i]]], " - (", luSumDisplay[terms], ")) / ", tft[U[[i, i]]],
+          lhsStyle[vars[[i]]], " = (", tft[y[[i]]], " - ", luWrappedSumDisplay[terms], ") / ", tft[U[[i, i]]],
           " = ", resultStyle[tft[x[[i]]]]
         }]
       ]
