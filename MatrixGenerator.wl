@@ -39,6 +39,11 @@ diff: \"EASY\" (4x4), \"MEDIUM\" (5x5), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože pre Doolittle bez pivotovania vyžadujeme regulárnu maticu s nenulovými hlavnými pivotmi počas rozkladu)";
 
+GenCramer::usage = "GenCramer[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou Cramerovho pravidla.
+diff: \"EASY\" (4x4), \"MEDIUM\" (5x5), \"HARD\" (6x6)
+mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
+opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože Cramerovo pravidlo vyžaduje regulárnu maticu s nenulovým determinantom)";
+
 GenTriangular::baddiff  = "Neplatná úroveň obtiažnosti `1`. Použiť \"EASY\"|\"MEDIUM\"|\"HARD\".";
 GenTriangular::badmode  = "Neplatný režim výstupu `1`. Použiť \"TASK\"|\"TASK_RESULT\"|\"TASK_STEPS_RESULT\".";
 GenTriangular::badst    = "Neplatný typ riešenia `1`. Použiť Automatic|\"ONE\"|\"NONE\"|\"INFINITE\".";
@@ -65,6 +70,10 @@ GenLU::baddiff = GenTriangular::baddiff;
 GenLU::badmode = GenTriangular::badmode;
 GenLU::badst   = GenTriangular::badst;
 GenLU::fail    = "Nepodarilo sa vygenerovať sústavu vhodnú pre LU rozklad bez pivotovania.";
+GenCramer::baddiff = GenTriangular::baddiff;
+GenCramer::badmode = GenTriangular::badmode;
+GenCramer::badst   = GenTriangular::badst;
+GenCramer::fail    = "Nepodarilo sa vygenerovať regulárnu sústavu vhodnú pre Cramerovo pravidlo.";
 
 $CommonGeneratorOptions = {SolutionType -> Automatic, TriangularType -> Automatic};
 
@@ -74,6 +83,7 @@ Options[GenGaussJordan] = $CommonGeneratorOptions;
 Options[GenGaussJordanPivot] = $CommonGeneratorOptions;
 Options[GenInverse] = {SolutionType -> "ONE"};
 Options[GenLU] = {SolutionType -> "ONE"};
+Options[GenCramer] = {SolutionType -> "ONE"};
 
 $FailedScrambleCount;
 
@@ -103,6 +113,98 @@ highlightGrid[grid_] := Style[grid, Background -> RGBColor[0.95, 0.95, 0.95], Fr
 highlightTerm[term_] := Style[term, Bold, RGBColor[0.8, 0, 0]];
 tf[val_] := TraditionalForm[val];
 tft[val_] := tf[Together[val]];
+resultLabelStyle[expr_] := Style[expr, Bold];
+resultValueStyle[expr_] := Style[expr, Bold, Blue];
+
+highlightEqualityRowsGrid[rows_List] := highlightGrid @ Grid[
+  ({#[[1]], "=", #[[2]]} & /@ rows),
+  Alignment -> {{Right, Center, Left}},
+  BaseStyle -> {FontSize -> 16},
+  Spacings -> {2, 0.8}
+];
+
+highlightEqualityGrid[lhs_, rhs_] := highlightEqualityRowsGrid[{{lhs, rhs}}];
+
+styledMatrixData[data_, highlightCol_: None, highlightCells_List : {}] := Which[
+  MatrixQ[data],
+  MapIndexed[
+    If[(IntegerQ[highlightCol] && #2[[2]] == highlightCol) || MemberQ[highlightCells, #2], Style[#1, Darker[Green], Bold], #1] &,
+    data,
+    {2}
+  ],
+  True,
+  data
+];
+
+matrixDisplayForm[data_, highlightCol_: None, highlightCells_List : {}] := TraditionalForm[MatrixForm[styledMatrixData[data, highlightCol, highlightCells]]];
+
+labeledMatrixItem[label_, data_, highlightCol_: None, highlightCells_List : {}] := {
+  Style[Row[{label, " ="}], Bold, FontSize -> 16],
+  matrixDisplayForm[data, highlightCol, highlightCells]
+};
+
+labeledMatrixSequenceGrid[items_List] := highlightGrid @ Grid[
+  {Flatten @ Riffle[items, Spacer[18]]},
+  Alignment -> Left,
+  Spacings -> {2, 1}
+];
+
+labeledMatrixGrid[label_, data_, highlightCol_: None, highlightCells_List : {}] := labeledMatrixSequenceGrid[{labeledMatrixItem[label, data, highlightCol, highlightCells]}];
+
+highlightedMinorSourceMatrixGrid[matrix_, row_Integer, col_Integer] := Module[
+  {redBg, redOverlapBg, greenBg, styled},
+
+  redBg = RGBColor[1.00, 0.90, 0.90];
+  redOverlapBg = Darker[redBg, 0.08];
+  greenBg = RGBColor[0.88, 0.94, 0.84];
+
+  styled = MapIndexed[
+    Function[{val, idx},
+      Item[
+        TraditionalForm[val],
+        Background -> Which[
+          idx[[1]] === row && idx[[2]] === col, redOverlapBg,
+          idx[[1]] === row, redBg,
+          idx[[2]] === col, redBg,
+          idx[[1]] =!= row && idx[[2]] =!= col, greenBg,
+          True, None
+        ]
+      ]
+    ],
+    matrix,
+    {2}
+  ];
+
+  TraditionalForm[MatrixForm[styled]]
+];
+solutionTupleDisplay[vars_List, values_List] := Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ values, ", "], ")"}]];
+
+solutionTupleGrid[vars_List, values_List] := highlightGrid @ Grid[
+  {{solutionTupleDisplay[vars, values]}},
+  Alignment -> Left,
+  BaseStyle -> {FontSize -> 16}
+];
+
+signedScalarSumDisplay[vals_List] := Module[{clean, first, rest},
+  clean = Select[Together /@ vals, # =!= 0 &];
+  If[clean === {}, Return[tft[0]]];
+
+  first = First[clean];
+  rest = Rest[clean];
+
+  Row @ Flatten @ Join[
+    {
+      If[first < 0, Row[{"-", tft[Abs[first]]}], tft[first]]
+    },
+    Table[
+      If[val < 0,
+        {" - ", tft[Abs[val]]},
+        {" + ", tft[val]}
+      ],
+      {val, rest}
+    ]
+  ]
+];
 
 SetAttributes[addGap, HoldFirst];
 
@@ -162,10 +264,7 @@ gaussBackSubstEquations[aug_, vars_, sol0_, skipIdx_, content_] := Module[
     exprVal = Together[(rhsVal - sumProducts)/pivot];
     sol[[i]] = exprVal;
 
-    AppendTo[out, highlightGrid @ Grid[
-      {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[exprVal]}},
-      Alignment -> {{Right, Center, Left}}, BaseStyle -> {FontSize -> 16}
-    ]];
+    AppendTo[out, highlightEqualityGrid[tf[lhsStyle[vars[[i]]]], TraditionalForm[exprVal]]];
     ,
     {i, n, 1, -1}
   ];
@@ -617,27 +716,13 @@ luMatrixPairGrid[L_, U_, lBold_List : {}, uBold_List : {}] := Module[
     {2}
   ];
 
-  highlightGrid @ Grid[
-    {{
-      Style["L =", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledL]],
-      Spacer[20],
-      Style["U =", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledU]]
-    }},
-    Alignment -> Left,
-    Spacings -> {2, 1}
-  ]
+  labeledMatrixSequenceGrid[{
+    labeledMatrixItem["L", styledL],
+    labeledMatrixItem["U", styledU]
+  }]
 ];
 
-luVectorGrid[label_String, vec_List] := highlightGrid @ Grid[
-  {{
-    Style[label <> " =", Bold, FontSize -> 16],
-    TraditionalForm[MatrixForm[vec]]
-  }},
-  Alignment -> {{Right, Left}},
-  Spacings -> {2, 1}
-];
+luVectorGrid[label_String, vec_List] := labeledMatrixGrid[label, vec];
 
 luGeneralMatricesGrid[n_Integer] := Module[{Lsym, Usym},
   Lsym = Table[
@@ -758,6 +843,264 @@ luMatrixProductDisplay[left_, right_] := Module[
     Spacings -> {1, 1},
     BaseStyle -> {FontSize -> 14}
   ]
+];
+
+cramerFactorDisplay[val_] := If[NumberQ[val] && val < 0, Row[{"(", tft[val], ")"}], tft[val]];
+
+cramerVarName[var_] := ToString[var, StandardForm];
+cramerMatrixName[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
+cramerMinorName[row_Integer, col_Integer] := Subscript[Style["M", Italic], Row[{row, ",", col}]];
+cramerDetLabel[label_] := Row[{"det(", label, ")"}];
+cramerMatrixKey[matrix_] := ToString[InputForm[matrix]];
+
+cramerReplacementMatrix[A_, b_, col_Integer] := Module[{matrix = A},
+  matrix[[All, col]] = b;
+  matrix
+];
+
+cramerMinorMatrix[matrix_, row_Integer, col_Integer] := Map[Delete[#, col] &, Delete[matrix, row]];
+
+cramerBestExpansion[matrix_] := Module[
+  {n, rowCounts, colCounts, positiveRows, positiveCols, minRow, minCol, rowIdx, colIdx},
+
+  n = Length[matrix];
+  rowCounts = Table[Count[matrix[[i]], x_ /; x =!= 0], {i, 1, n}];
+  colCounts = Table[Count[matrix[[All, j]], x_ /; x =!= 0], {j, 1, n}];
+
+  positiveRows = Select[rowCounts, # > 0 &];
+  positiveCols = Select[colCounts, # > 0 &];
+
+  minRow = If[positiveRows === {}, Infinity, Min[positiveRows]];
+  minCol = If[positiveCols === {}, Infinity, Min[positiveCols]];
+
+  rowIdx = First @ FirstPosition[rowCounts, minRow, {1}];
+  colIdx = First @ FirstPosition[colCounts, minCol, {1}];
+
+  If[minRow <= minCol,
+    <|"Type" -> "Row", "Index" -> rowIdx, "Count" -> minRow|>,
+    <|"Type" -> "Column", "Index" -> colIdx, "Count" -> minCol|>
+  ]
+];
+
+cramerExpansionDepth[diff_String] := Infinity;
+
+cramerExpansionChoiceText[expansion_Association] := Module[{idx = expansion["Index"], count = expansion["Count"]},
+  Switch[expansion["Type"],
+    "Row",
+    If[count === 1,
+      "Determinant rozvinieme podľa " <> ToString[idx] <> ". riadku, lebo v ňom je iba jeden nenulový prvok.",
+      "Determinant rozvinieme podľa " <> ToString[idx] <> ". riadku, lebo v ňom je najmenej nenulových prvkov."
+    ],
+    _,
+    If[count === 1,
+      "Determinant rozvinieme podľa " <> ToString[idx] <> ". stĺpca, lebo v ňom je iba jeden nenulový prvok.",
+      "Determinant rozvinieme podľa " <> ToString[idx] <> ". stĺpca, lebo v ňom je najmenej nenulových prvkov."
+    ]
+  ]
+];
+
+cramerExpansionBodyDisplay[term_Association, kind_String] := Module[{rhs},
+  rhs = Switch[kind,
+    "Symbolic", cramerDetLabel[term["MinorLabel"]],
+    "Substituted", cramerFactorDisplay[term["MinorValue"]],
+    _, tft[0]
+  ];
+
+  Row[{cramerFactorDisplay[term["Coeff"]], "\[CenterDot]", rhs}]
+];
+
+cramerSignedTermSumDisplay[termData_List, kind_String] := Module[
+  {items, first, rest},
+
+  If[termData === {}, Return[tft[0]]];
+
+  items = termData /. term_Association :> <|
+    "NegativeQ" -> term["Sign"] < 0,
+    "Body" -> cramerExpansionBodyDisplay[term, kind]
+  |>;
+
+  first = First[items];
+  rest = Rest[items];
+
+  Row @ Flatten @ Join[
+    {
+      If[first["NegativeQ"], Row[{"-", first["Body"]}], first["Body"]]
+    },
+    Table[
+      If[item["NegativeQ"],
+        {" - ", item["Body"]},
+        {" + ", item["Body"]}
+      ],
+      {item, rest}
+    ]
+  ]
+];
+
+cramerDeterminantDerivation[
+  matrix_,
+  diff_String,
+  label_,
+  depth_Integer,
+  profile_String,
+  cacheIn_Association
+] := Module[
+  {
+    n, detValue, lhs, expansion, termData, lines = {}, showChildrenQ, a, b, c, d,
+    minorDerivation, termValues, key, cache = cacheIn, fullTopLevelQ,
+    minorKey, reusedValue
+  },
+
+  n = Length[matrix];
+  detValue = Together[Det[matrix]];
+  lhs = If[depth == 0 && label =!= Automatic, label, TraditionalForm[Det[matrix]]];
+  key = cramerMatrixKey[matrix];
+  fullTopLevelQ = profile === "Main" && depth == 0;
+
+  If[n == 1,
+    cache[key] = <|"Value" -> detValue|>;
+    Return[<|
+      "Value" -> detValue,
+      "Lines" -> {Row[{lhs, " = ", tft[matrix[[1, 1]]]}]},
+      "Expansion" -> Missing["NotApplicable"],
+      "Cache" -> cache
+    |>]
+  ];
+
+  If[n == 2,
+    {a, b} = matrix[[1]];
+    {c, d} = matrix[[2]];
+    cache[key] = <|"Value" -> detValue|>;
+    Return[<|
+      "Value" -> detValue,
+      "Lines" -> {
+        Row[{
+          lhs, " = ",
+          cramerFactorDisplay[a], "\[CenterDot]", cramerFactorDisplay[d],
+          " - ",
+          cramerFactorDisplay[b], "\[CenterDot]", cramerFactorDisplay[c],
+          " = ",
+          signedScalarSumDisplay[{Together[a d], -Together[b c]}],
+          " = ",
+          tft[detValue]
+        }]
+      },
+      "Expansion" -> Missing["NotApplicable"],
+      "Cache" -> cache
+    |>]
+  ];
+
+  expansion = cramerBestExpansion[matrix];
+  termData = If[
+    expansion["Type"] === "Row",
+    Table[
+      If[matrix[[expansion["Index"], j]] === 0,
+        Nothing,
+        <|
+          "Row" -> expansion["Index"],
+          "Col" -> j,
+          "Sign" -> (-1)^(expansion["Index"] + j),
+          "Coeff" -> Together[matrix[[expansion["Index"], j]]],
+          "Minor" -> cramerMinorMatrix[matrix, expansion["Index"], j],
+          "MinorLabel" -> cramerMinorName[expansion["Index"], j],
+          "MinorValue" -> Together[Det[cramerMinorMatrix[matrix, expansion["Index"], j]]],
+          "SignedTermValue" -> Together[(-1)^(expansion["Index"] + j) matrix[[expansion["Index"], j]] Det[cramerMinorMatrix[matrix, expansion["Index"], j]]]
+        |>
+      ],
+      {j, 1, n}
+    ],
+    Table[
+      If[matrix[[i, expansion["Index"]]] === 0,
+        Nothing,
+        <|
+          "Row" -> i,
+          "Col" -> expansion["Index"],
+          "Sign" -> (-1)^(i + expansion["Index"]),
+          "Coeff" -> Together[matrix[[i, expansion["Index"]]]],
+          "Minor" -> cramerMinorMatrix[matrix, i, expansion["Index"]],
+          "MinorLabel" -> cramerMinorName[i, expansion["Index"]],
+          "MinorValue" -> Together[Det[cramerMinorMatrix[matrix, i, expansion["Index"]]]],
+          "SignedTermValue" -> Together[(-1)^(i + expansion["Index"]) matrix[[i, expansion["Index"]]] Det[cramerMinorMatrix[matrix, i, expansion["Index"]]]]
+        |>
+      ],
+      {i, 1, n}
+    ]
+  ];
+
+  If[fullTopLevelQ,
+    AppendTo[lines, Style["Laplaceov rozvoj:", Bold]]
+  ];
+  AppendTo[lines, Row[{lhs, " = ", cramerSignedTermSumDisplay[termData, "Symbolic"]}]];
+
+  showChildrenQ = depth < cramerExpansionDepth[diff];
+  If[showChildrenQ,
+    Do[
+      AppendTo[
+        lines,
+        Style[
+          "Vyznačíme " <> ToString[term["Row"]] <> ". riadok a " <> ToString[term["Col"]] <> ". stĺpec, ktoré vynecháme:",
+          Italic,
+          GrayLevel[0.25]
+        ]
+      ];
+      AppendTo[
+        lines,
+        Row[{
+          highlightedMinorSourceMatrixGrid[matrix, term["Row"], term["Col"]],
+          Spacer[10],
+          Style["\[LongRightArrow]", 16],
+          Spacer[10],
+          labeledMatrixGrid[term["MinorLabel"], term["Minor"]]
+        }]
+      ];
+      minorKey = cramerMatrixKey[term["Minor"]];
+      If[KeyExistsQ[cache, minorKey],
+        reusedValue = cache[minorKey]["Value"];
+        AppendTo[
+          lines,
+          Row[{"Tento vedľajší determinant sme už počítali vyššie, jeho hodnota je ", tft[reusedValue], "."}]
+        ];
+        AppendTo[lines, Row[{cramerDetLabel[term["MinorLabel"]], " = ", tft[reusedValue]}]],
+        minorDerivation = cramerDeterminantDerivation[
+          term["Minor"],
+          diff,
+          cramerDetLabel[term["MinorLabel"]],
+          depth + 1,
+          profile,
+          cache
+        ];
+        cache = minorDerivation["Cache"];
+        lines = Join[lines, minorDerivation["Lines"]]
+      ];
+
+      If[diff === "EASY" && fullTopLevelQ,
+        AppendTo[lines, Spacer[4]]
+      ];
+      ,
+      {term, termData}
+    ];
+  ];
+
+  If[fullTopLevelQ,
+    AppendTo[lines, Style["Dosadenie hodnôt vedľajších determinantov:", Bold]]
+  ];
+  AppendTo[lines, Row[{lhs, " = ", cramerSignedTermSumDisplay[termData, "Substituted"]}]];
+
+  termValues = termData[[All, "SignedTermValue"]];
+  If[fullTopLevelQ,
+    AppendTo[lines, Style["Aritmetické zjednodušenie:", Bold]];
+    AppendTo[lines, Row[{lhs, " = ", signedScalarSumDisplay[termValues]}]];
+    AppendTo[lines, Row[{lhs, " = ", tft[detValue]}]],
+    AppendTo[lines, Row[{lhs, " = ", signedScalarSumDisplay[termValues], " = ", tft[detValue]}]]
+  ];
+
+  cache[key] = <|"Value" -> detValue|>;
+
+  <|
+    "Value" -> detValue,
+    "Lines" -> lines,
+    "Expansion" -> expansion,
+    "Cache" -> cache
+  |>
 ];
 
 (* ~-~-~ MATRIX GENERATION ~-~-~ *)
@@ -1030,7 +1373,7 @@ luSolveData[A_, b_] := Module[
   <|"L" -> L, "U" -> U, "Y" -> y, "X" -> x|>
 ];
 
-luDecompositionWithinBoundsQ[data_Association] := Module[
+luDecompositionWithinBoundsQ[data_Association, ___] := Module[
   {luData, limit},
 
   limit = $MaxBounds;
@@ -1044,6 +1387,56 @@ luDecompositionWithinBoundsQ[data_Association] := Module[
     {data["A"], data["b"], luData["L"], luData["U"], luData["Y"], luData["X"]},
     matrixMaxAbs[#] <= limit &
   ]
+];
+
+cramerSolveData[A_, b_] := Module[
+  {n, detA, auxMatrices, auxDeterminants, solution},
+
+  n = Length[A];
+  detA = Together[Det[A]];
+  If[detA === 0,
+    Return[$Failed]
+  ];
+
+  auxMatrices = Table[cramerReplacementMatrix[A, b, i], {i, 1, n}];
+  auxDeterminants = Together /@ (Det /@ auxMatrices);
+  solution = Together /@ (auxDeterminants/detA);
+
+  <|
+    "DetA" -> detA,
+    "AuxMatrices" -> auxMatrices,
+    "AuxDeterminants" -> auxDeterminants,
+    "Solution" -> solution
+  |>
+];
+
+cramerValueMaxAbs[expr_] := Which[
+  MatrixQ[expr] || VectorQ[expr], matrixMaxAbs[expr],
+  True, Abs[expr]
+];
+
+cramerWithinBoundsQ[data_Association, ___] := Module[
+  {cramerData, limit, scalarLimit, matrixItems, scalarItems},
+
+  limit = $MaxBounds;
+  scalarLimit = 3 $MaxBounds;
+  cramerData = cramerSolveData[data["A"], data["b"]];
+
+  If[cramerData === $Failed,
+    Return[False]
+  ];
+
+  matrixItems = Join[
+    {data["A"], data["b"]},
+    cramerData["AuxMatrices"],
+    {cramerData["Solution"]}
+  ];
+
+  scalarItems = Join[{cramerData["DetA"]}, cramerData["AuxDeterminants"]];
+
+  AllTrue[matrixItems, cramerValueMaxAbs[#] <= limit &] &&
+    AllTrue[scalarItems, Abs[#] <= scalarLimit &] &&
+    cramerData["Solution"] === data["x"]
 ];
 
 generateDataWithBounds[
@@ -1280,6 +1673,37 @@ genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Mod
   augFromAb[A, b]
 ];
 
+genScrambleCramer[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
+  {n, x, A, b, diagPool, offPool},
+
+  n = Length[aug0];
+  x = aug0[[All, n + 1]];
+
+  Switch[diff,
+    "EASY",
+    diagPool = {-3, -2, 2, 3};
+    offPool = {-1, 1},
+    "MEDIUM",
+    diagPool = {-4, -3, -2, 2, 3, 4};
+    offPool = {-2, -1, 1, 2},
+    _,
+    diagPool = {-4, -3, -2, 2, 3, 4};
+    offPool = {-2, -1, 1, 2}
+  ];
+
+  A = DiagonalMatrix[RandomChoice[diagPool, n]];
+
+  Do[
+    A[[i, i + 1]] = RandomChoice[offPool];
+    A[[i + 1, i]] = RandomChoice[offPool];
+    ,
+    {i, 1, n - 1}
+  ];
+
+  b = Together[A . x];
+  augFromAb[A, b]
+];
+
 (* ~-~-~ STEP GENERATION ~-~-~ *)
 
 stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st, order, addHeader, addText, addMatrix, addConclusion, addCheckHeader, notes, result, sol},
@@ -1357,10 +1781,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
 
         solLocal[[i]] = aug[[i, n + 1]];
         AppendTo[content, Spacer[6]];
-        AppendTo[content, highlightGrid @ Grid[
-          {{tf[lhsStyle[vars[[i]]]], "=", tft[solLocal[[i]]]}},
-          Alignment -> {{Right, Center, Left}}, BaseStyle -> {FontSize -> 16}
-        ]];
+        AppendTo[content, highlightEqualityGrid[tf[lhsStyle[vars[[i]]]], tft[solLocal[[i]]]]];
         AppendTo[content, Spacer[6]];
         ,
         {i, order}
@@ -1399,13 +1820,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       addMatrix[aug, notes, <|"ActiveRow" -> paramIdx|>];
       addText[Row[{"Premennú ", vars[[paramIdx]], " zvolíme za parameter ", TraditionalForm[\[FormalT]], "."}]];
       AppendTo[content, Spacer[6]];
-      AppendTo[content,
-        highlightGrid @ Grid[
-          {{tf[vars[[paramIdx]]], "=", TraditionalForm[\[FormalT]]}},
-          Alignment -> {{Right, Center, Left}},
-          BaseStyle -> {FontSize -> 16}
-        ]
-      ];
+      AppendTo[content, highlightEqualityGrid[tf[resultLabelStyle[vars[[paramIdx]]]], TraditionalForm[\[FormalT]]]];
       AppendTo[content, Spacer[6]];
 
       addHeader["Vyjadrenie ostatných premenných pomocou parametra"];
@@ -1437,13 +1852,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
         ];
 
         AppendTo[content, Spacer[6]];
-        AppendTo[content,
-          highlightGrid @ Grid[
-            {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]]}},
-            Alignment -> {{Right, Center, Left}},
-            BaseStyle -> {FontSize -> 16}
-          ]
-        ];
+        AppendTo[content, highlightEqualityGrid[tf[lhsStyle[vars[[i]]]], TraditionalForm[solExprs[[i]]]]];
         AppendTo[content, Spacer[6]];
         ,
         {i, order}
@@ -1674,11 +2083,7 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
     ];
 
     AppendTo[content, Spacer[6]];
-    AppendTo[content, highlightGrid @ Grid[
-      {{tf[lhsStyle[vars[[i]]]], "=", tft[aug[[i, n + 1]]] }},
-      Alignment -> {{Right, Center, Left}},
-      BaseStyle -> {FontSize -> 16}
-    ]];
+    AppendTo[content, highlightEqualityGrid[tf[lhsStyle[vars[[i]]]], tft[aug[[i, n + 1]]]]];
     AppendTo[content, Spacer[6]];
     ,
     {i, 1, n}
@@ -1697,11 +2102,7 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
 
     addText[Row[{"Premennú ", vars[[paramIdx]], " zvolíme za parameter ", TraditionalForm[\[FormalT]], " a ponecháme ju v riešení ako symbol."}]];
     AppendTo[content, Spacer[6]];
-    AppendTo[content, highlightGrid @ Grid[
-      {{tf[vars[[paramIdx]]], "=", TraditionalForm[\[FormalT]]}},
-      Alignment -> {{Right, Center, Left}},
-      BaseStyle -> {FontSize -> 16}
-    ]];
+    AppendTo[content, highlightEqualityGrid[tf[resultLabelStyle[vars[[paramIdx]]]], TraditionalForm[\[FormalT]]]];
     AppendTo[content, Spacer[6]];
 
     addHeader["Vyjadrenie ostatných premenných pomocou parametra"];
@@ -1728,11 +2129,7 @@ stepsGaussJordan[data_Association, pivotQ_?BooleanQ] := Module[
       ];
 
       AppendTo[content, Spacer[6]];
-      AppendTo[content, highlightGrid @ Grid[
-        {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]] }},
-        Alignment -> {{Right, Center, Left}},
-        BaseStyle -> {FontSize -> 16}
-      ]];
+      AppendTo[content, highlightEqualityGrid[tf[lhsStyle[vars[[i]]]], TraditionalForm[solExprs[[i]]]]];
       AppendTo[content, Spacer[6]];
       ,
       {i, n, 1, -1}
@@ -1859,13 +2256,7 @@ stepsInverseMatrix[data_Association] := Module[
   invMatrix = augInv[[All, n + 1 ;; 2 n]];
 
   AppendTo[content, Spacer[8]];
-  AppendTo[content,
-    highlightGrid @ Grid[
-      {{Style["A^(-1) =", Bold, FontSize -> 16], TraditionalForm[MatrixForm[invMatrix]]}},
-      Alignment -> {{Right, Left}},
-      Spacings -> {2, 1}
-    ]
-  ];
+  AppendTo[content, labeledMatrixGrid[Superscript[Style["A", Italic], -1], invMatrix]];
   AppendTo[content, Spacer[8]];
 
   addHeader["Výpočet riešenia x = A^(-1) · b"];
@@ -1887,10 +2278,8 @@ stepsInverseMatrix[data_Association] := Module[
   ]];
 
   AppendTo[content, Spacer[8]];
-  AppendTo[content, highlightGrid @ Grid[
-    Table[{tf[lhsStyle[vars[[i]]]], "=", tft[xResult[[i]]]}, {i, 1, n}],
-    Alignment -> {{Right, Center, Left}},
-    BaseStyle -> {FontSize -> 16}
+  AppendTo[content, highlightEqualityRowsGrid[
+    Table[{tf[lhsStyle[vars[[i]]]], tft[xResult[[i]]]}, {i, 1, n}]
   ]];
   AppendTo[content, Spacer[8]];
 
@@ -1945,8 +2334,8 @@ stepsLU[data_Association] := Module[
     content, luMatrixPairGrid[l, u, lBold, uBold]
   ];  addVector[label_, vec_] := AppendTo[content, luVectorGrid[label, vec]];
   addFormula[expr_] := AppendTo[content, expr];
-  lhsStyle[expr_] := Style[expr, Bold];
-  resultStyle[expr_] := Style[expr, Bold, Blue];
+  lhsStyle[expr_] := resultLabelStyle[expr];
+  resultStyle[expr_] := resultValueStyle[expr];
 
   currentLBoldPositions[step_] := Join[
     Table[{r, r}, {r, 1, n}], Flatten[Table[{r, c}, {c, 1, Min[step, n - 1]}, {r, c + 1, n}], 1]
@@ -2148,20 +2537,11 @@ stepsLU[data_Association] := Module[
 
   AppendTo[
     content,
-    highlightGrid @ Grid[
-      {{
-        Style["A =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[A]],
-        Spacer[18],
-        Style["x =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[xSymbols]],
-        Spacer[18],
-        Style["b =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[b]]
-      }},
-      Alignment -> Left,
-      Spacings -> {2, 1}
-    ]
+    labeledMatrixSequenceGrid[{
+      labeledMatrixItem["A", A],
+      labeledMatrixItem["x", xSymbols],
+      labeledMatrixItem["b", b]
+    }]
   ];
 
   addText["Pri LU rozklade chceme maticu A zapísať ako súčin A = L \[CenterDot] U."];
@@ -2397,6 +2777,124 @@ stepsLU[data_Association] := Module[
   |>
 ];
 
+stepsCramer[data_Association] := Module[
+  {
+    content = {}, n, A, b, vars, diff, cramerData, detA, auxMatrices, auxDeterminants, solution,
+    addHeader, addText, addFormula, resultStyle, mainLabel, mainDetLabel,
+    detDerivation, expansionInfo, i, var, varName, auxLabel, auxDetLabel, minorCache = <||>
+  },
+
+  n = data["n"];
+  A = data["A"];
+  b = data["b"];
+  vars = data["Vars"];
+  diff = data["Difficulty"];
+
+  cramerData = cramerSolveData[A, b];
+  If[cramerData === $Failed,
+    Return[<|
+      "Content" -> {
+        makeStepHeader["Cramerovo pravidlo nemožno použiť"],
+        "Pri tejto matici vyšiel nulový determinant, takže Cramerovo pravidlo nemožno použiť."
+      },
+      "Solution" -> Missing["NotAvailable"]
+    |>]
+  ];
+
+  detA = cramerData["DetA"];
+  auxMatrices = cramerData["AuxMatrices"];
+  auxDeterminants = cramerData["AuxDeterminants"];
+  solution = cramerData["Solution"];
+
+  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addText[text_] := AppendTo[content, text];
+  addFormula[expr_] := AppendTo[content, expr];
+  resultStyle[expr_] := resultValueStyle[expr];
+
+  mainLabel = Style["A", Italic];
+  mainDetLabel = cramerDetLabel[mainLabel];
+
+  addHeader["Prepis sústavy do maticového tvaru"];
+  addText["Sústavu zapíšeme v tvare A · x = b."];
+  addText["Pri Cramerovom pravidle rozhoduje determinant matice sústavy A. Ak det(A) ≠ 0, sústava má jediné riešenie a metódu možno použiť."];
+  addFormula[labeledMatrixSequenceGrid[{
+    labeledMatrixItem["A", A],
+    labeledMatrixItem["x", vars],
+    labeledMatrixItem["b", b]
+  }]];
+
+  addHeader["Výpočet hlavného determinantu det(A)"];
+  addText["Najprv vypočítame determinant matice sústavy A."];
+  addFormula[labeledMatrixGrid[mainLabel, A]];
+  detDerivation = cramerDeterminantDerivation[A, diff, mainDetLabel, 0, "Main", minorCache];
+  minorCache = detDerivation["Cache"];
+  expansionInfo = detDerivation["Expansion"];
+  If[AssociationQ[expansionInfo],
+    addText[cramerExpansionChoiceText[expansionInfo]]
+  ];
+  addText[
+    If[diff === "EASY",
+      "Menšie determinanty ďalej rozvinieme rovnakým spôsobom, až kým sa nedostaneme na základný výpočet determinantov 2 × 2.",
+      "Menšie determinanty dopočítame rovnakou schémou a ich hodnoty budeme priebežne dosádzať do výsledného rozpisu."
+    ]
+  ];
+  Scan[addFormula, detDerivation["Lines"]];
+  addFormula[highlightEqualityGrid[resultLabelStyle[mainDetLabel], resultValueStyle[tft[detA]]]];
+  addText["Keďže det(A) ≠ 0, sústava má práve jedno riešenie a môžeme pokračovať Cramerovým pravidlom."];
+
+  Do[
+    var = vars[[i]];
+    varName = cramerVarName[var];
+    auxLabel = cramerMatrixName[var];
+    auxDetLabel = cramerDetLabel[auxLabel];
+
+    addHeader["Výpočet neznámej " <> varName];
+    addText[
+      "Maticu A_" <> varName <> " dostaneme tak, že v matici A nahradíme " <> ToString[i] <> ". stĺpec vektorom pravých strán b."
+    ];
+    addFormula[labeledMatrixGrid[auxLabel, auxMatrices[[i]], i]];
+    addText["Teraz vypočítame determinant tejto pomocnej matice."];
+
+    detDerivation = cramerDeterminantDerivation[auxMatrices[[i]], diff, auxDetLabel, 0, "Aux", minorCache];
+    minorCache = detDerivation["Cache"];
+    expansionInfo = detDerivation["Expansion"];
+    If[AssociationQ[expansionInfo],
+      addText[cramerExpansionChoiceText[expansionInfo]]
+    ];
+    Scan[addFormula, detDerivation["Lines"]];
+    addFormula[highlightEqualityGrid[resultLabelStyle[auxDetLabel], resultValueStyle[tft[auxDeterminants[[i]]]]]];
+
+    addText["Dosadíme do Cramerovho vzorca pre danú neznámu."];
+    addFormula[highlightEqualityRowsGrid[
+      {
+        {tf[resultLabelStyle[var]], Row[{auxDetLabel, " / ", mainDetLabel}]},
+        {tf[resultLabelStyle[var]], Row[{tft[auxDeterminants[[i]]], " / ", tft[detA]}]},
+        {tf[resultLabelStyle[var]], resultStyle[tft[solution[[i]]]]}
+      }
+    ]];
+    ,
+    {i, 1, n}
+  ];
+
+  addHeader["Zostavenie riešenia"];
+  addText["Po výpočte všetkých pomocných determinantov dostávame riešenie sústavy."];
+  addFormula[solutionTupleGrid[vars, solution]];
+
+  addHeader["Skúška správnosti"];
+  addText["Overíme dosadením vypočítaného riešenia do pôvodnej sústavy."];
+  content = Join[content, verificationSteps[data, solution]];
+
+  addHeader["Záver"];
+  addText["Riešenie sústavy bolo úspešne vypočítané pomocou Cramerovho pravidla."];
+
+  <|
+    "Content" -> content,
+    "Solution" -> solution,
+    "DetA" -> detA,
+    "AuxDeterminants" -> auxDeterminants
+  |>
+];
+
 (* ~-~-~ VERIFICATION STEPS ~-~-~ *)
 
 verificationSteps[data_Association, sol_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs},
@@ -2528,11 +3026,19 @@ printTaskLU[data_Association, vars_List] := Module[{},
   printTextCell["Pracujte priamo s maticami L a U bez pivotovania."];
 ];
 
+printTaskCramer[data_Association, vars_List] := Module[{},
+  printTextCell["Riešte sústavu rovníc pomocou Cramerovho pravidla."];
+  printFormulaCell @ Grid[
+    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
+    Alignment -> Left,
+    Spacings -> {0, 0.8}
+  ];
+  printTextCell["Najprv vypočítajte determinant matice sústavy A. Ak det(A) ≠ 0, zostrojte pomocné matice nahradením jednotlivých stĺpcov vektorom pravých strán b a určte neznáme zo vzťahov Cramerovho pravidla."];
+];
+
 printDefaultResult[data_Association, vars_List, st_] := Module[{},
   If[st === "ONE",
-    printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ data["x"], ", "], ")"}]]
-    ]
+    printFormulaCell[solutionTupleGrid[vars, data["x"]]]
   ];
 
   If[st === "NONE",
@@ -2564,15 +3070,12 @@ printResultInverse[data_Association, vars_List, st_, steps_] := Module[
   ];
 
   If[MatrixQ[invMatrix],
-    printTextCell["Inverzná matica:"];
-    printFormulaCell[TraditionalForm[MatrixForm[invMatrix]]];
+    printFormulaCell[labeledMatrixGrid[Superscript[Style["A", Italic], -1], invMatrix]];
   ];
 
   If[ListQ[solution],
     printTextCell["Riešenie sústavy:"];
-    printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
-    ];
+    printFormulaCell[solutionTupleGrid[vars, solution]];
   ];
 ];
 
@@ -2601,25 +3104,70 @@ printResultLU[data_Association, vars_List, st_, steps_] := Module[
   ];
 
   If[MatrixQ[lMatrix],
-    printTextCell["Matica L:"];
-    printFormulaCell[TraditionalForm[MatrixForm[lMatrix]]];
+    printFormulaCell[labeledMatrixGrid["L", lMatrix]];
   ];
 
   If[MatrixQ[uMatrix],
-    printTextCell["Matica U:"];
-    printFormulaCell[TraditionalForm[MatrixForm[uMatrix]]];
+    printFormulaCell[labeledMatrixGrid["U", uMatrix]];
   ];
 
   If[ListQ[yVector],
-    printTextCell["Pomocný vektor y:"];
-    printFormulaCell[TraditionalForm[MatrixForm[yVector]]];
+    printFormulaCell[labeledMatrixGrid["y", yVector]];
   ];
 
   If[ListQ[solution],
     printTextCell["Riešenie sústavy:"];
+    printFormulaCell[solutionTupleGrid[vars, solution]];
+  ];
+];
+
+printResultCramer[data_Association, vars_List, st_, steps_] := Module[
+  {solveData, detA, auxDeterminants, solution},
+
+  solveData = cramerSolveData[data["A"], data["b"]];
+
+  detA = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "DetA"], steps["DetA"],
+    AssociationQ[solveData], solveData["DetA"],
+    True, Missing["NotAvailable"]
+  ];
+
+  auxDeterminants = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "AuxDeterminants"], steps["AuxDeterminants"],
+    AssociationQ[solveData], solveData["AuxDeterminants"],
+    True, Missing["NotAvailable"]
+  ];
+
+  solution = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
+    AssociationQ[solveData], solveData["Solution"],
+    KeyExistsQ[data, "x"], data["x"],
+    True, Missing["NotAvailable"]
+  ];
+
+  If[detA =!= Missing["NotAvailable"],
+    printTextCell["Determinant matice sústavy:"];
+    printFormulaCell[highlightEqualityGrid[resultLabelStyle[cramerDetLabel[Style["A", Italic]]], resultValueStyle[tft[detA]]]];
+  ];
+
+  If[ListQ[auxDeterminants],
+    printTextCell["Pomocné determinanty:"];
     printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
+      highlightEqualityRowsGrid[
+        Table[
+          {
+            resultLabelStyle[cramerDetLabel[cramerMatrixName[vars[[i]]]]],
+            resultValueStyle[tft[auxDeterminants[[i]]]]
+          },
+          {i, 1, Length[vars]}
+        ]
+      ]
     ];
+  ];
+
+  If[ListQ[solution],
+    printTextCell["Riešenie sústavy:"];
+    printFormulaCell[solutionTupleGrid[vars, solution]];
   ];
 ];
 
@@ -2836,6 +3384,33 @@ GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "UseForwardBoundRetry" -> True,
     "ForwardBoundAugFn" -> Function[data, data],
     "ForwardBoundCheckFn" -> luDecompositionWithinBoundsQ
+  |>;
+  runMatrixGenerator[spec, diff, mode, opts]
+];
+
+GenCramer[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+  spec = <|
+    "EntryFn" -> GenCramer,
+    "MsgPrefix" -> GenCramer,
+    "DimKey" -> "Cramer",
+    "SectionTitle" -> "Cramerovo pravidlo",
+    "ScrambleFn" -> genScrambleCramer,
+    "StepsFn" -> stepsCramer,
+    "ValidateExtra" -> Function[{specLocal, passedOpts},
+      With[{stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
+        If[stOpt =!= "ONE",
+          Message[specLocal["MsgPrefix"]::badst, stOpt];
+          False,
+          True
+        ]
+      ]
+    ],
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
+    "TaskPrinter" -> printTaskCramer,
+    "ResultPrinter" -> printResultCramer,
+    "UseForwardBoundRetry" -> True,
+    "ForwardBoundAugFn" -> Function[data, data],
+    "ForwardBoundCheckFn" -> cramerWithinBoundsQ
   |>;
   runMatrixGenerator[spec, diff, mode, opts]
 ];
