@@ -1726,23 +1726,106 @@ cramerSparseRowIndex[matrix_] := First @ MinimalBy[
   Count[matrix[[#]], x_ /; x =!= 0] &
 ];
 
+cramer3x3PositiveColors = {
+  RGBColor[0.10, 0.60, 0.22],
+  RGBColor[0.87, 0.48, 0.07],
+  RGBColor[0.73, 0.63, 0.05]
+};
+
+cramer3x3NegativeColors = {
+  RGBColor[0.12, 0.37, 0.92],
+  RGBColor[0.53, 0.29, 0.88],
+  RGBColor[0.00, 0.60, 0.78]
+};
+
+cramer3x3ModeColor[mode_String, pos_List] := Module[{groups, colors},
+  {groups, colors} = Switch[
+    mode,
+    "Positive",
+    {
+      {
+        {{1, 1}, {2, 2}, {3, 3}},
+        {{1, 2}, {2, 3}, {3, 1}},
+        {{1, 3}, {2, 1}, {3, 2}}
+      },
+      cramer3x3PositiveColors
+    },
+    "Negative",
+    {
+      {
+        {{1, 3}, {2, 2}, {3, 1}},
+        {{1, 1}, {2, 3}, {3, 2}},
+        {{1, 2}, {2, 1}, {3, 3}}
+      },
+      cramer3x3NegativeColors
+    }
+  ];
+
+  FirstCase[
+    Range[Length[groups]],
+    k_ /; MemberQ[groups[[k]], pos] :> colors[[k]],
+    Black
+  ]
+];
+
+cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[
+  {styled},
+  styled = MapIndexed[
+    Style[#1, FontColor -> cramer3x3ModeColor[mode, #2], Bold] &,
+    matrix,
+    {2}
+  ];
+  TraditionalForm[MatrixForm[styled]]
+];
+
+cramer3x3TermProduct[values_List, color_] := Row @ Riffle[
+  (Style[cramerFactor[#], FontColor -> color, Bold] & /@ values),
+  Style["\[CenterDot]", FontColor -> color, Bold]
+];
+
 cramer3x3FormulaDisplay[matrix_] := Module[
   {a, b, c, d, e, f, g, h, i},
   {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
 
   Row[{
-    cramerFactor[a], "\[CenterDot]", cramerFactor[e], "\[CenterDot]", cramerFactor[i],
+    cramer3x3TermProduct[{a, e, i}, cramer3x3PositiveColors[[1]]],
     " + ",
-    cramerFactor[b], "\[CenterDot]", cramerFactor[f], "\[CenterDot]", cramerFactor[g],
+    cramer3x3TermProduct[{b, f, g}, cramer3x3PositiveColors[[2]]],
     " + ",
-    cramerFactor[c], "\[CenterDot]", cramerFactor[d], "\[CenterDot]", cramerFactor[h],
+    cramer3x3TermProduct[{c, d, h}, cramer3x3PositiveColors[[3]]],
     " - ",
-    cramerFactor[c], "\[CenterDot]", cramerFactor[e], "\[CenterDot]", cramerFactor[g],
+    cramer3x3TermProduct[{c, e, g}, cramer3x3NegativeColors[[1]]],
     " - ",
-    cramerFactor[a], "\[CenterDot]", cramerFactor[f], "\[CenterDot]", cramerFactor[h],
+    cramer3x3TermProduct[{a, f, h}, cramer3x3NegativeColors[[2]]],
     " - ",
-    cramerFactor[b], "\[CenterDot]", cramerFactor[d], "\[CenterDot]", cramerFactor[i]
+    cramer3x3TermProduct[{b, d, i}, cramer3x3NegativeColors[[3]]]
   }]
+];
+
+cramer3x3VisualPanel[label_, matrix_] := Grid[
+  {{
+    Style[Row[{label, " ="}], Bold, FontSize -> 16],
+    TraditionalForm[MatrixForm[matrix]],
+    Style["\[LongRightArrow]", Bold, FontSize -> 26],
+    Grid[
+      {{
+        Style["+", Bold, FontSize -> 28],
+        cramer3x3StyledMatrixByMode[matrix, "Positive"]
+      }},
+      Alignment -> {Left, Top},
+      Spacings -> {0.4, 0}
+    ],
+    Grid[
+      {{
+        Style["-", Bold, FontSize -> 28],
+        cramer3x3StyledMatrixByMode[matrix, "Negative"]
+      }},
+      Alignment -> {Left, Top},
+      Spacings -> {0.4, 0}
+    ]
+  }},
+  Alignment -> {Left, Center, Center, Left, Left},
+  Spacings -> {1.5, 1}
 ];
 
 (* vykreslí determinant 3×3 štandardným vzorcom *)
@@ -1751,8 +1834,12 @@ renderCramer3x3Det[matrix_, label_] := Module[
 
   value = Together[Det[matrix]];
 
-  AppendTo[content, cramerLabeledMatrixGrid[label, matrix]];
-  AppendTo[content, "Determinant matice 3×3 vypočítame priamo štandardným vzorcom."];
+  AppendTo[content, Row[{
+    "Determinant matice 3×3 vypočítame pomocou ",
+    Style["Sarrusovho pravidla", Bold],
+    "."
+  }]];
+  AppendTo[content, cramer3x3VisualPanel[label, matrix]];
   AppendTo[content, Row[{cramerDetLabel[label], " = ", cramer3x3FormulaDisplay[matrix]}]];
   AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
@@ -1849,6 +1936,10 @@ renderCramerMediumReduction[matrix_, label_] := Module[
   content = Join[content, det3Data["Content"]];
 
   det4Value = Together[signed2 det3Data["Value"]];
+  AppendTo[content, Row[{
+    cramerDetLabel[minor3Label], " = ",
+    cramerFactor[det3Data["Value"]]
+  }]];
   AppendTo[content, Row[{
     cramerDetLabel[minor4Label], " = ",
     cramerFactor[signed2], " \[CenterDot] ", cramerDetLabel[minor3Label],
@@ -2070,6 +2161,10 @@ renderCramerHardReduction[matrix_, label_] := Module[
   AppendTo[content, cramerEqualityGrid[cramerDetLabel[minor4Label], innerValue]];
 
   det5Value = Together[signed2 innerValue];
+  AppendTo[content, Row[{
+    cramerDetLabel[minor4Label], " = ",
+    cramerFactor[innerValue]
+  }]];
   AppendTo[content, Row[{
     cramerDetLabel[minor5Label], " = ",
     cramerFactor[signed2], " \[CenterDot] ", cramerDetLabel[minor4Label],
