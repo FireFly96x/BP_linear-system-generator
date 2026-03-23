@@ -1332,10 +1332,36 @@ replaceColumn[matrix_, column_Integer, values_List] := Module[{updated = matrix}
   updated
 ];
 
-(* zloží súčet členov laplaceovho rozvoja v tvare c1·det(N1) + c2·det(N2) + ... *)
-cramerDetTermSum[terms_List] := Row @ Riffle[
-  (Row[{cramerFactor[#[[1]]], " \[CenterDot] ", cramerDetLabel[#[[2]]]}] & /@ terms),
-  " + "
+cramerSignedTermDisplay[coeff_, body_, firstQ_] := Module[{absCoeff = Abs[coeff]},
+  If[firstQ,
+    If[coeff < 0,
+      Row[{"-", cramerFactor[absCoeff], " \[CenterDot] ", body}],
+      Row[{cramerFactor[coeff], " \[CenterDot] ", body}]
+    ],
+    If[coeff < 0,
+      Row[{" - ", cramerFactor[absCoeff], " \[CenterDot] ", body}],
+      Row[{" + ", cramerFactor[coeff], " \[CenterDot] ", body}]
+    ]
+  ]
+];
+
+(* zloží súčet členov laplaceovho rozvoja so zachovaním znamienok *)
+cramerDetTermSum[terms_List] := Row @ Table[
+  cramerSignedTermDisplay[
+    terms[[k, 1]],
+    cramerDetLabel[terms[[k, 2]]],
+    k === 1
+  ],
+  {k, 1, Length[terms]}
+];
+
+cramerValueTermSum[coeffs_List, values_List] := Row @ Table[
+  cramerSignedTermDisplay[
+    coeffs[[k]],
+    cramerFactor[values[[k]]],
+    k === 1
+  ],
+  {k, 1, Length[coeffs]}
 ];
 
 (* nájde stĺpec s práve jedným nenulovým prvkom *)
@@ -1465,16 +1491,177 @@ cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
 cramerDetLabel[label_] := Row[{"det(", label, ")"}];
 cramerResultStyle[expr_] := Style[expr, Bold, Blue];
 
+cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[
+  {
+    activeRow, activeColumn, pivotPos, focusCells,
+    columnAsRowQ, rowTextColor, colTextColor, focusTextColor, pivotTextColor, zeroTextColor
+  },
+
+  activeRow = Lookup[hi, "ActiveRow", None];
+  activeColumn = Lookup[hi, "ActiveColumn", None];
+  pivotPos = Lookup[hi, "PivotPos", None];
+  focusCells = Lookup[hi, "FocusCells", {}];
+  columnAsRowQ = TrueQ @ Lookup[hi, "ColumnAsRow", False];
+
+  rowTextColor = RGBColor[0.68, 0.45, 0.04];
+  colTextColor = RGBColor[0.18, 0.56, 0.24];
+  focusTextColor = RGBColor[0.20, 0.40, 0.78];
+  pivotTextColor = RGBColor[0.16, 0.34, 0.90];
+  zeroTextColor = GrayLevel[0.50];
+
+  MapIndexed[
+    Module[{i = #2[[1]], j = #2[[2]], styleOpts = {}, textColor = Automatic, styleArgs, inRowQ, inColumnQ, inFocusQ},
+      inRowQ = IntegerQ[activeRow] && i === activeRow;
+      inColumnQ = IntegerQ[activeColumn] && j === activeColumn;
+      inFocusQ = MemberQ[focusCells, {i, j}];
+
+      If[ListQ[pivotPos] && pivotPos === {i, j},
+        textColor = pivotTextColor;
+        styleOpts = {Bold};,
+        If[inFocusQ,
+          textColor = focusTextColor,
+          If[inColumnQ,
+            textColor = If[columnAsRowQ, rowTextColor, colTextColor],
+            If[inRowQ,
+              textColor = rowTextColor,
+              If[#1 === 0,
+                textColor = zeroTextColor
+              ]
+            ]
+          ]
+        ]
+      ];
+
+      styleArgs = Join[
+        If[textColor === Automatic, {}, {textColor}],
+        styleOpts
+      ];
+
+      Style[#1, Sequence @@ styleArgs]
+    ] &,
+    matrix,
+    {2}
+  ]
+];
+
+cramerMatrixCard[matrix_, hi_Association : <||>] := TraditionalForm[
+  MatrixForm[cramerStyledMatrix[matrix, hi]]
+];
+
+cramerReductionHighlight[lineData_Association, extra_Association : <||>] := Module[
+  {base},
+  base = If[
+    lineData["Type"] === "Row",
+    <|
+      "ActiveRow" -> lineData["LineIndex"],
+      "ActiveColumn" -> lineData["PivotColumn"],
+      "PivotPos" -> {lineData["PivotRow"], lineData["PivotColumn"]},
+      "ColumnAsRow" -> True
+    |>,
+    <|
+      "ActiveRow" -> lineData["PivotRow"],
+      "ActiveColumn" -> lineData["LineIndex"],
+      "PivotPos" -> {lineData["PivotRow"], lineData["PivotColumn"]},
+      "ColumnAsRow" -> True
+    |>
+  ];
+  Join[base, extra]
+];
+
+cramerLaplaceReductionPanel[matrix_, lineData_Association, minorLabel_, minorMatrix_] := Grid[
+  {{
+    cramerMatrixCard[matrix, cramerReductionHighlight[lineData]],
+    Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
+    Grid[
+      {{
+        Style[Row[{minorLabel, " ="}], Bold, FontSize -> 15],
+        cramerMatrixCard[minorMatrix, <|"FontSize" -> 13, "CellWidth" -> 1.05|>]
+      }},
+      Alignment -> {Left, Center},
+      Spacings -> {0.8, 0.4}
+    ]
+  }},
+  Alignment -> {Left, Center, Left},
+  Spacings -> {1.8, 1}
+];
+
+cramerLaplaceVisualizationTitle[lineData_Association] := If[
+  lineData["Type"] === "Row",
+  "Vizualizácia Laplaceovho rozvoja podľa " <> ToString[lineData["LineIndex"]] <> ". riadku:",
+  "Vizualizácia Laplaceovho rozvoja podľa " <> ToString[lineData["LineIndex"]] <> ". stĺpca:"
+];
+
+cramerTermHighlight[sparseLine_Association, termIndex_Integer] := If[
+  sparseLine["Type"] === "Row",
+  <|
+    "ActiveRow" -> sparseLine["LineIndex"],
+    "ActiveColumn" -> termIndex,
+    "PivotPos" -> {sparseLine["LineIndex"], termIndex},
+    "FontSize" -> 12,
+    "CellWidth" -> 0.95
+  |>,
+  <|
+    "ActiveRow" -> termIndex,
+    "ActiveColumn" -> sparseLine["LineIndex"],
+    "PivotPos" -> {termIndex, sparseLine["LineIndex"]},
+    "FontSize" -> 12,
+    "CellWidth" -> 0.95
+  |>
+];
+
+cramerLaplaceTermVisual[sourceMatrix_, sparseLine_Association, coeff_, termIndex_Integer, termLabel_, minorMatrix_] := Grid[
+  {
+    {cramerMatrixCard[sourceMatrix, cramerTermHighlight[sparseLine, termIndex]]},
+    {Style[Row[{"\[DownArrow] ", termLabel}], Bold, FontSize -> 14, GrayLevel[0.25]]},
+    {
+      Grid[
+        {{
+          Style[cramerFactor[coeff], Bold, RGBColor[0.20, 0.38, 0.93], FontSize -> 15],
+          Style["\[CenterDot]", Bold, RGBColor[0.20, 0.38, 0.93], FontSize -> 15],
+          cramerMatrixCard[minorMatrix, <|"FontSize" -> 12, "CellWidth" -> 0.95|>]
+        }},
+        Alignment -> {Center, Center, Center},
+        Spacings -> {0.5, 0.4}
+      ]
+    }
+  },
+  Alignment -> Center,
+  Spacings -> {0.8, 0.7}
+];
+
+cramerLaplaceTermPanel[sourceMatrix_, sparseLine_Association, termInfos_List, termDataList_List, termIndices_List] := Module[
+  {termVisuals},
+  termVisuals = Table[
+    cramerLaplaceTermVisual[
+      sourceMatrix,
+      sparseLine,
+      termInfos[[k, 1]],
+      termIndices[[k]],
+      termInfos[[k, 2]],
+      termDataList[[k]]["Matrix"]
+    ],
+    {k, 1, Length[termInfos]}
+  ];
+
+  highlightGrid @ Column[
+    {
+      Style[cramerLaplaceVisualizationTitle[sparseLine], FontSize -> 14, GrayLevel[0.15]],
+      Grid[{termVisuals}, Alignment -> Center, Spacings -> {1.8, 0.8}]
+    },
+    Spacings -> 0.9
+  ]
+];
+
 cramerFactor[value_] := If[
   NumberQ[value] && value < 0,
   Row[{"(", tft[value], ")"}],
   tft[value]
 ];
 
-cramerLabeledMatrixGrid[label_, matrix_] := highlightGrid @ Grid[
+cramerLabeledMatrixGrid[label_, matrix_, hi_Association : <||>] := Grid[
   {{
     Style[Row[{label, " ="}], Bold, FontSize -> 16],
-    TraditionalForm[MatrixForm[matrix]]
+    cramerMatrixCard[matrix, hi]
   }},
   Alignment -> Left,
   Spacings -> {2, 1}
@@ -1569,7 +1756,7 @@ renderCramer3x3Det[matrix_, label_] := Module[
   AppendTo[content, Row[{cramerDetLabel[label], " = ", cramer3x3FormulaDisplay[matrix]}]];
   AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-  <|"Content" -> content, "Value" -> value|>
+  <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
 
 (* vykreslí determinant 5×5 cez dva laplaceove rozvoje a následný determinant 3×3 *)
@@ -1590,7 +1777,7 @@ renderCramerMediumReduction[matrix_, label_] := Module[
     value = Together[Det[matrix]];
     AppendTo[content, "Matica nemá vhodný riedky riadok ani stĺpec, preto determinant dopočítame priamo."];
     AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
-    Return[<|"Content" -> content, "Value" -> value|>];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
   signed1 = Together[
@@ -1600,11 +1787,11 @@ renderCramerMediumReduction[matrix_, label_] := Module[
   minor4 = cramerMinor[matrix, line1["PivotRow"], line1["PivotColumn"]];
 
   AppendTo[content, cramerLaplaceExplanation[line1]];
+  AppendTo[content, cramerLaplaceReductionPanel[matrix, line1, minor4Label, minor4]];
   AppendTo[content, Row[{
     cramerDetLabel[label], " = ", cramerFactor[signed1],
     " \[CenterDot] ", cramerDetLabel[minor4Label]
   }]];
-  AppendTo[content, cramerLabeledMatrixGrid[minor4Label, minor4]];
 
   If[cramerZeroRowIndex[minor4] =!= Missing["NotFound"],
     det4Value = 0;
@@ -1622,7 +1809,7 @@ renderCramerMediumReduction[matrix_, label_] := Module[
     }]];
     AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-    Return[<|"Content" -> content, "Value" -> value|>];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
   line2 = cramerSingletonLineData[minor4];
@@ -1642,7 +1829,7 @@ renderCramerMediumReduction[matrix_, label_] := Module[
     }]];
     AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-    Return[<|"Content" -> content, "Value" -> value|>];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
   signed2 = Together[
@@ -1652,6 +1839,7 @@ renderCramerMediumReduction[matrix_, label_] := Module[
   minor3 = cramerMinor[minor4, line2["PivotRow"], line2["PivotColumn"]];
 
   AppendTo[content, cramerLaplaceExplanation[line2]];
+  AppendTo[content, cramerLaplaceReductionPanel[minor4, line2, minor3Label, minor3]];
   AppendTo[content, Row[{
     cramerDetLabel[minor4Label], " = ", cramerFactor[signed2],
     " \[CenterDot] ", cramerDetLabel[minor3Label]
@@ -1682,7 +1870,7 @@ renderCramerMediumReduction[matrix_, label_] := Module[
   }]];
   AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-  <|"Content" -> content, "Value" -> value|>
+  <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
 
 (* vykreslí determinant 6×6 cez dva laplaceove rozvoje na 4×4 a potom rozvoj podľa najriedšej línie *)
@@ -1692,8 +1880,8 @@ renderCramerHardReduction[matrix_, label_] := Module[
     signed1, signed2, minor5, minor4,
     minor5Label, minor4Label,
     det5Value, det4Value, innerValue, value,
-    termDataList = {}, termInfos = {},
-    termIndex, coeff, minor3, termLabel, termData
+    termDataList = {}, termInfos = {}, allTermDataList = {}, allTermInfos = {},
+    termIndex, coeff, minor3, termLabel, termData, termIndices, termValues
   },
 
   minor5Label = Subscript[Style["M", Italic], 5];
@@ -1706,7 +1894,7 @@ renderCramerHardReduction[matrix_, label_] := Module[
     value = Together[Det[matrix]];
     AppendTo[content, "Matica nemá vhodný riedky riadok ani stĺpec, preto determinant dopočítame priamo."];
     AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
-    Return[<|"Content" -> content, "Value" -> value|>];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
   signed1 = Together[
@@ -1716,11 +1904,11 @@ renderCramerHardReduction[matrix_, label_] := Module[
   minor5 = cramerMinor[matrix, line1["PivotRow"], line1["PivotColumn"]];
 
   AppendTo[content, cramerLaplaceExplanation[line1]];
+  AppendTo[content, cramerLaplaceReductionPanel[matrix, line1, minor5Label, minor5]];
   AppendTo[content, Row[{
     cramerDetLabel[label], " = ", cramerFactor[signed1],
     " \[CenterDot] ", cramerDetLabel[minor5Label]
   }]];
-  AppendTo[content, cramerLabeledMatrixGrid[minor5Label, minor5]];
 
   If[cramerZeroRowIndex[minor5] =!= Missing["NotFound"],
     det5Value = 0;
@@ -1738,7 +1926,7 @@ renderCramerHardReduction[matrix_, label_] := Module[
     }]];
     AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-    Return[<|"Content" -> content, "Value" -> value|>];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
   line2 = cramerSingletonLineData[minor5];
@@ -1758,7 +1946,7 @@ renderCramerHardReduction[matrix_, label_] := Module[
     }]];
     AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-    Return[<|"Content" -> content, "Value" -> value|>];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
   signed2 = Together[
@@ -1768,11 +1956,11 @@ renderCramerHardReduction[matrix_, label_] := Module[
   minor4 = cramerMinor[minor5, line2["PivotRow"], line2["PivotColumn"]];
 
   AppendTo[content, cramerLaplaceExplanation[line2]];
+  AppendTo[content, cramerLaplaceReductionPanel[minor5, line2, minor4Label, minor4]];
   AppendTo[content, Row[{
     cramerDetLabel[minor5Label], " = ", cramerFactor[signed2],
     " \[CenterDot] ", cramerDetLabel[minor4Label]
   }]];
-  AppendTo[content, cramerLabeledMatrixGrid[minor4Label, minor4]];
 
   If[cramerZeroRowIndex[minor4] =!= Missing["NotFound"],
     det4Value = 0;
@@ -1801,11 +1989,17 @@ renderCramerHardReduction[matrix_, label_] := Module[
     }]];
     AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-    Return[<|"Content" -> content, "Value" -> value|>];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
   sparseLine = cramerSparseLineData[minor4];
   AppendTo[content, cramerSparseExplanation[sparseLine]];
+
+  termIndices = If[
+    sparseLine["Type"] === "Row",
+    Range[Length[minor4[[sparseLine["LineIndex"]]]]],
+    Range[Length[minor4]]
+  ];
 
   Do[
     If[sparseLine["Type"] === "Row",
@@ -1822,25 +2016,33 @@ renderCramerHardReduction[matrix_, label_] := Module[
       minor3 = cramerMinor[minor4, termIndex, sparseLine["LineIndex"]];
     ];
 
-    termLabel = Subscript[Style["N", Italic], Length[termInfos] + 1];
-    AppendTo[termInfos, {coeff, termLabel}];
+    termLabel = Subscript[Style["N", Italic], Length[allTermInfos] + 1];
 
     termData = renderCramer3x3Det[minor3, termLabel];
-    AppendTo[termDataList, termData];
+    AppendTo[allTermInfos, {coeff, termLabel}];
+    AppendTo[allTermDataList, termData];
+
+    If[coeff =!= 0,
+      AppendTo[termInfos, {coeff, termLabel}];
+      AppendTo[termDataList, termData];
+    ];
     ,
-    {termIndex, sparseLine["NonzeroIndices"]}
+    {termIndex, termIndices}
   ];
+
+  AppendTo[content, cramerLaplaceTermPanel[minor4, sparseLine, allTermInfos, allTermDataList, termIndices]];
 
   AppendTo[content, Row[{
     cramerDetLabel[minor4Label], " = ",
-    Row @ Riffle[
-      Table[
-        Row[{cramerFactor[termInfos[[k, 1]]], " \[CenterDot] ", cramerDetLabel[termInfos[[k, 2]]]}],
-        {k, 1, Length[termInfos]}
-      ],
-      " + "
-    ]
+    cramerDetTermSum[allTermInfos]
   }]];
+
+  If[Length[termInfos] < Length[allTermInfos],
+    AppendTo[content, Row[{
+      cramerDetLabel[minor4Label], " = ",
+      cramerDetTermSum[termInfos]
+    }]];
+  ];
 
   Do[
     AppendTo[content, Row[{
@@ -1856,23 +2058,12 @@ renderCramerHardReduction[matrix_, label_] := Module[
   innerValue = Together[
     Total@Table[termInfos[[k, 1]] termDataList[[k]]["Value"], {k, 1, Length[termInfos]}]
   ];
+  termValues = termDataList[[All, "Value"]];
   AppendTo[content, Row[{
     cramerDetLabel[minor4Label], " = ",
-    Row @ Riffle[
-      Table[
-        Row[{cramerFactor[termInfos[[k, 1]]], " \[CenterDot] ", cramerDetLabel[termInfos[[k, 2]]]}],
-        {k, 1, Length[termInfos]}
-      ],
-      " + "
-    ],
+    cramerDetTermSum[termInfos],
     " = ",
-    Row @ Riffle[
-      Table[
-        Row[{cramerFactor[termInfos[[k, 1]]], " \[CenterDot] ", cramerFactor[termDataList[[k]]["Value"]]}],
-        {k, 1, Length[termInfos]}
-      ],
-      " + "
-    ],
+    cramerValueTermSum[termInfos[[All, 1]], termValues],
     " = ",
     cramerFactor[innerValue]
   }]];
@@ -1900,7 +2091,7 @@ renderCramerHardReduction[matrix_, label_] := Module[
   }]];
   AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-  <|"Content" -> content, "Value" -> value|>
+  <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
 
 renderCramerDeterminant[matrix_, label_] := Switch[
@@ -1913,7 +2104,8 @@ renderCramerDeterminant[matrix_, label_] := Switch[
       cramerLabeledMatrixGrid[label, matrix],
       cramerEqualityGrid[cramerDetLabel[label], Together[Det[matrix]]]
     },
-    "Value" -> Together[Det[matrix]]
+    "Value" -> Together[Det[matrix]],
+    "Matrix" -> matrix
   |>
 ];
 
