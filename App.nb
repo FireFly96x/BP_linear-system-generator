@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      6978,        125]
-NotebookOptionsPosition[      6537,        108]
-NotebookOutlinePosition[      7022,        127]
-CellTagsIndexPosition[      6979,        124]
+NotebookDataLength[      6989,        124]
+NotebookOptionsPosition[      6583,        108]
+NotebookOutlinePosition[      7033,        126]
+CellTagsIndexPosition[      6990,        123]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -30,7 +30,7 @@ Cell[BoxData[{
   RowBox[{
    RowBox[{"<<", " ", "\"\<MatrixGenerator.wl\>\""}], ";"}], "Input"], "\[IndentingNewLine]", 
  RowBox[{"GenCramer", "[", 
-  RowBox[{"\"\<MEDIUM\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
+  RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
    RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}]}], "Input",
  CellChangeTimes->{{3.9757009438068523`*^9, 3.9757009438068523`*^9}, 
    3.975701017016773*^9, {3.975701093725874*^9, 3.975701102330042*^9}, {
@@ -103,12 +103,11 @@ Cell[BoxData[{
    3.9832695243764954`*^9, 3.9832695414477253`*^9}, {3.983272905812216*^9, 
    3.983272942045452*^9}, {3.983276177228321*^9, 3.983276178028763*^9}, {
    3.983276303892988*^9, 3.983276304603428*^9}, {3.9832776941332855`*^9, 
-   3.9832776948963184`*^9}},
+   3.9832776948963184`*^9}, {3.9835240445662823`*^9, 3.983524051818079*^9}},
  CellLabel->"",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
 },
-WindowSize->{1152, 579.6},
-WindowMargins->{{
-  Automatic, -5.399999999999864}, {-5.399999999999977, Automatic}},
+WindowSize->{1141.2, 573.6},
+WindowMargins->{{0, Automatic}, {Automatic, 0}},
 LightDark->"Light",
 Magnification:>0.9 Inherited,
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
@@ -126,7 +125,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 5979, 86, 93, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
+Cell[554, 20, 6025, 86, 93, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
 }
 ]
 *)

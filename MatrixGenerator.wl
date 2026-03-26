@@ -39,6 +39,11 @@ diff: \"EASY\" (3x3), \"MEDIUM\" (5x5), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože pre Doolittle bez pivotovania vyžadujeme regulárnu maticu s nenulovými hlavnými pivotmi počas rozkladu)";
 
+GenCholesky::usage = "GenCholesky[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou Choleského rozkladu.
+diff: \"EASY\" (3x3), \"MEDIUM\" (5x5), \"HARD\" (6x6)
+mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
+opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože Choleského rozklad vyžaduje symetrickú kladne definitnú maticu)";
+
 GenCramer::usage = "GenCramer[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou Cramerovho pravidla.
 diff: \"EASY\" (3x3), \"MEDIUM\" (5x5), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
@@ -70,6 +75,10 @@ GenLU::baddiff = GenTriangular::baddiff;
 GenLU::badmode = GenTriangular::badmode;
 GenLU::badst   = GenTriangular::badst;
 GenLU::fail    = "Nepodarilo sa vygenerovať sústavu vhodnú pre LU rozklad bez pivotovania.";
+GenCholesky::baddiff = GenTriangular::baddiff;
+GenCholesky::badmode = GenTriangular::badmode;
+GenCholesky::badst   = GenTriangular::badst;
+GenCholesky::fail    = "Nepodarilo sa vygenerovať symetrickú kladne definitnú sústavu vhodnú pre Choleského rozklad.";
 GenCramer::baddiff = GenTriangular::baddiff;
 GenCramer::badmode = GenTriangular::badmode;
 GenCramer::badst   = GenTriangular::badst;
@@ -83,6 +92,7 @@ Options[GenGaussJordan] = $CommonGeneratorOptions;
 Options[GenGaussJordanPivot] = $CommonGeneratorOptions;
 Options[GenInverse] = {SolutionType -> "ONE"};
 Options[GenLU] = {SolutionType -> "ONE"};
+Options[GenCholesky] = {SolutionType -> "ONE"};
 Options[GenCramer] = {SolutionType -> "ONE"};
 
 $FailedScrambleCount;
@@ -617,33 +627,41 @@ luLinearCombinationDisplay[terms_List] := Module[{clean, first, rest},
   ]
 ];
 
-luMatrixPairGrid[L_, U_, lBold_List : {}, uBold_List : {}] := Module[
-  {styledL, styledU},
-  styledL = MapIndexed[
-    If[MemberQ[lBold, #2], Style[#1, Bold], #1] &,
-    L,
+matrixPairGrid[leftLabel_, leftMatrix_, rightLabel_, rightMatrix_, leftBold_List : {}, rightBold_List : {}] := Module[
+  {styledLeft, styledRight},
+
+  styledLeft = MapIndexed[
+    If[MemberQ[leftBold, #2], Style[#1, Bold], #1] &,
+    leftMatrix,
     {2}
   ];
-  styledU = MapIndexed[
-    If[MemberQ[uBold, #2], Style[#1, Bold], #1] &,
-    U,
+
+  styledRight = MapIndexed[
+    If[MemberQ[rightBold, #2], Style[#1, Bold], #1] &,
+    rightMatrix,
     {2}
   ];
 
   highlightGrid @ Grid[
     {{
-      Style["L =", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledL]],
+      Style[Row[{leftLabel, " ="}], Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[styledLeft]],
       Spacer[20],
-      Style["U =", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledU]]
+      Style[Row[{rightLabel, " ="}], Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[styledRight]]
     }},
     Alignment -> Left,
     Spacings -> {2, 1}
   ]
 ];
 
-luVectorGrid[label_String, vec_List] := highlightGrid @ Grid[
+luMatrixPairGrid[L_, U_, lBold_List : {}, uBold_List : {}] :=
+    matrixPairGrid["L", L, "U", U, lBold, uBold];
+
+choleskyMatrixPairGrid[L_, LT_, lBold_List : {}, ltBold_List : {}] :=
+    matrixPairGrid["L", L, Superscript["L", "T"], LT, lBold, ltBold];
+
+namedVectorGrid[label_String, vec_List] := highlightGrid @ Grid[
   {{
     Style[label <> " =", Bold, FontSize -> 16],
     TraditionalForm[MatrixForm[vec]]
@@ -692,70 +710,55 @@ luFormulaLGeneral[j_Integer, i_Integer] := If[i === 1,
   }]
 ];
 
-luEquationForwardDisplay[row_List, rhs_, vars_List, idx_Integer] := Module[{terms},
+forwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer] := Module[{terms},
   terms = Table[{row[[j]], vars[[j]]}, {j, 1, idx}];
   Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
 ];
 
-luEquationBackwardDisplay[row_List, rhs_, vars_List, idx_Integer, n_Integer] := Module[{terms},
+backwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer, n_Integer] := Module[{terms},
   terms = Table[{row[[j]], vars[[j]]}, {j, idx, n}];
   Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
 ];
 
-luMatrixProductDisplay[left_, right_] := Module[
-  {rawMatrix, finalMatrix, terms, firstTerm, restTerms, shortExpr, tooltipExpr},
+matrixProductDisplay[left_, right_] := Module[
+  {tooltipMatrix, makeTooltipCell, makeTermDisplay},
 
-  rawMatrix = Table[
-    terms = Select[
-      Transpose[{left[[i]], right[[All, j]]}],
-      #[[1]] =!= 0 && #[[2]] =!= 0 &
-    ];
+  makeTermDisplay[a_, b_] := Row[{luFactorDisplay[a], "\[CenterDot]", luFactorDisplay[b]}];
 
-    If[
-      terms === {},
-      0,
-      firstTerm = Row[{
-        luFactorDisplay[terms[[1, 1]]],
-        "\[CenterDot]",
-        luFactorDisplay[terms[[1, 2]]]
-      }];
+  makeTooltipCell[i_, j_] := Module[{allTerms, value, tooltipExpr},
+    allTerms = Transpose[{left[[i]], right[[All, j]]}];
+    value = Together[left[[i]] . right[[All, j]]];
 
-      If[
-        Length[terms] == 1,
-        firstTerm,
-        restTerms = Rest[terms];
+    tooltipExpr = Row[{
+      Row @ Riffle[
+        (makeTermDisplay[#[[1]], #[[2]]] & /@ allTerms),
+        " + "
+      ],
+      " = ",
+      tft[value]
+    }];
 
-        tooltipExpr = Row @ Riffle[
-          (Row[{luFactorDisplay[#[[1]]], "\[CenterDot]", luFactorDisplay[#[[2]]]}] & /@ restTerms),
-          " + "
-        ];
-
-        shortExpr = Row[{
-          firstTerm,
-          " + ",
-          MouseAppearance[
-            Tooltip[
-              Style["...", Blue],
-              Framed[
-                tooltipExpr,
-                Background -> White,
-                FrameStyle -> GrayLevel[0.8],
-                RoundingRadius -> 4,
-                FrameMargins -> 5
-              ],
-              TooltipStyle -> {CellFrame -> 0}
-            ],
-            "LinkHand"
-          ]
-        }];
-
-        shortExpr
-      ]
-    ],
-    {i, 1, Length[left]}, {j, 1, Length[right[[1]]]}
+    MouseAppearance[
+      Tooltip[
+        TraditionalForm[value],
+        Framed[
+          tooltipExpr,
+          Background -> White,
+          FrameStyle -> GrayLevel[0.8],
+          RoundingRadius -> 4,
+          FrameMargins -> 5
+        ],
+        TooltipStyle -> {CellFrame -> 0}
+      ],
+      "LinkHand"
+    ]
   ];
 
-  finalMatrix = Together[left . right];
+  tooltipMatrix = Table[
+    makeTooltipCell[i, j],
+    {i, 1, Length[left]},
+    {j, 1, Length[right[[1]]]}
+  ];
 
   highlightGrid @ Grid[
     {{
@@ -763,9 +766,7 @@ luMatrixProductDisplay[left_, right_] := Module[
       Style["\[CenterDot]", Bold, FontSize -> 16],
       TraditionalForm[MatrixForm[right]],
       Style["=", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[rawMatrix]],
-      Style["=", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[finalMatrix]]
+      TraditionalForm[MatrixForm[tooltipMatrix]]
     }},
     Alignment -> Center,
     Spacings -> {1, 1},
@@ -1043,6 +1044,64 @@ luSolveData[A_, b_] := Module[
   <|"L" -> L, "U" -> U, "Y" -> y, "X" -> x|>
 ];
 
+choleskySolveData[A_, b_] := Module[
+  {n, L, y, x, i, j, diagTerms, mixedTerms, diagRadicand, diagValue, sumTerm},
+
+  n = Length[A];
+
+  If[!SymmetricMatrixQ[A], Return[$Failed]];
+
+  L = ConstantArray[0, {n, n}];
+  y = ConstantArray[0, n];
+  x = ConstantArray[0, n];
+
+  Do[
+    diagTerms = Table[L[[i, k]]^2, {k, 1, i - 1}];
+    diagRadicand = Together[A[[i, i]] - Total[diagTerms]];
+
+    If[!IntegerQ[diagRadicand] || diagRadicand <= 0, Return[$Failed]];
+
+    diagValue = Sqrt[diagRadicand];
+    If[!IntegerQ[diagValue], Return[$Failed]];
+
+    L[[i, i]] = diagValue;
+
+    Do[
+      mixedTerms = Table[L[[j, k]]*L[[i, k]], {k, 1, i - 1}];
+      sumTerm = Total[mixedTerms];
+      L[[j, i]] = Together[(A[[j, i]] - sumTerm)/L[[i, i]]];
+
+      If[!IntegerQ[L[[j, i]]], Return[$Failed]];
+      ,
+      {j, i + 1, n}
+    ];
+    ,
+    {i, 1, n}
+  ];
+
+  Do[
+    mixedTerms = Table[L[[i, k]]*y[[k]], {k, 1, i - 1}];
+    sumTerm = Total[mixedTerms];
+    y[[i]] = Together[(b[[i]] - sumTerm)/L[[i, i]]];
+
+    If[!IntegerQ[y[[i]]], Return[$Failed]];
+    ,
+    {i, 1, n}
+  ];
+
+  Do[
+    mixedTerms = Table[L[[k, i]]*x[[k]], {k, i + 1, n}];
+    sumTerm = Total[mixedTerms];
+    x[[i]] = Together[(y[[i]] - sumTerm)/L[[i, i]]];
+
+    If[!IntegerQ[x[[i]]], Return[$Failed]];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  <|"L" -> L, "Y" -> y, "X" -> x|>
+];
+
 luDecompositionWithinBoundsQ[data_Association] := Module[
   {luData, limit},
 
@@ -1055,6 +1114,20 @@ luDecompositionWithinBoundsQ[data_Association] := Module[
 
   AllTrue[
     {data["A"], data["b"], luData["L"], luData["U"], luData["Y"], luData["X"]},
+    matrixMaxAbs[#] <= limit &
+  ]
+];
+
+choleskyDecompositionWithinBoundsQ[data_Association] := Module[
+  {choleskyData, limit},
+
+  limit = $MaxBounds;
+  choleskyData = choleskySolveData[data["A"], data["b"]];
+
+  If[choleskyData === $Failed, Return[False]];
+
+  AllTrue[
+    {data["A"], data["b"], choleskyData["L"], Transpose[choleskyData["L"]], choleskyData["Y"], choleskyData["X"]},
     matrixMaxAbs[#] <= limit &
   ]
 ];
@@ -1291,6 +1364,53 @@ genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Mod
   b = Together[A . x];
 
   augFromAb[A, b]
+];
+
+genScrambleCholesky[diff_String, aug0_, triType_, solType_String : "ONE"] := Module[
+  {n, solutionVector, lMatrix, aMatrix, bVector, tries = 0, lowerPool, diagPool, diagMax, lowerMax},
+
+  n = Length[aug0];
+  solutionVector = aug0[[All, n + 1]];
+
+  {diagMax, lowerMax} = Switch[
+    diff,
+    "EASY", {4, 2},
+    "MEDIUM", {3, 2},
+    "HARD", {3, 1},
+    _, {3, 1}
+  ];
+
+  lowerPool = Join[Range[-lowerMax, -1], {0, 0}, Range[1, lowerMax]];
+  diagPool = Range[2, diagMax];
+
+  While[tries < $MaxRetryCount,
+    lMatrix = ConstantArray[0, {n, n}];
+
+    Do[
+      lMatrix[[i, i]] = RandomChoice[diagPool];
+      Do[
+        lMatrix[[i, j]] = RandomChoice[lowerPool];
+        ,
+        {j, 1, i - 1}
+      ];
+      ,
+      {i, 1, n}
+    ];
+
+    aMatrix = Together[lMatrix . Transpose[lMatrix]];
+    bVector = Together[aMatrix . solutionVector];
+
+    If[
+      matrixMaxAbs[aMatrix] <= $MaxBounds &&
+          matrixMaxAbs[bVector] <= $MaxBounds &&
+          choleskyDecompositionWithinBoundsQ[<|"A" -> aMatrix, "b" -> bVector|>],
+      Return[augFromAb[aMatrix, bVector]]
+    ];
+
+    tries++;
+  ];
+
+  $Failed
 ];
 
 genScrambleCramer[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
@@ -2385,6 +2505,110 @@ cramerDeterminantsWithinBoundsQ[A_, b_] := Module[
   ]
 ];
 
+
+
+(*pomocne helpry pre cholesky*)
+
+choleskySqrtDisplay[arg_] := Row[{"\[Sqrt]", "(", arg, ")"}];
+
+choleskySymbolicSquareSum[indices_List, row_Integer] := If[
+  indices === {},
+  tft[0],
+  Row @ Riffle[
+    (Superscript[luEntrySymbol["l", row, #], "2"] & /@ indices),
+    " + "
+  ]
+];
+
+choleskySymbolicProductSum[indices_List, row_Integer, col_Integer] := If[
+  indices === {},
+  tft[0],
+  Row @ Riffle[
+    (Row[{luEntrySymbol["l", row, #], "\[CenterDot]", luEntrySymbol["l", col, #]}] & /@ indices),
+    " + "
+  ]
+];
+
+choleskyNumericSquareSum[vals_List] := If[
+  vals === {},
+  tft[0],
+  Row @ Riffle[
+    (Superscript[luFactorDisplay[#], "2"] & /@ vals),
+    " + "
+  ]
+];
+
+buildCholeskyDiagonalLines[i_Integer, A_, L_, value_] := Module[
+  {diagTerms, diagRadicand},
+
+  diagTerms = Table[L[[i, k]]^2, {k, 1, i - 1}];
+  diagRadicand = Together[A[[i, i]] - Total[diagTerms]];
+
+  If[diagTerms === {},
+    {
+      Row[{
+        lhsStyle[luEntrySymbol["l", i, i]], " = ",
+        choleskySqrtDisplay[luEntrySymbol["a", i, i]], " = ",
+        choleskySqrtDisplay[tft[A[[i, i]]]], " = ",
+        Style[tft[value], Bold, Blue]
+      }]
+    },
+    {
+      Row[{
+        lhsStyle[luEntrySymbol["l", i, i]], " = ",
+        choleskySqrtDisplay[
+          Row[{luEntrySymbol["a", i, i], " - (", choleskySymbolicSquareSum[Range[i - 1], i], ")"}]
+        ]
+      }],
+      Row[{
+        lhsStyle[luEntrySymbol["l", i, i]], " = ",
+        choleskySqrtDisplay[
+          Row[{tft[A[[i, i]]], " - (", choleskyNumericSquareSum[L[[i, 1 ;; i - 1]]], ")"}]
+        ]
+      }],
+      Row[{
+        lhsStyle[luEntrySymbol["l", i, i]], " = ",
+        choleskySqrtDisplay[tft[diagRadicand]], " = ",
+        Style[tft[value], Bold, Blue]
+      }]
+    }
+  ]
+];
+
+buildCholeskyOffDiagonalLines[j_Integer, i_Integer, A_, L_, diagValue_, value_] := Module[
+  {mixedTerms, numerator},
+
+  mixedTerms = Table[{L[[j, k]], L[[i, k]]}, {k, 1, i - 1}];
+  numerator = Together[A[[j, i]] - Total[Times @@@ mixedTerms]];
+
+  If[mixedTerms === {},
+    {
+      Row[{
+        lhsStyle[luEntrySymbol["l", j, i]], " = ",
+        luEntrySymbol["a", j, i], " / ", luEntrySymbol["l", i, i],
+        " = ", tft[A[[j, i]]], " / ", tft[diagValue],
+        " = ", Style[tft[value], Bold, Blue]
+      }]
+    },
+    {
+      Row[{
+        lhsStyle[luEntrySymbol["l", j, i]], " = (",
+        luEntrySymbol["a", j, i], " - (", choleskySymbolicProductSum[Range[i - 1], j, i], ")) / ",
+        luEntrySymbol["l", i, i]
+      }],
+      Row[{
+        lhsStyle[luEntrySymbol["l", j, i]], " = (",
+        tft[A[[j, i]]], " - ", luWrappedSumDisplay[mixedTerms], ") / ", tft[diagValue]
+      }],
+      Row[{
+        lhsStyle[luEntrySymbol["l", j, i]], " = ",
+        tft[numerator], " / ", tft[diagValue],
+        " = ", Style[tft[value], Bold, Blue]
+      }]
+    }
+  ]
+];
+
 (* ~-~-~ STEP GENERATION ~-~-~ *)
 
 stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st, order, addHeader, addText, addMatrix, addConclusion, addCheckHeader, notes, result, sol},
@@ -3048,7 +3272,8 @@ stepsLU[data_Association] := Module[
   addText[text_] := AppendTo[content, text];
   addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}] := AppendTo[
     content, luMatrixPairGrid[l, u, lBold, uBold]
-  ];  addVector[label_, vec_] := AppendTo[content, luVectorGrid[label, vec]];
+  ];
+  addVector[label_, vec_] := AppendTo[content, namedVectorGrid[label, vec]];
   addFormula[expr_] := AppendTo[content, expr];
   resultStyle[expr_] := Style[expr, Bold, Blue];
 
@@ -3372,7 +3597,7 @@ stepsLU[data_Association] := Module[
   addHeader["Overenie rozkladu L \[CenterDot] U = A"];
   luProduct = Together[L . U];
   addText["Každý prvok súčinu L \[CenterDot] U vzniká ako skalárny súčin príslušného riadku matice L a stĺpca matice U. Najprv si ukážeme dosadenie, potom vypočítané súčiny a nakoniec výsledný prvok."];
-  AppendTo[content, luMatrixProductDisplay[L, U]];
+  AppendTo[content, matrixProductDisplay[L, U]];
 
   AppendTo[
     content,
@@ -3497,6 +3722,281 @@ stepsLU[data_Association] := Module[
     "Solution" -> x,
     "L" -> L,
     "U" -> U,
+    "Y" -> y
+  |>
+];
+
+stepsCholesky[data_Association] := Module[
+  {
+    content = {}, n, A, b, vars, choleskyData, L, LT, y, x,
+    addHeader, addText, addSubHeader, addFormula, addMatrixPair, addVector,
+    i, j, productCheck, lowerCheck, upperCheck, ySymbols,
+    currentLBoldPositions, currentLTBoldPositions
+  },
+
+  n = data["n"];
+  A = data["A"];
+  b = data["b"];
+  vars = data["Vars"];
+  ySymbols = Table[luScalarSymbol["y", k], {k, 1, n}];
+
+  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
+  addText[text_] := AppendTo[content, text];
+  addFormula[expr_] := AppendTo[content, expr];
+  addMatrixPair[l_, lt_, lBold_List : {}, ltBold_List : {}] := AppendTo[
+    content,
+    choleskyMatrixPairGrid[l, lt, lBold, ltBold]
+  ];
+  addVector[label_, vec_] := AppendTo[content, namedVectorGrid[label, vec]];
+
+  currentLBoldPositions[step_] := Flatten[
+    Table[{r, c}, {c, 1, step}, {r, c, n}],
+    1
+  ];
+
+  currentLTBoldPositions[step_] := Reverse /@ currentLBoldPositions[step];
+
+  addHeader["Prepis sústavy do maticového tvaru"];
+  addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Pri Choleského rozklade chceme symetrickú kladne definitnú maticu A rozložiť na tvar A = L \[CenterDot] L^T."];
+
+  AppendTo[
+    content,
+    highlightGrid @ Grid[
+      {{
+        Style["A =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[A]],
+        Spacer[18],
+        Style["x =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[vars]],
+        Spacer[18],
+        Style["b =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[b]]
+      }},
+      Alignment -> Left,
+      Spacings -> {2, 1}
+    ]
+  ];
+
+  AppendTo[
+    content,
+    highlightGrid @ Grid[
+      {
+        {Style["A \[CenterDot] x = b", Bold]},
+        {Style["A = L \[CenterDot] L^T", Bold]},
+        {Style["Potom označíme", Plain]},
+        {Style["L^T \[CenterDot] x = y", Bold]},
+        {Style["a sústavu vyriešime v dvoch krokoch:", Plain]},
+        {Style["1. vyriešime L \[CenterDot] y = b", Plain]},
+        {Style["2. potom vyriešime L^T \[CenterDot] x = y", Plain]}
+      },
+      Alignment -> Left,
+      Spacings -> {1, 0.6}
+    ]
+  ];
+
+  choleskyData = choleskySolveData[A, b];
+
+  If[choleskyData === $Failed,
+    addHeader["Výsledok"];
+    addText["Pre túto maticu sa nepodarilo zostrojiť Choleského rozklad v tvare A = L \[CenterDot] L^T."];
+    Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
+  ];
+
+  L = ConstantArray[0, {n, n}];
+  LT = ConstantArray[0, {n, n}];
+
+  addHeader["Inicializácia matice L"];
+  addText["Na začiatku sú prvky matice L neznáme. Počítame ich postupne po stĺpcoch a po každom kroku si ukážeme aktuálny tvar matíc L a L^T."];
+  addMatrixPair[L, LT];
+
+  Do[
+    addHeader["Krok " <> ToString[i] <> " – výpočet " <> ToString[i] <> ". stĺpca matice L"];
+
+    addSubHeader["Diagonálny prvok"];
+    Scan[
+      addFormula,
+      buildCholeskyDiagonalLines[i, A, L, choleskyData["L"][[i, i]]]
+    ];
+
+    L[[i, i]] = choleskyData["L"][[i, i]];
+
+    If[i < n,
+      addSubHeader["Prvky pod diagonálou"];
+      Do[
+        Scan[
+          addFormula,
+          buildCholeskyOffDiagonalLines[j, i, A, L, L[[i, i]], choleskyData["L"][[j, i]]]
+        ];
+
+        L[[j, i]] = choleskyData["L"][[j, i]];
+
+        If[j < n, addGap[content, 4]];
+        ,
+        {j, i + 1, n}
+      ];
+    ];
+
+    LT = Transpose[L];
+    addText["Po tomto kroku majú matice tvar:"];
+    addMatrixPair[L, LT, currentLBoldPositions[i], currentLTBoldPositions[i]];
+    ,
+    {i, 1, n}
+  ];
+
+  LT = Transpose[L];
+  y = choleskyData["Y"];
+  x = choleskyData["X"];
+
+  addHeader["Hotový rozklad A = L \[CenterDot] L^T"];
+  addText["Po dopočítaní všetkých prvkov máme hotovú dolnú trojuholníkovú maticu L a jej transpozíciu L^T."];
+  addMatrixPair[L, LT, currentLBoldPositions[n], currentLTBoldPositions[n]];
+
+  addHeader["Overenie rozkladu L \[CenterDot] L^T = A"];
+  addText["Skontrolujeme, že súčin matíc L a L^T sa rovná pôvodnej matici A."];
+  productCheck = Together[L . LT];
+
+  AppendTo[content, matrixProductDisplay[L, LT]];
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] L^T =", FontSize -> 13],
+        TraditionalForm[MatrixForm[productCheck]],
+        Style["A =", FontSize -> 13],
+        TraditionalForm[MatrixForm[A]],
+        If[productCheck === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
+  addText["Keďže L je dolná trojuholníková matica, vektor y určujeme dopredným dosadzovaním zhora nadol."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
+
+  Do[
+    addFormula[forwardEquationDisplay[L[[i]], b[[i]], ySymbols, i]];
+    addFormula[
+      If[
+        i === 1,
+        Row[{
+          lhsStyle[luScalarSymbol["y", i]], " = ",
+          tft[b[[i]]], " / ", tft[L[[i, i]]], " = ",
+          Style[tft[y[[i]]], Bold, Blue]
+        }],
+        Row[{
+          lhsStyle[luScalarSymbol["y", i]], " = (",
+          tft[b[[i]]], " - ",
+          luWrappedSumDisplay[Table[{L[[i, k]], y[[k]]}, {k, 1, i - 1}]],
+          ") / ", tft[L[[i, i]]],
+          " = ", Style[tft[y[[i]]], Bold, Blue]
+        }]
+      ]
+    ];
+
+    If[i < n, addGap[content, 5]];
+    ,
+    {i, 1, n}
+  ];
+
+  addVector["y", y];
+
+  addHeader["Riešenie sústavy L^T \[CenterDot] x = y"];
+  addText["Po určení vektora y riešime hornú trojuholníkovú sústavu L^T \[CenterDot] x = y spätným dosadzovaním od poslednej rovnice."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[LT, y], {}, <|"BoldDiagonal" -> True|>]];
+
+  Do[
+    addFormula[backwardEquationDisplay[LT[[i]], y[[i]], vars, i, n]];
+    addFormula[
+      If[
+        i === n,
+        Row[{
+          lhsStyle[vars[[i]]], " = ",
+          tft[y[[i]]], " / ", tft[LT[[i, i]]], " = ",
+          Style[tft[x[[i]]], Bold, Blue]
+        }],
+        Row[{
+          lhsStyle[vars[[i]]], " = (",
+          tft[y[[i]]], " - ",
+          luWrappedSumDisplay[Table[{LT[[i, k]], x[[k]]}, {k, i + 1, n}]],
+          ") / ", tft[LT[[i, i]]],
+          " = ", Style[tft[x[[i]]], Bold, Blue]
+        }]
+      ]
+    ];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  addHeader["Skúška správnosti"];
+  addText["Overíme rozklad A = L \[CenterDot] L^T, pomocnú sústavu L \[CenterDot] y = b, sústavu L^T \[CenterDot] x = y a napokon pôvodnú sústavu A \[CenterDot] x = b."];
+
+  lowerCheck = Together[L . y];
+  upperCheck = Together[LT . x];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] L^T =", FontSize -> 13],
+        TraditionalForm[MatrixForm[productCheck]],
+        Style["A =", FontSize -> 13],
+        TraditionalForm[MatrixForm[A]],
+        If[productCheck === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] y =", FontSize -> 13],
+        TraditionalForm[MatrixForm[lowerCheck]],
+        Style["b =", FontSize -> 13],
+        TraditionalForm[MatrixForm[b]],
+        If[lowerCheck === b, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L^T \[CenterDot] x =", FontSize -> 13],
+        TraditionalForm[MatrixForm[upperCheck]],
+        Style["y =", FontSize -> 13],
+        TraditionalForm[MatrixForm[y]],
+        If[upperCheck === y, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+  content = Join[content, verificationSteps[data, x]];
+
+  <|
+    "Content" -> content,
+    "Solution" -> x,
+    "L" -> L,
+    "LT" -> LT,
     "Y" -> y
   |>
 ];
@@ -3722,6 +4222,16 @@ printTaskLU[data_Association, vars_List] := Module[{},
   printTextCell["Pracujte priamo s maticami L a U bez pivotovania."];
 ];
 
+printTaskCholesky[data_Association, vars_List] := Module[{},
+  printTextCell["Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L · L^T, kde L je dolná trojuholníková matica s kladnými diagonálnymi prvkami. Potom vyriešte pomocnú sústavu L · y = b a následne L^T · x = y."];
+  printFormulaCell @ Grid[
+    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
+    Alignment -> Left,
+    Spacings -> {0, 0.8}
+  ];
+  printTextCell["Všimnite si, že matica A je symetrická a kladne definitná."];
+];
+
 printTaskCramer[data_Association, vars_List] := Module[{},
   printTextCell["Riešte sústavu rovníc pomocou Cramerovho pravidla."];
   printFormulaCell @ Grid[
@@ -3812,6 +4322,50 @@ printResultLU[data_Association, vars_List, st_, steps_] := Module[
   If[MatrixQ[uMatrix],
     printTextCell["Matica U:"];
     printFormulaCell[TraditionalForm[MatrixForm[uMatrix]]];
+  ];
+
+  If[ListQ[yVector],
+    printTextCell["Pomocný vektor y:"];
+    printFormulaCell[TraditionalForm[MatrixForm[yVector]]];
+  ];
+
+  If[ListQ[solution],
+    printTextCell["Riešenie sústavy:"];
+    printFormulaCell[
+      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
+    ];
+  ];
+];
+
+printResultCholesky[data_Association, vars_List, st_, steps_] := Module[
+  {solution, lMatrix, ltMatrix, yVector},
+
+  solution = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
+    KeyExistsQ[data, "x"], data["x"],
+    True, Missing["NotAvailable"]
+  ];
+
+  lMatrix = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "L"], steps["L"],
+    True, Missing["NotAvailable"]
+  ];
+
+  ltMatrix = If[MatrixQ[lMatrix], Transpose[lMatrix], Missing["NotAvailable"]];
+
+  yVector = Which[
+    AssociationQ[steps] && KeyExistsQ[steps, "Y"], steps["Y"],
+    True, Missing["NotAvailable"]
+  ];
+
+  If[MatrixQ[lMatrix],
+    printTextCell["Matica L:"];
+    printFormulaCell[TraditionalForm[MatrixForm[lMatrix]]];
+  ];
+
+  If[MatrixQ[ltMatrix],
+    printTextCell["Matica L^T:"];
+    printFormulaCell[TraditionalForm[MatrixForm[ltMatrix]]];
   ];
 
   If[ListQ[yVector],
@@ -4089,6 +4643,33 @@ GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "UseForwardBoundRetry" -> True,
     "ForwardBoundAugFn" -> Function[data, data],
     "ForwardBoundCheckFn" -> Function[{data, pivotMode}, luDecompositionWithinBoundsQ[data]]
+  |>;
+  runMatrixGenerator[spec, diff, mode, opts]
+];
+
+GenCholesky[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+  spec = <|
+    "EntryFn" -> GenCholesky,
+    "MsgPrefix" -> GenCholesky,
+    "DimKey" -> "Cholesky",
+    "SectionTitle" -> "Choleského rozklad",
+    "ScrambleFn" -> genScrambleCholesky,
+    "StepsFn" -> stepsCholesky,
+    "ValidateExtra" -> Function[{specLocal, passedOpts},
+      With[{stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
+        If[stOpt =!= "ONE",
+          Message[MessageName[specLocal["MsgPrefix"], "badst"], stOpt];
+          False,
+          True
+        ]
+      ]
+    ],
+    "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
+    "TaskPrinter" -> printTaskCholesky,
+    "ResultPrinter" -> printResultCholesky,
+    "UseForwardBoundRetry" -> True,
+    "ForwardBoundAugFn" -> Function[data, data],
+    "ForwardBoundCheckFn" -> Function[{data, pivotMode}, choleskyDecompositionWithinBoundsQ[data]]
   |>;
   runMatrixGenerator[spec, diff, mode, opts]
 ];
