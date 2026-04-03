@@ -2867,7 +2867,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
   addCheckHeader[extra_List : {}] := (addHeader["Skúška správnosti"]; Scan[addText, extra]);
 
   addHeader["Prepis sústavy do augmentovanej matice"];
-  addText["Sústavu najprv prepíšeme do augmentovanej matice. Od tohto momentu pracujeme už len s maticou a vykonávame ekvivalentné riadkové úpravy."];
+  addText["Sústavu najprv zapíšeme do augmentovanej matice. Ďalej pracujeme už len s maticou."];
   addMatrix[aug];
 
   result = Switch[st,
@@ -2876,7 +2876,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       solLocal = ConstantArray[None, n];
 
       addHeader["Riadkové úpravy"];
-      addText["Riadky upravujeme tak, aby v každom kroku zostala v riadku iba jedna nová neznáma. Najprv odstránime členy s už známymi premennými a potom (ak je to potrebné) riadok vydelíme pivotom, aby sme dostali jednoduchý tvar rovnice."];
+      addText["V každom riadku vyjadríme jednu neznámu. Najprv odstránime známe členy a potom riadok podľa potreby vydelíme pivotom."];
 
       Do[
         terms = If[tri === "U",
@@ -2939,7 +2939,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
         {i, order}
       ];
 
-      addCheckHeader[{"Výpočet overíme porovnaním A \[CenterDot] x s pravou stranou b (po riadkoch)."}];
+      addCheckHeader[{"Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."}];
       content = Join[content, verificationSteps[data, solLocal]];
 
       <|"Solution" -> solLocal|>
@@ -2950,13 +2950,13 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       badIdx = data["BadRow"];
 
       addHeader["Analýza riadkov"];
-      addText["Hľadáme riadok, v ktorom sú všetky koeficienty pri neznámych nulové, ale pravá strana je nenulová. Takýto riadok predstavuje spor tvaru 0 = k, kde k \[NotEqual] 0."];
+      addText["Hľadáme riadok tvaru 0 = k, kde k \[NotEqual] 0. Taký riadok znamená spor."];
 
       notes = ReplacePart[ConstantArray["", n], badIdx -> "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]]];
       addMatrix[aug, notes, <|"ActiveRow" -> badIdx|>];
-      addCheckHeader[{"Pri sústave bez riešenia nerobíme klasickú skúšku dosadením. Overíme, že spor je naozaj nevyhnutný pomocou Frobeniovej vety (porovnanie hodností)."}];
+      addCheckHeader[{"Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."}];
       content = Join[content, verificationStepsNone[data]];
-      addConclusion[{"Sústava preto nemá riešenie."}];
+      addConclusion[{"Sústava nemá riešenie."}];
 
       <|"Solution" -> "NONE"|>
     ],
@@ -2966,7 +2966,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       paramIdx = data["ParamIdx"];
 
       addHeader["Analýza riadkov"];
-      addText["Ak sa objaví nulový riadok, znamená to, že jedna z premenných nie je určená jednoznačne. Túto premennú zvolíme ako voľný parameter a ostatné premenné vyjadríme pomocou neho."];
+      addText["Nulový riadok znamená, že jedna z premenných je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho."];
 
       notes = ReplacePart[ConstantArray["", n], paramIdx -> "nulový riadok -> parameter"];
       addMatrix[aug, notes, <|"ActiveRow" -> paramIdx|>];
@@ -3023,11 +3023,11 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
       ];
 
 
-      addCheckHeader[{"Dosadíme parametrické riešenie do pôvodných rovníc. Po úprave musí v každom riadku vyjsť identita (napr. 0 = 0) pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."}];
+      addCheckHeader[{"Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."}];
       content = Join[content, verificationStepsInfinite[data, solExprs]];
 
       addConclusion[{
-        "Sústava má nekonečne veľa riešení v tvare:",
+        "Sústava má nekonečne veľa riešení:",
         Row[{"[", Row @ Riffle[solExprs, ", "], "], ", \[FormalT], " \[Element] ", Integers}]
       }];
 
@@ -3047,11 +3047,11 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
 
   addHeader["Prepis sústavy do augmentovanej matice"];
-  addText["Sústavu prepíšeme do augmentovanej matice a následne vykonáme Gaussovu elimináciu, aby sme zrušili prvky pod hlavnou diagonálou."];
+  addText["Sústavu zapíšeme do augmentovanej matice. Potom vynulujeme prvky pod hlavnou diagonálou."];
   addMatrix[aug];
 
   addHeader["Dopredná eliminácia (na horný trojuholník)"];
-  addText["Postupujeme po st\:013apcoch zľava doprava. V každom kroku zvolíme pivot (ak treba, prehodíme riadky) a následne rušíme prvky pod pivotom celočíselnými riadkovými úpravami. Koeficienty priebežne skracujeme pomocou gcd a riadky normalizujeme."];
+  addText["Postupujeme po st\:013apcoch zľava doprava. Vyberieme pivot, podľa potreby prehodíme riadky a potom vynulujeme prvky pod pivotom."];
 
   Do[
     kPivot = choosePivotRowIfZero[aug, i];
@@ -3080,12 +3080,12 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
   ];
 
   addHeader["Tvar po Gaussovej eliminácii"];
-  addText["Po doprednej eliminácii dostaneme hornú trojuholníkovú sústavu. Teraz môžeme určiť neznáme spätným dosadzovaním, začíname od posledného riadku."];
+  addText["Po týchto úpravách dostaneme hornú trojuholníkovú sústavu. Neznáme určíme spätným dosadzovaním od posledného riadku."];
   addMatrix[aug, {}, <|"BoldDiagonal" -> True|>];
 
   If[st === "NONE",
     idx = FirstCase[Range[n], k_ /; aug[[k, k]] === 0 && aug[[k, n + 1]] =!= 0, Missing["NotFound"]];
-    addText["Na diagonále sa nachádza nulový pivot a zároveň je v príslušnom riadku nenulová pravá strana. To vedie k rovnici tvaru 0 = k, kde k \[NotEqual] 0, takže sústava nemá riešenie."];
+    addText["V jednom riadku vyjde rovnica tvaru 0 = k, kde k \[NotEqual] 0. Preto sústava nemá riešenie."];
     If[IntegerQ[idx],
       notes = ConstantArray["", n]; notes[[idx]] = "pivot = 0";
       addMatrix[aug, notes, <|"ActiveRow" -> idx, "BoldDiagonal" -> True|>],
@@ -3093,7 +3093,7 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
     ];
 
     addHeader["Skúška správnosti"];
-    addText["Pri sústave bez riešenia nerobíme klasickú skúšku dosadením. Overíme, že spor je naozaj nevyhnutný pomocou Frobeniovej vety (porovnanie hodností)."];
+    addText["Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
     content = Join[content, verificationStepsNone[data]];
 
     addHeader["Záver"];
@@ -3109,7 +3109,7 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
     content = tmp[[2]];
 
     addHeader["Skúška správnosti"];
-    addText["Overíme porovnaním A \[CenterDot] x s pravou stranou b (po riadkoch)."];
+    addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
     content = Join[content, verificationSteps[data, solLocal]];
     Return[<|"Content" -> content, "Solution" -> solLocal|>];
   ];
@@ -3125,7 +3125,7 @@ stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeade
     content = tmp[[2]];
 
     addHeader["Skúška správnosti"];
-    addText["Dosadíme parametrické riešenie do pôvodných rovníc. Po úprave musí v každom riadku vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."];
+    addText["Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."];
     content = Join[content, verificationStepsInfinite[data, solLocal]];
 
     addHeader["Záver"];
@@ -3152,9 +3152,9 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
 
   addHeader["Prepis sústavy do augmentovanej matice"];
   If[showElemQ,
-    addText["Sústavu prepíšeme do augmentovanej matice a označíme ju M₀. Každú riadkovú úpravu budeme zapisovať aj pomocou elementárnej matice Eᵢ, takže po každom kroku bude platiť Mᵢ = Eᵢ · Mᵢ₋₁."];
+    addText["Sústavu zapíšeme do augmentovanej matice a označíme ju M₀. Pri každej úprave uvedieme aj príslušnú elementárnu maticu Eᵢ, takže bude platiť Mᵢ = Eᵢ · Mᵢ₋₁."];
     AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], 0], aug]],
-    addText["Sústavu prepíšeme do augmentovanej matice a vykonáme Gaussovu-Jordanovu elimináciu tak, aby sa ľavá časť zmenila na jednotkovú maticu."];
+    addText["Sústavu zapíšeme do augmentovanej matice. Úpravami ju prevedieme na tvar (I | x)."];
     addMatrix[aug]
   ];
 
@@ -3162,12 +3162,12 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
   addText[
     If[showElemQ,
       If[pivotQ,
-        "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme pivot s najmenšou absolútnou hodnotou. Keďže chceme skutočné elementárne matice, každý stabilizačný krok rozbijeme na elementárne operácie: prípadné násobenie riadku, pripočítanie násobku pivotového riadku a prípadné skrátenie riadku.",
-        "Postupujeme po stĺpcoch zľava doprava. Ak je pivot nulový, prehodíme riadky. Každý stabilizačný krok rozbijeme na elementárne operácie: prípadné násobenie riadku, pripočítanie násobku pivotového riadku a prípadné skrátenie riadku."
+        "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme vhodný pivot a vynulujeme prvky pod ním. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
+        "Postupujeme po stĺpcoch zľava doprava. Ak je pivot nulový, prehodíme riadky. Potom vynulujeme prvky pod pivotom a pri každej úprave uvedieme aj elementárnu maticu."
       ],
       If[pivotQ,
-        "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme pivot ako nenulový prvok s najmenšou absolútnou hodnotou a prípadne prehodíme riadky. Pomocou pivotového riadku potom nulujeme prvky pod ním celočíselnými úpravami. Po každom kroku riadky skracujeme pomocou najväčšieho spoločného deliteľa (gcd) a normalizujeme.",
-        "Postupujeme po stĺpcoch zľava doprava. Ak je aktuálny pivot nulový, prehodíme riadok s niektorým nižším riadkom, ktorý má v danom stĺpci nenulový prvok. Potom pomocou pivotového riadku nulujeme prvky pod ním celočíselnými úpravami. Po každom kroku riadky skracujeme pomocou najväčšieho spoločného deliteľa (gcd) a normalizujeme."
+        "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme vhodný pivot a vynulujeme prvky pod ním.",
+        "Postupujeme po stĺpcoch zľava doprava. Ak je pivot nulový, prehodíme riadky. Potom vynulujeme prvky pod pivotom."
       ]
     ]
   ];
@@ -3196,8 +3196,8 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
 
   addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
   addText[If[showElemQ,
-    "Teraz rovnakým spôsobom vynulujeme prvky nad pivotmi, aby sa ľavá časť postupne zmenila na diagonálny tvar.",
-    "Potom zrušíme prvky nad diagonálou, aby sme v ľavej časti dostali jednotkovú maticu."
+    "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi.",
+    "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
   ]];
 
   Do[
@@ -3218,7 +3218,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
   If[st === "NONE",
     badIdx = findContradictionRow[aug];
     addHeader["Analýza riadkov"];
-    addText["Hľadáme riadok, v ktorom sú všetky koeficienty pri neznámych nulové, ale pravá strana je nenulová. Takýto riadok znamená spor tvaru 0 = k, kde k \[NotEqual] 0."];
+    addText["Hľadáme riadok tvaru 0 = k, kde k \[NotEqual] 0. Taký riadok znamená spor."];
     notes = ConstantArray["", n];
     If[IntegerQ[badIdx], notes[[badIdx]] = "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]]];
     If[showElemQ,
@@ -3227,7 +3227,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
     ];
 
     addHeader["Skúška správnosti"];
-    addText["Pri sústave bez riešenia nerobíme klasickú skúšku dosadením. Overíme pomocou Frobeniovej vety (porovnanie hodností)."];
+    addText["Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
     content = Join[content, verificationStepsNone[data]];
 
     addHeader["Záver"];
@@ -3241,7 +3241,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
   If[needsNormalizationQ,
     addHeader["Normalizácia pivotov na 1"];
     If[showElemQ,
-      addText["Nakoniec vydelíme každý nenulový pivot jeho hodnotou. Tým dostaneme v ľavej časti jednotkovú maticu I."];
+      addText["Vydelíme každý nenulový pivot jeho hodnotou. Tým dostaneme v ľavej časti jednotkovú maticu I."];
     ];
 
     Do[
@@ -3279,13 +3279,14 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
       {i, 1, n}
     ],
     addHeader["Normalizácia pivotov na 1"];
-    addText["Normalizácia nie je potrebná, pretože všetky nenulové pivoty už majú hodnotu 1."]
+    addText["Pivoty už majú hodnotu 1, preto v tomto kroku netreba robiť ďalšie úpravy."]
   ];
 
   addHeader["Hotový tvar (I | x)"];
   If[showElemQ,
-    addText["Po dokončení všetkých elementárnych krokov sme dostali redukovaný stupňovitý tvar. Pri jednoznačnom riešení sa riešenie číta priamo z pravej strany."];
+    addText["Po úpravách dostaneme tvar (I | x). Riešenie prečítame z pravej strany."];
     AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], $ElemMatrixCounter], aug, {}, <|"BoldDiagonal" -> True|>]],
+    addText["Po úpravách dostaneme tvar (I | x). Riešenie prečítame z pravej strany."];
     addMatrix[aug]
   ];
 
@@ -3293,14 +3294,14 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
     paramIdx = data["ParamIdx"];
 
     addHeader["Analýza riadkov"];
-    addText["Ak sa objaví nulový riadok, znamená to, že jedna z premenných nie je určená jednoznačne. Túto premennú zvolíme ako voľný parameter a ostatné premenné vyjadríme pomocou neho."];
+    addText["Nulový riadok znamená, že jedna z premenných je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho."];
     notes = ReplacePart[ConstantArray["", n], paramIdx -> "nulový riadok -> parameter"];
     If[showElemQ,
       AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], $ElemMatrixCounter], aug, notes, <|"ActiveRow" -> paramIdx|>]],
       addMatrix[aug, notes, <|"ActiveRow" -> paramIdx|>]
     ];
 
-    addText[Row[{"Premennú ", vars[[paramIdx]], " zvolíme za parameter ", TraditionalForm[\[FormalT]], If[showElemQ, ".", " a ponecháme ju v riešení ako symbol."]}]];
+    addText[Row[{"Premennú ", vars[[paramIdx]], " označíme parametrom ", TraditionalForm[\[FormalT]], "."}]];
     addGap[content, 6];
     AppendTo[content, highlightGrid @ Grid[
       {{tf[vars[[paramIdx]]], "=", TraditionalForm[\[FormalT]]}},
@@ -3346,7 +3347,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
     ];
 
     addHeader["Skúška správnosti"];
-    addText["Dosadíme parametrické riešenie do pôvodných rovníc. Po úprave musí v každom riadku vyjsť identita (napr. 0 = 0) pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."];
+    addText["Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."];
     content = Join[content, verificationStepsInfinite[data, solExprs]];
 
     addHeader["Záver"];
@@ -3358,7 +3359,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
   solLocal = aug[[All, n + 1]];
 
   addHeader["Skúška správnosti"];
-  addText["Overíme porovnaním A \[CenterDot] x s pravou stranou b (po riadkoch)."];
+  addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
   content = Join[content, verificationSteps[data, solLocal]];
 
   <|"Content" -> content, "Solution" -> solLocal|>
@@ -3378,13 +3379,13 @@ stepsInverseMatrix[data_Association] := Module[
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrixInverse[m, rowNotes, hi]];
 
   addHeader["Prepis matice do tvaru (A | E)"];
-  addText["Na výpočet inverznej matice použijeme Gaussovu-Jordanovu metódu. Na ľavej strane zapíšeme pôvodnú maticu A a na pravej strane jednotkovú maticu E. Rovnaké elementárne riadkové úpravy, ktoré prevedú ľavú časť na E, prevedú pravú časť na A^(-1)."];
+  addText["Na ľavú stranu zapíšeme maticu A a na pravú jednotkovú maticu E. Rovnakými úpravami dostaneme z ľavej časti E a z pravej A^(-1)."];
 
   augInv = Join[A, IdentityMatrix[n], 2];
   addMatrix[augInv];
 
   addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
-  addText["Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme pivot ako nenulový prvok s najmenšou absolútnou hodnotou a prípadne prehodíme riadky. Pomocou pivotového riadku potom nulujeme prvky pod ním celočíselnými riadkovými úpravami. Koeficienty priebežne skracujeme pomocou gcd a riadky normalizujeme."];
+  addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme vhodný pivot a vynulujeme prvky pod ním."];
 
   Do[
     kPivot = choosePivotRow[augInv, i];
@@ -3418,7 +3419,7 @@ stepsInverseMatrix[data_Association] := Module[
   ];
 
   addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
-  addText["Potom zrušíme prvky nad diagonálou, aby sme v ľavej časti dostali diagonálny tvar a pripravili maticu na poslednú normalizáciu pivotov."];
+  addText["Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."];
 
   Do[
     pNow = augInv[[i, i]];
@@ -3437,7 +3438,7 @@ stepsInverseMatrix[data_Association] := Module[
   ];
 
   addHeader["Normalizácia pivotov na 1"];
-  addText["Nakoniec vydelíme každý riadok jeho pivotom. Tým dostaneme na ľavej strane jednotkovú maticu E a na pravej strane hľadanú inverznú maticu A^(-1)."];
+  addText["Vydelíme každý riadok jeho pivotom. Na ľavej strane dostaneme E a na pravej A^(-1)."];
 
   Do[
     pNow = augInv[[i, i]];
@@ -3460,7 +3461,7 @@ stepsInverseMatrix[data_Association] := Module[
   ];
 
   addHeader["Hotový tvar (E | A^(-1))"];
-  addText["Ľavá časť je teraz jednotková matica. Pravá časť preto predstavuje inverznú maticu A^(-1)."];
+  addText["Ľavá časť je jednotková matica. Pravá časť je teda inverzná matica A^(-1)."];
   addMatrix[augInv, {}, <|"BoldIdentity" -> True|>];
 
   invMatrix = augInv[[All, n + 1 ;; 2 n]];
@@ -3476,7 +3477,7 @@ stepsInverseMatrix[data_Association] := Module[
   AppendTo[content, Spacer[8]];
 
   addHeader["Výpočet riešenia x = A^(-1) · b"];
-  addText["Keď už poznáme inverznú maticu, riešenie pôvodnej sústavy dostaneme vynásobením x = A^(-1) · b."];
+  addText["Riešenie teraz vypočítame zo vzťahu x = A^(-1) · b."];
 
   xResult = invMatrix . b;
 
@@ -3502,7 +3503,7 @@ stepsInverseMatrix[data_Association] := Module[
   AppendTo[content, Spacer[8]];
 
   addHeader["Skúška správnosti"];
-  addText["Overíme najprv, že A · A^(-1) = E. Potom ešte skontrolujeme, že pre vypočítané x platí A · x = b."];
+  addText["Najprv skontrolujeme, že A · A^(-1) = E. Potom overíme, že platí aj A · x = b."];
 
   Module[{product, isIdentity},
     product = Together[A . invMatrix];
@@ -3524,7 +3525,7 @@ stepsInverseMatrix[data_Association] := Module[
   content = Join[content, verificationSteps[data, xResult]];
 
   addHeader["Záver"];
-  addText["Inverzná matica bola úspešne vypočítaná pomocou Gaussovej-Jordanovej metódy. Riešenie sústavy sme následne dostali zo vzťahu x = A^(-1) · b."];
+  addText["Najprv sme určili inverznú maticu A^(-1). Potom sme z nej vypočítali riešenie sústavy."];
 
   <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
 ];
@@ -3771,7 +3772,7 @@ stepsLU[data_Association] := Module[
     ]
   ];
 
-  addText["Pri LU rozklade chceme maticu A zapísať ako súčin A = L \[CenterDot] U."];
+  addText["Maticu A rozložíme na súčin A = L \[CenterDot] U."];
 
   AppendTo[
     content,
@@ -3779,9 +3780,9 @@ stepsLU[data_Association] := Module[
       {
         {Style["A \[CenterDot] x = b", Bold]},
         {Style["A = L \[CenterDot] U", Bold]},
-        {Style["Potom označíme", Plain]},
+        {Style["Označíme", Plain]},
         {Style["U \[CenterDot] x = y", Bold]},
-        {Style["a sústavu vyriešime v dvoch krokoch:", Plain]},
+        {Style["Ďalej riešime v dvoch krokoch:", Plain]},
         {Style["1. vyriešime L \[CenterDot] y = b", Plain]},
         {Style["2. potom vyriešime U \[CenterDot] x = y", Plain]}
       },
@@ -3794,7 +3795,7 @@ stepsLU[data_Association] := Module[
 
   If[luData === $Failed,
     addHeader["Výsledok"];
-    addText["Pri tejto matici sa počas Doolittleho rozkladu objavil nulový pivot, takže LU rozklad bez pivotovania nemožno použiť."];
+    addText["Počas rozkladu sa objavil nulový pivot, preto LU rozklad bez pivotovania nemožno použiť."];
     Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
   ];
 
@@ -3802,7 +3803,7 @@ stepsLU[data_Association] := Module[
   U = ConstantArray[0, {n, n}];
 
   addHeader["Inicializácia matíc"];
-  addText["Na začiatku poznáme iba jednotkovú diagonálu matice L. Ostatné prvky matíc L a U budeme dopočítavať postupne po krokoch."];
+  addText["Na začiatku poznáme len jednotkovú diagonálu matice L. Ostatné prvky matíc L a U dopočítame postupne."];
   addMatrixPair[L, U, Table[{r, r}, {r, 1, n}], {}];
 
   Do[
@@ -3816,7 +3817,7 @@ stepsLU[data_Association] := Module[
     ];
 
     If[i < n,
-      addText["Najprv určujeme prvky matice U."];
+      addText["Najprv vypočítame prvky matice U."];
       addSubHeader["Prvky matice U:"];
       Do[
         terms = Table[{L[[i, kk]], U[[kk, j]]}, {kk, 1, i - 1}];
@@ -3858,7 +3859,7 @@ stepsLU[data_Association] := Module[
     ];
 
     If[i < n,
-      addText["Po tomto kroku majú matice tvar:"];
+      addText["Po tomto kroku dostaneme:"];
       addMatrixPair[L, U, currentLBoldPositions[i], currentUBoldPositions[i]];
     ];
     ,
@@ -3866,7 +3867,7 @@ stepsLU[data_Association] := Module[
   ];
 
   addHeader["Hotový rozklad A = L \[CenterDot] U"];
-  addText["Po dokončení výpočtu máme maticu L s jednotkovou diagonálou a hornú trojuholníkovú maticu U."];
+  addText["Po výpočte dostaneme maticu L s jednotkami na diagonále a hornú trojuholníkovú maticu U."];
   addMatrixPair[
     L, U,
     Join[Table[{r, r}, {r, 1, n}], Flatten[Table[{r, c}, {c, 1, n - 1}, {r, c + 1, n}], 1]],
@@ -3874,7 +3875,7 @@ stepsLU[data_Association] := Module[
   ];
   addHeader["Overenie rozkladu L \[CenterDot] U = A"];
   luProduct = Together[L . U];
-  addText["Každý prvok súčinu L \[CenterDot] U vzniká ako skalárny súčin príslušného riadku matice L a stĺpca matice U. Najprv si ukážeme dosadenie, potom vypočítané súčiny a nakoniec výsledný prvok."];
+  addText["Skontrolujeme, že súčin L \[CenterDot] U sa rovná matici A."];
   AppendTo[content, matrixProductDisplay[L, U]];
 
   AppendTo[
@@ -3892,7 +3893,7 @@ stepsLU[data_Association] := Module[
   ];
 
   addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
-  addText["Keďže L je dolná trojuholníková matica s jednotkami na diagonále, pomocný vektor y určujeme dopredným dosadzovaním zhora nadol."];
+  addText["Keďže L je dolná trojuholníková matica s jednotkami na diagonále, vektor y určíme dopredným dosadzovaním."];
   AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
 
   y = ConstantArray[0, n];
@@ -3912,7 +3913,7 @@ stepsLU[data_Association] := Module[
 
   addVector["y", y];
   addHeader["Riešenie sústavy U \[CenterDot] x = y"];
-  addText["Po určení pomocného vektora y riešime hornú trojuholníkovú sústavu U \[CenterDot] x = y spätným dosadzovaním od poslednej rovnice."];
+  addText["Keď poznáme vektor y, vyriešime sústavu U \[CenterDot] x = y spätným dosadzovaním."];
   AppendTo[content, alignedAugmentedMatrix[augFromAb[U, y], {}, <|"BoldDiagonal" -> True|>]];
 
   x = ConstantArray[0, n];
@@ -3938,7 +3939,7 @@ stepsLU[data_Association] := Module[
   ];
 
   addHeader["Skúška správnosti"];
-  addText["Overíme najprv rozklad A = L \[CenterDot] U, potom pomocnú sústavu L \[CenterDot] y = b, ďalej sústavu U \[CenterDot] x = y a napokon pôvodnú sústavu A \[CenterDot] x = b."];
+  addText["Skontrolujeme rozklad A = L \[CenterDot] U, pomocnú sústavu L \[CenterDot] y = b, sústavu U \[CenterDot] x = y aj pôvodnú sústavu A \[CenterDot] x = b."];
 
   lowerCheck = Together[L . y];
   upperCheck = Together[U . x];
@@ -4036,7 +4037,7 @@ stepsCholesky[data_Association] := Module[
   currentLTBoldPositions[step_] := Reverse /@ currentLBoldPositions[step];
 
   addHeader["Prepis sústavy do maticového tvaru"];
-  addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Pri Choleského rozklade chceme symetrickú kladne definitnú maticu A rozložiť na tvar A = L \[CenterDot] L^T."];
+  addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Maticu A rozložíme na tvar A = L \[CenterDot] L^T."];
 
   AppendTo[
     content,
@@ -4062,9 +4063,9 @@ stepsCholesky[data_Association] := Module[
       {
         {Style["A \[CenterDot] x = b", Bold]},
         {Style["A = L \[CenterDot] L^T", Bold]},
-        {Style["Potom označíme", Plain]},
+        {Style["Označíme", Plain]},
         {Style["L^T \[CenterDot] x = y", Bold]},
-        {Style["a sústavu vyriešime v dvoch krokoch:", Plain]},
+        {Style["Ďalej riešime v dvoch krokoch:", Plain]},
         {Style["1. vyriešime L \[CenterDot] y = b", Plain]},
         {Style["2. potom vyriešime L^T \[CenterDot] x = y", Plain]}
       },
@@ -4077,7 +4078,7 @@ stepsCholesky[data_Association] := Module[
 
   If[choleskyData === $Failed,
     addHeader["Výsledok"];
-    addText["Pre túto maticu sa nepodarilo zostrojiť Choleského rozklad v tvare A = L \[CenterDot] L^T."];
+    addText["Pre túto maticu sa nepodarilo zostrojiť Choleského rozklad A = L \[CenterDot] L^T."];
     Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
   ];
 
@@ -4085,7 +4086,7 @@ stepsCholesky[data_Association] := Module[
   LT = ConstantArray[0, {n, n}];
 
   addHeader["Inicializácia matice L"];
-  addText["Na začiatku sú prvky matice L neznáme. Počítame ich postupne po stĺpcoch a po každom kroku si ukážeme aktuálny tvar matíc L a L^T."];
+  addText["Prvky matice L vypočítame postupne po stĺpcoch. Po každom kroku si ukážeme tvar matíc L a L^T."];
   addMatrixPair[L, LT];
 
   Do[
@@ -4116,7 +4117,7 @@ stepsCholesky[data_Association] := Module[
     ];
 
     LT = Transpose[L];
-    addText["Po tomto kroku majú matice tvar:"];
+    addText["Po tomto kroku dostaneme:"];
     addMatrixPair[L, LT, currentLBoldPositions[i], currentLTBoldPositions[i]];
     ,
     {i, 1, n}
@@ -4127,11 +4128,11 @@ stepsCholesky[data_Association] := Module[
   x = choleskyData["X"];
 
   addHeader["Hotový rozklad A = L \[CenterDot] L^T"];
-  addText["Po dopočítaní všetkých prvkov máme hotovú dolnú trojuholníkovú maticu L a jej transpozíciu L^T."];
+  addText["Po výpočte dostaneme dolnú trojuholníkovú maticu L a jej transpozíciu L^T."];
   addMatrixPair[L, LT, currentLBoldPositions[n], currentLTBoldPositions[n]];
 
   addHeader["Overenie rozkladu L \[CenterDot] L^T = A"];
-  addText["Skontrolujeme, že súčin matíc L a L^T sa rovná pôvodnej matici A."];
+  addText["Skontrolujeme, že súčin L \[CenterDot] L^T sa rovná matici A."];
   productCheck = Together[L . LT];
 
   AppendTo[content, matrixProductDisplay[L, LT]];
@@ -4152,7 +4153,7 @@ stepsCholesky[data_Association] := Module[
   ];
 
   addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
-  addText["Keďže L je dolná trojuholníková matica, vektor y určujeme dopredným dosadzovaním zhora nadol."];
+  addText["Keďže L je dolná trojuholníková matica, vektor y určíme dopredným dosadzovaním."];
   AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
 
   Do[
@@ -4183,7 +4184,7 @@ stepsCholesky[data_Association] := Module[
   addVector["y", y];
 
   addHeader["Riešenie sústavy L^T \[CenterDot] x = y"];
-  addText["Po určení vektora y riešime hornú trojuholníkovú sústavu L^T \[CenterDot] x = y spätným dosadzovaním od poslednej rovnice."];
+  addText["Keď poznáme vektor y, vyriešime sústavu L^T \[CenterDot] x = y spätným dosadzovaním."];
   AppendTo[content, alignedAugmentedMatrix[augFromAb[LT, y], {}, <|"BoldDiagonal" -> True|>]];
 
   Do[
@@ -4210,7 +4211,7 @@ stepsCholesky[data_Association] := Module[
   ];
 
   addHeader["Skúška správnosti"];
-  addText["Overíme rozklad A = L \[CenterDot] L^T, pomocnú sústavu L \[CenterDot] y = b, sústavu L^T \[CenterDot] x = y a napokon pôvodnú sústavu A \[CenterDot] x = b."];
+  addText["Skontrolujeme rozklad A = L \[CenterDot] L^T, pomocnú sústavu L \[CenterDot] y = b, sústavu L^T \[CenterDot] x = y aj pôvodnú sústavu A \[CenterDot] x = b."];
 
   lowerCheck = Together[L . y];
   upperCheck = Together[LT . x];
@@ -4296,7 +4297,7 @@ stepsCramer[data_Association] := Module[
   addText[text_] := AppendTo[content, text];
 
   addHeader["Prepis sústavy do maticového tvaru"];
-  addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Pri Cramerovom pravidle potrebujeme determinant matice A a determinanty pomocných matíc, ktoré vzniknú nahradením jedného stĺpca vektorom b."];
+  addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Potom vypočítame determinant matice A a determinanty pomocných matíc."];
   AppendTo[content, highlightGrid @ Grid[
     {{
       Style["A =", Bold, FontSize -> 16],
@@ -4355,7 +4356,7 @@ stepsCramer[data_Association] := Module[
   ];
 
   addHeader["Skúška správnosti"];
-  addText["Overíme porovnaním A \[CenterDot] x s pravou stranou b (po riadkoch)."];
+  addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
   content = Join[content, verificationSteps[data, solveData["Solution"]]];
 
   addHeader["Záver"];
@@ -4477,21 +4478,21 @@ printDefaultTask[data_Association, vars_List] := Module[{},
     Alignment -> Left,
     Spacings -> {0, 0.8}
   ];
-  printTextCell["Riešte pomocou augmentovanej matice."];
+  printTextCell["Použite augmentovanú maticu."];
 ];
 
 printTaskInverse[data_Association, vars_List] := Module[{},
-  printTextCell["Vypočítajte inverznú maticu k matici sústavy a následne pomocou nej určte riešenie sústavy v množine celých čísel."];
+  printTextCell["Vypočítajte inverznú maticu k matici sústavy a potom pomocou nej určte riešenie sústavy v množine celých čísel."];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
     Alignment -> Left,
     Spacings -> {0, 0.8}
   ];
-  printTextCell["Použite postup cez augmentovanú maticu v tvare (A | E)."];
+  printTextCell["Použite augmentovanú maticu v tvare (A | E)."];
 ];
 
 printTaskLU[data_Association, vars_List] := Module[{},
-  printTextCell["Rozložte maticu sústavy pomocou LU rozkladu (Doolittle, bez pivotovania) v tvare A = L · U, kde L má jednotky na diagonále. Potom vyriešte pomocnú sústavu L · y = b a následne U · x = y."];
+  printTextCell["Rozložte maticu sústavy pomocou LU rozkladu (Doolittle, bez pivotovania) v tvare A = L · U, kde L má jednotky na diagonále. Potom vyriešte sústavy L · y = b a U · x = y."];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
     Alignment -> Left,
@@ -4501,7 +4502,7 @@ printTaskLU[data_Association, vars_List] := Module[{},
 ];
 
 printTaskCholesky[data_Association, vars_List] := Module[{},
-  printTextCell["Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L · L^T, kde L je dolná trojuholníková matica s kladnými diagonálnymi prvkami. Potom vyriešte pomocnú sústavu L · y = b a následne L^T · x = y."];
+  printTextCell["Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L · L^T. Potom vyriešte sústavy L · y = b a L^T · x = y."];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
     Alignment -> Left,
@@ -4517,7 +4518,7 @@ printTaskCramer[data_Association, vars_List] := Module[{},
     Alignment -> Left,
     Spacings -> {0, 0.8}
   ];
-  printTextCell["Nezabudnite najprv vypočítať determinant matice A a potom determinanty matíc vzniknutých z A dosadením vektora b do jednotlivých stĺpcov."];
+  printTextCell["Najprv vypočítajte determinant matice A a potom determinanty matíc, ktoré vzniknú nahradením jednotlivých stĺpcov vektorom b."];
 ];
 
 printDefaultResult[data_Association, vars_List, st_] := Module[{},
