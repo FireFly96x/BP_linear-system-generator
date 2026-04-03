@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      6989,        124]
-NotebookOptionsPosition[      6583,        108]
-NotebookOutlinePosition[      7033,        126]
-CellTagsIndexPosition[      6990,        123]
+NotebookDataLength[      7195,        127]
+NotebookOptionsPosition[      6789,        111]
+NotebookOutlinePosition[      7239,        129]
+CellTagsIndexPosition[      7196,        126]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -29,7 +29,7 @@ Cell[BoxData[{
  StyleBox[
   RowBox[{
    RowBox[{"<<", " ", "\"\<MatrixGenerator.wl\>\""}], ";"}], "Input"], "\[IndentingNewLine]", 
- RowBox[{"GenCramer", "[", 
+ RowBox[{"GenGaussJordan", "[", 
   RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
    RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}]}], "Input",
  CellChangeTimes->{{3.9757009438068523`*^9, 3.9757009438068523`*^9}, 
@@ -103,10 +103,13 @@ Cell[BoxData[{
    3.9832695243764954`*^9, 3.9832695414477253`*^9}, {3.983272905812216*^9, 
    3.983272942045452*^9}, {3.983276177228321*^9, 3.983276178028763*^9}, {
    3.983276303892988*^9, 3.983276304603428*^9}, {3.9832776941332855`*^9, 
-   3.9832776948963184`*^9}, {3.9835240445662823`*^9, 3.983524051818079*^9}},
+   3.9832776948963184`*^9}, {3.9835240445662823`*^9, 3.983524059234455*^9}, {
+   3.9835419922309513`*^9, 3.9835419926099567`*^9}, {3.98354262995035*^9, 
+   3.983542630590809*^9}, {3.983542705216688*^9, 3.983542710354786*^9}, {
+   3.9839508057369766`*^9, 3.983950822608696*^9}},
  CellLabel->"",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
 },
-WindowSize->{1141.2, 573.6},
+WindowSize->{1141.2, 568.8},
 WindowMargins->{{0, Automatic}, {Automatic, 0}},
 LightDark->"Light",
 Magnification:>0.9 Inherited,
@@ -125,7 +128,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 6025, 86, 93, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
+Cell[554, 20, 6231, 89, 93, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
 }
 ]
 *)
