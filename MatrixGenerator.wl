@@ -141,8 +141,12 @@ tft[val_] := tf[Together[val]];
 lhsStyle[expr_] := Style[expr, Bold];
 
 SetAttributes[addGap, HoldFirst];
-
 addGap[content_, h_: 5] := AppendTo[content, Cell["", "Text", CellMargins -> {{Inherited, Inherited}, {0, 0}}, CellSize -> {Automatic, h}]];
+
+SetAttributes[appendStepHeader, HoldFirst];
+appendStepHeader[content_, text_, gap_: 2] := (
+  If[Length[content] > 0, addGap[content, gap]]; AppendTo[content, makeStepHeader[text]]
+);
 
 (* rovnice pre dosadzovanie v gauss *)
 gaussBackSubstEquations[aug_, vars_, sol0_, skipIdx_, content_] := Module[
@@ -282,7 +286,7 @@ augRender3[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[
 ];
 
 (* pomenovaný stav matice *)
-namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] := highlightGrid @ Grid[
+namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] := Grid[
   {{
     Style[Row[{label, " ="}], Bold, FontSize -> 16],
     alignedAugmentedMatrix[aug, notes, hi]
@@ -292,7 +296,7 @@ namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] :=
 ];
 
 (* karta s elementárnou maticou *)
-elementaryMatrixCard[label_, eMat_] := highlightGrid @ Grid[
+elementaryMatrixCard[label_, eMat_] := Grid[
   {{
     Style[Row[{label, " ="}], Bold, FontSize -> 16],
     TraditionalForm[MatrixForm[eMat]]
@@ -301,43 +305,47 @@ elementaryMatrixCard[label_, eMat_] := highlightGrid @ Grid[
   Spacings -> {2, 1}
 ];
 
-(* vzťah medzi stavmi *)
-elementaryRelationCard[eLabel_, prevLabel_, nextLabel_] := highlightGrid @ Grid[
-  {{
-    Style[Row[{nextLabel, " = ", eLabel, "\[CenterDot]", prevLabel}], Bold, FontSize -> 16]
-  }},
-  Alignment -> Left,
-  Spacings -> {2, 1}
-];
-
 SetAttributes[appendElemTransition, HoldFirst];
 
-appendElemTransition[
-  content_,
-  before_,
-  after_,
-  note_,
-  eMat_,
-  targetRow_Integer,
-  n_Integer,
-  eIndex_Integer,
-  mIndex_Integer,
-  hiBefore_Association : <||>,
-  hiAfter_Association : <||>
-] := Module[
-  {notes, eLabel, prevLabel, nextLabel},
+appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer, eIndex_Integer, mIndex_Integer, boldPos_: Automatic, hiBefore_Association : <||>, hiAfter_Association : <||>] := Module[
+  {notes, eLabel, prevLabel, nextLabel, relationRow, rightMarginCard, eMatShown},
 
   notes = ConstantArray["", n];
   notes[[targetRow]] = note;
-
-  AppendTo[content, augRender2[before, after, notes, hiBefore, hiAfter]];
 
   eLabel = Subscript[Style["E", Italic], eIndex];
   prevLabel = Subscript[Style["M", Italic], mIndex - 1];
   nextLabel = Subscript[Style["M", Italic], mIndex];
 
-  AppendTo[content, elementaryMatrixCard[eLabel, eMat]];
-  AppendTo[content, elementaryRelationCard[eLabel, prevLabel, nextLabel]];
+  relationRow = Style[Row[{nextLabel, " = ", eLabel, "\[CenterDot]", prevLabel}], Bold, FontSize -> 16];
+
+  eMatShown = If[
+    MatchQ[boldPos, {_Integer, _Integer}],
+    ReplacePart[eMat, boldPos -> Style[Extract[eMat, boldPos], Bold]],
+    eMat
+  ];
+
+  rightMarginCard = Row[
+    {
+      Style[Row[{eLabel, " = "}], Bold, FontSize -> 15],
+      Style[
+        TraditionalForm[MatrixForm[eMatShown]],
+        FontSize -> 13
+      ]
+    },
+    Alignment -> Center
+  ];
+
+  addGap[content, 1];
+  AppendTo[content, relationRow];
+  AppendTo[content, Grid[
+    {{
+      augRender2[before, after, notes, hiBefore, hiAfter],
+      rightMarginCard
+    }},
+    Alignment -> {Left, Center, Center},
+    Spacings -> {0, 0}
+  ]];
 ];
 
 SetAttributes[applyElemMultiplyStep, HoldFirst];
@@ -359,7 +367,7 @@ applyElemMultiplyStep[
 
   appendElemTransition[
     content, before, after, rowNoteMultiply[rowIdx, factor], eMat,
-    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, hi, hi
+    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, rowIdx}, hi, hi
   ];
 
   after
@@ -384,7 +392,7 @@ applyElemCombineStep[
 
   appendElemTransition[
     content, before, after, rowNoteCombine[rowIdx, terms], eMat,
-    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, hi, hi
+    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, terms[[1, 1]]}, hi, hi
   ];
 
   after
@@ -409,7 +417,7 @@ applyElemDivideStep[
 
   appendElemTransition[
     content, before, after, rowNoteDivide[rowIdx, divisor], eMat,
-    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, hi, hi
+    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, rowIdx}, hi, hi
   ];
 
   after
@@ -1158,16 +1166,7 @@ choleskyDecompositionWithinBoundsQ[data_Association] := Module[
   ]
 ];
 
-generateDataWithBounds[
-  diff_String,
-  n_Integer,
-  solType_,
-  triType_,
-  scrambleFn_,
-  pivotMode_: "ZERO",
-  boundAugFn_: Automatic,
-  boundCheckFn_: Automatic
-] := Module[
+generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, pivotMode_: "ZERO", boundAugFn_: Automatic, boundCheckFn_: Automatic] := Module[
   {data, retries = 0, augForCheck, resolvedBoundAugFn, resolvedBoundCheckFn},
 
   resolvedBoundAugFn = If[
@@ -1668,7 +1667,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
   tri = data["TriType"]; st = data["SolutionType"];
   order = If[tri === "U", Range[n, 1, -1],Range[1, n]];
 
-  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addHeader[text_] := appendStepHeader[content, text];
   addText[text_] := AppendTo[content, text];
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
   addConclusion[lines_List] := (addHeader["Záver"]; Scan[addText, lines]);
@@ -1850,7 +1849,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
 stepsGauss[data_Association] := Module[{content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, idx, solLocal, paramIdx, tmp},
   n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
 
-  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addHeader[text_] := appendStepHeader[content, text];
   addText[text_] := AppendTo[content, text];
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
 
@@ -1954,7 +1953,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
 
   pivotRowFn = If[pivotQ, choosePivotRow, choosePivotRowIfZero];
 
-  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addHeader[text_] := appendStepHeader[content, text];
   addText[text_] := AppendTo[content, text];
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
 
@@ -1970,12 +1969,12 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
   addText[
     If[showElemQ,
       If[pivotQ,
-        "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme vhodný pivot a vynulujeme prvky pod ním. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
-        "Postupujeme po stĺpcoch zľava doprava. Ak je pivot nulový, prehodíme riadky. Potom vynulujeme prvky pod pivotom a pri každej úprave uvedieme aj elementárnu maticu."
+        "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
+        "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky. Každú úpravu zapíšeme aj pomocou elementárnej matice."
       ],
       If[pivotQ,
-        "Postupujeme po stĺpcoch zľava doprava. V každom stĺpci vyberieme vhodný pivot a vynulujeme prvky pod ním.",
-        "Postupujeme po stĺpcoch zľava doprava. Ak je pivot nulový, prehodíme riadky. Potom vynulujeme prvky pod pivotom."
+        "Pomocou riadkových úprav vynulujeme prvky pod pivotmi.",
+        "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky."
       ]
     ]
   ];
@@ -2003,10 +2002,12 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
   ];
 
   addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
-  addText[If[showElemQ,
-    "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi.",
-    "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
-  ]];
+  addText[
+    If[showElemQ,
+      "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
+      "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
+    ]
+  ];
 
   Do[
     pNow = aug[[i, i]];
@@ -2085,9 +2086,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
       addGap[content, 6];
       ,
       {i, 1, n}
-    ],
-    addHeader["Normalizácia pivotov na 1"];
-    addText["Pivoty už majú hodnotu 1, preto v tomto kroku netreba robiť ďalšie úpravy."]
+    ]
   ];
 
   addHeader["Hotový tvar (I | x)"];
@@ -2182,7 +2181,7 @@ stepsInverseMatrix[data_Association] := Module[
   b = data["b"];
   vars = data["Vars"];
 
-  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addHeader[text_] := appendStepHeader[content, text];
   addText[text_] := AppendTo[content, text];
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrixInverse[m, rowNotes, hi]];
 
@@ -2226,8 +2225,8 @@ stepsInverseMatrix[data_Association] := Module[
     {i, 1, n - 1}
   ];
 
-  addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
-  addText["Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."];
+  addHeader["Spätná eliminácia"];
+  addText["Rovnakým spôsobom vynulujeme aj prvky nad diagonálou."];
 
   Do[
     pNow = augInv[[i, i]];
@@ -2274,41 +2273,34 @@ stepsInverseMatrix[data_Association] := Module[
 
   invMatrix = augInv[[All, n + 1 ;; 2 n]];
 
-  AppendTo[content, Spacer[8]];
-  AppendTo[content,
-    highlightGrid @ Grid[
+  addGap[content, 6];
+  AppendTo[content, highlightGrid @ Grid[
       {{Style["A^(-1) =", Bold, FontSize -> 16], TraditionalForm[MatrixForm[invMatrix]]}},
       Alignment -> {{Right, Left}},
       Spacings -> {2, 1}
     ]
   ];
-  AppendTo[content, Spacer[8]];
 
   addHeader["Výpočet riešenia x = A^(-1) · b"];
   addText["Riešenie teraz vypočítame zo vzťahu x = A^(-1) · b."];
 
   xResult = invMatrix . b;
 
-  AppendTo[content, highlightGrid @ Grid[
-    {{
-      Style["x =", Bold],
-      TraditionalForm[MatrixForm[invMatrix]],
-      Style["·", Bold],
-      TraditionalForm[MatrixForm[b]],
-      Style["=", Bold],
-      TraditionalForm[MatrixForm[xResult]]
+  AppendTo[content, Grid[
+    {{Style["x =", Bold], TraditionalForm[MatrixForm[invMatrix]],
+      Style["·", Bold], TraditionalForm[MatrixForm[b]],
+      Style["=", Bold], TraditionalForm[MatrixForm[xResult]]
     }},
     Alignment -> Center,
     Spacings -> {1, 1}
   ]];
 
-  AppendTo[content, Spacer[8]];
+  addGap[content, 2];
   AppendTo[content, highlightGrid @ Grid[
     Table[{tf[lhsStyle[vars[[i]]]], "=", tft[xResult[[i]]]}, {i, 1, n}],
     Alignment -> {{Right, Center, Left}},
     BaseStyle -> {FontSize -> 16}
   ]];
-  AppendTo[content, Spacer[8]];
 
   addHeader["Skúška správnosti"];
   addText["Najprv skontrolujeme, že A · A^(-1) = E. Potom overíme, že platí aj A · x = b."];
@@ -2329,7 +2321,6 @@ stepsInverseMatrix[data_Association] := Module[
     ]];
   ];
 
-  addGap[content, 6];
   content = Join[content, verificationSteps[data, xResult]];
 
   addHeader["Záver"];
@@ -2574,7 +2565,7 @@ stepsLU[data_Association] := Module[
   vars = data["Vars"];
   xSymbols = vars;
 
-  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addHeader[text_] := appendStepHeader[content, text];
   addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
   addText[text_] := AppendTo[content, text];
   addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}] := AppendTo[
@@ -3149,7 +3140,7 @@ stepsCholesky[data_Association] := Module[
   vars = data["Vars"];
   ySymbols = Table[luScalarSymbol["y", k], {k, 1, n}];
 
-  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addHeader[text_] := appendStepHeader[content, text];
   addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
   addText[text_] := AppendTo[content, text];
   addFormula[expr_] := AppendTo[content, expr];
@@ -4297,7 +4288,7 @@ stepsCramer[data_Association] := Module[
 
   solveData = cramerSolveData[A, b];
 
-  addHeader[text_] := AppendTo[content, makeStepHeader[text]];
+  addHeader[text_] := appendStepHeader[content, text];
   addText[text_] := AppendTo[content, text];
 
   addHeader["Prepis sústavy do maticového tvaru"];
@@ -5004,5 +4995,3 @@ GenCramer[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
 
 End[];
 EndPackage[];
-
-
