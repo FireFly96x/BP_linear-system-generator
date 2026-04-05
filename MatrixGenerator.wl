@@ -264,8 +264,18 @@ rowNoteMultiply[i_, p_] := Row[{"R", i, " \[LeftArrow] ", tf[p], "\[CenterDot]R"
 rowApplyMultiply[aug_, i_Integer, p_] := ReplacePart[aug, i -> (p aug[[i]])];
 
 (* note pre kombináciu riadkov *)
-rowNoteCombine[i_, terms_List] := Module[{base = Row[{"R", i, " \[LeftArrow] R", i}]},
-  Row @ Prepend[(Row[{If[#2 < 0, " - ", " + "], tf[Abs[#2]], "\[CenterDot]R", #1}] & @@@ terms), base]
+rowNoteCombine[i_, terms_List] := Module[
+  {base = Row[{"R", i, " \[LeftArrow] R", i}], termDisplay},
+
+  termDisplay[row_, coeff_] := Row[{
+    If[coeff < 0, " - ", " + "],
+    If[Abs[coeff] === 1,
+      Row[{"R", row}],
+      Row[{tf[Abs[coeff]], "\[CenterDot]", "R", row}]
+    ]
+  }];
+
+  Row @ Prepend[(termDisplay @@@ terms), base]
 ];
 
 rowApplyCombine[aug_, i_Integer, terms_List] := Module[{row = aug[[i]]},
@@ -296,10 +306,10 @@ namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] :=
 ];
 
 (* karta s elementárnou maticou *)
-elementaryMatrixCard[label_, eMat_] := Grid[
+elementaryMatrixCard[label_, eMat_, hi_Association : <||>] := Grid[
   {{
     Style[Row[{label, " ="}], Bold, FontSize -> 16],
-    TraditionalForm[MatrixForm[eMat]]
+    styledPlainMatrix[eMat, hi]
   }},
   Alignment -> Left,
   Spacings -> {2, 1}
@@ -307,8 +317,12 @@ elementaryMatrixCard[label_, eMat_] := Grid[
 
 SetAttributes[appendElemTransition, HoldFirst];
 
-appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer, eIndex_Integer, mIndex_Integer, boldPos_: Automatic, hiBefore_Association : <||>, hiAfter_Association : <||>] := Module[
-  {notes, eLabel, prevLabel, nextLabel, relationRow, rightMarginCard, eMatShown},
+appendElemTransition[
+  content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer,
+  eIndex_Integer, mIndex_Integer, boldPos_: Automatic,
+  hiBefore_Association : <||>, hiAfter_Association : <||>
+] := Module[
+  {notes, eLabel, prevLabel, nextLabel, eHi, eBoldPositions, eActiveCol},
 
   notes = ConstantArray["", n];
   notes[[targetRow]] = note;
@@ -317,35 +331,44 @@ appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer,
   prevLabel = Subscript[Style["M", Italic], mIndex - 1];
   nextLabel = Subscript[Style["M", Italic], mIndex];
 
-  relationRow = Style[Row[{nextLabel, " = ", eLabel, "\[CenterDot]", prevLabel}], Bold, FontSize -> 16];
-
-  eMatShown = If[
+  eBoldPositions = Which[
     MatchQ[boldPos, {_Integer, _Integer}],
-    ReplacePart[eMat, boldPos -> Style[Extract[eMat, boldPos], Bold]],
-    eMat
+    {boldPos},
+    ListQ[boldPos] && AllTrue[boldPos, MatchQ[#, {_Integer, _Integer}] &],
+    boldPos,
+    True,
+    {}
   ];
 
-  rightMarginCard = Row[
-    {
-      Style[Row[{eLabel, " = "}], Bold, FontSize -> 15],
-      Style[
-        TraditionalForm[MatrixForm[eMatShown]],
-        FontSize -> 13
-      ]
-    },
-    Alignment -> Center
+  eActiveCol = Which[
+    MatchQ[boldPos, {_Integer, _Integer}],
+    boldPos[[2]],
+    True,
+    targetRow
   ];
+
+  eHi = <|
+    "ActiveRow" -> targetRow,
+    "ActiveCol" -> eActiveCol,
+    "BoldPositions" -> eBoldPositions
+  |>;
 
   addGap[content, 1];
-  AppendTo[content, relationRow];
-  AppendTo[content, Grid[
-    {{
-      augRender2[before, after, notes, hiBefore, hiAfter],
-      rightMarginCard
-    }},
-    Alignment -> {Left, Center, Center},
-    Spacings -> {0, 0}
-  ]];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        labeledMatrixBlock[eLabel, styledPlainMatrix[eMat, eHi]],
+        Style["\[CenterDot]", Bold, FontSize -> 18],
+        labeledMatrixBlock[prevLabel, alignedAugmentedMatrix[before, notes, hiBefore]],
+        Style["=", Bold, FontSize -> 18],
+        labeledMatrixBlock[nextLabel, alignedAugmentedMatrix[after, {}, hiAfter]]
+      }},
+      Alignment -> {Left, Center, Left, Center, Left},
+      Spacings -> {1.2, 0.8}
+    ]
+  ];
 ];
 
 SetAttributes[applyElemMultiplyStep, HoldFirst];
@@ -377,13 +400,20 @@ SetAttributes[applyElemCombineStep, HoldFirst];
 
 applyElemCombineStep[
   content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None
-] := Module[{before, after, eMat, hi},
+] := Module[{before, after, eMat, hiBefore, hiAfter},
   before = aug;
   after = rowApplyCombine[before, rowIdx, terms];
   eMat = elemMatrixCombine[n, rowIdx, terms];
 
-  hi = Join[
+  (* pred úpravou chceme vidieť menený riadok aj zdrojové riadky *)
+  hiBefore = Join[
     <|"ActiveRow" -> rowIdx, "SourceRows" -> terms[[All, 1]]|>,
+    If[ListQ[pivotPos], <|"PivotPos" -> pivotPos|>, <||>]
+  ];
+
+  (* po úprave chceme zvýrazniť už iba výsledný menený riadok *)
+  hiAfter = Join[
+    <|"ActiveRow" -> rowIdx|>,
     If[ListQ[pivotPos], <|"PivotPos" -> pivotPos|>, <||>]
   ];
 
@@ -392,7 +422,7 @@ applyElemCombineStep[
 
   appendElemTransition[
     content, before, after, rowNoteCombine[rowIdx, terms], eMat,
-    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, terms[[1, 1]]}, hi, hi
+    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, terms[[1, 1]]}, hiBefore, hiAfter
   ];
 
   after
@@ -447,7 +477,7 @@ applyJordanSwapStep[
 
   appendElemTransition[
     content, before, after, rowNoteSwap[i, k], eMat,
-    i, n, $ElemStepCounter, $ElemMatrixCounter, hi1, hi2
+    i, n, $ElemStepCounter, $ElemMatrixCounter, Automatic, hi1, hi2
   ];
 
   after
@@ -631,48 +661,174 @@ findContradictionRow[aug_] := Module[{idx = FirstCase[Range[Length[aug]], i_ /; 
 
 (* ~-~-~ MATRIX VISUALIZATION ~-~-~ *)
 
-alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, greenCells, bar, rowColor, sourceColor, boldDiagQ, wrapBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid},
+(* zvýraznené zobrazenie obyčajnej matice s riadkom a stĺpcom *)
+styledPlainMatrix[m_, hi_Association : <||>] := Module[
+  {
+    nRows, nCols, activeRows, sourceRows, activeCols, sourceCols,
+    boldPositions, cellBg, makeCell, leftBracketCell, rightBracketCell,
+    rows
+  },
+
+  {nRows, nCols} = Dimensions[m];
+
+  activeRows = DeleteCases[
+    Flatten @ {Lookup[hi, "ActiveRows", {}], Lookup[hi, "ActiveRow", None]},
+    None
+  ];
+  sourceRows = Flatten @ {Lookup[hi, "SourceRows", {}]};
+
+  activeCols = DeleteCases[
+    Flatten @ {Lookup[hi, "ActiveCols", {}], Lookup[hi, "ActiveCol", None]},
+    None
+  ];
+  sourceCols = Flatten @ {Lookup[hi, "SourceCols", {}]};
+
+  boldPositions = Lookup[hi, "BoldPositions", {}];
+  If[MatchQ[boldPositions, {_Integer, _Integer}],
+    boldPositions = {boldPositions}
+  ];
+
+  cellBg[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
+    aRowQ = MemberQ[activeRows, i];
+    sRowQ = MemberQ[sourceRows, i];
+    aColQ = MemberQ[activeCols, j];
+    sColQ = MemberQ[sourceCols, j];
+
+    Which[
+      aRowQ && aColQ, RGBColor[0.86, 0.93, 1.00],
+      sRowQ && aColQ, RGBColor[0.92, 0.90, 1.00],
+      aRowQ && sColQ, RGBColor[0.90, 0.96, 0.94],
+      sRowQ && sColQ, RGBColor[0.95, 0.92, 0.98],
+      aRowQ, RGBColor[0.90, 0.95, 1.00],
+      sRowQ, RGBColor[0.95, 0.92, 1.00],
+      aColQ, RGBColor[1.00, 0.97, 0.88],
+      sColQ, RGBColor[0.98, 0.95, 0.90],
+      True, None
+    ]
+  ];
+
+  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val]},
+    If[
+      MemberQ[boldPositions, {i, j}] || (MemberQ[activeRows, i] && MemberQ[activeCols, j]),
+      cell = Style[cell, Bold]
+    ];
+
+    Item[
+      Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}],
+      Background -> cellBg[i, j]
+    ]
+  ];
+
+  leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
+  rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
+
+  rows = Table[
+    Join[
+      {If[i === 1, leftBracketCell, SpanFromAbove]},
+      Table[makeCell[i, j, m[[i, j]]], {j, 1, nCols}],
+      {If[i === 1, rightBracketCell, SpanFromAbove]}
+    ],
+    {i, 1, nRows}
+  ];
+
+  Grid[
+    rows,
+    Alignment -> Join[{Center}, ConstantArray[Right, nCols], {Center}],
+    Spacings -> {1, 1},
+    BaseStyle -> {FontSize -> 14}
+  ]
+];
+
+(* blok s popisom nad maticou *)
+labeledMatrixBlock[label_, body_] := Column[
+  {
+    Style[label, Bold, FontSize -> 15],
+    body
+  },
+  Alignment -> Center,
+  Spacings -> {0.4}
+];
+
+alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
+  {
+    nRows, nCols, nA, notes2, pivotPos, activeRows, sourceRows,
+    activeCols, sourceCols, greenCells, bar, boldDiagQ,
+    cellBg, makeCell, makeBar, leftBracketCell, rightBracketCell,
+    rows, matrixGrid, notesGrid
+  },
+
   {nRows, nCols} = Dimensions[aug];
   nA = nCols - 1;
 
   notes2 = If[notes === {}, ConstantArray["", nRows], PadRight[notes, nRows, ""]];
   pivotPos = Lookup[hi, "PivotPos", None];
-  activeRow = Lookup[hi, "ActiveRow", None];
 
-  sourceRows = Lookup[hi, "SourceRows", {}];
+  activeRows = DeleteCases[
+    Flatten @ {Lookup[hi, "ActiveRows", {}], Lookup[hi, "ActiveRow", None]},
+    None
+  ];
+  sourceRows = Flatten @ {Lookup[hi, "SourceRows", {}]};
+
+  activeCols = DeleteCases[
+    Flatten @ {
+      Lookup[hi, "ActiveCols", {}],
+      Lookup[hi, "ActiveCol", None],
+      If[ListQ[pivotPos], pivotPos[[2]], Nothing]
+    },
+    None
+  ];
+  sourceCols = Flatten @ {Lookup[hi, "SourceCols", {}]};
+
   greenCells = Lookup[hi, "GreenCells", {}];
   boldDiagQ = TrueQ @ Lookup[hi, "BoldDiagonal", False];
 
   bar = Style["|", GrayLevel[.35], FontSize -> 16];
 
-  rowColor = RGBColor[0.90, 0.95, 1];
-  sourceColor = RGBColor[0.95, 0.92, 1.00];
+  cellBg[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
+    aRowQ = MemberQ[activeRows, i];
+    sRowQ = MemberQ[sourceRows, i];
+    aColQ = MemberQ[activeCols, j];
+    sColQ = MemberQ[sourceCols, j];
 
-  wrapBg[i_, expr_] := Module[{bg = None},
-    If[IntegerQ[activeRow] && i === activeRow, bg = rowColor,
-      If[MemberQ[sourceRows, i], bg = sourceColor]
-    ];
-    Item[expr, Background -> bg]
+    Which[
+      aRowQ && aColQ, RGBColor[0.86, 0.93, 1.00],
+      sRowQ && aColQ, RGBColor[0.92, 0.90, 1.00],
+      aRowQ && sColQ, RGBColor[0.90, 0.96, 0.94],
+      sRowQ && sColQ, RGBColor[0.95, 0.92, 0.98],
+      aRowQ, RGBColor[0.90, 0.95, 1.00],
+      sRowQ, RGBColor[0.95, 0.92, 1.00],
+      aColQ, RGBColor[1.00, 0.97, 0.88],
+      sColQ, RGBColor[0.98, 0.95, 0.90],
+      True, None
+    ]
   ];
 
-  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, showPivotQ, isDiag},
+  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isDiag, isPivot},
     isGreen = MemberQ[greenCells, {i, j}];
     isDiag = boldDiagQ && (j <= nA) && (i === j);
-
-    showPivotQ = ListQ[pivotPos] && ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
+    isPivot = ListQ[pivotPos] && pivotPos === {i, j};
 
     If[isGreen,
       cell = Style[cell, Darker[Green], Bold],
-      If[showPivotQ && pivotPos === {i, j},
-        cell = Style[cell, Bold],
-        If[isDiag, cell = Style[cell, Bold]]
+      If[isPivot || isDiag,
+        cell = Style[cell, Bold]
       ]
     ];
 
-    wrapBg[i, Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}]]
+    Item[
+      Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}],
+      Background -> cellBg[i, j]
+    ]
   ];
 
-  makeBar[i_] := wrapBg[i, bar];
+  makeBar[i_] := Item[
+    bar,
+    Background -> Which[
+      MemberQ[activeRows, i], RGBColor[0.90, 0.95, 1.00],
+      MemberQ[sourceRows, i], RGBColor[0.95, 0.92, 1.00],
+      True, None
+    ]
+  ];
 
   leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
   rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
@@ -692,7 +848,10 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{
     Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center, Right, Center}],
     Spacings -> {1, 1},
     BaseStyle -> {FontSize -> 14},
-    ItemSize -> {({#, Automatic} & /@ Join[{0.2}, ConstantArray[1.2, nA], {0.2, 1.2, 0.2}]), Automatic}
+    ItemSize -> {
+      ({#, Automatic} & /@ Join[{0.2}, ConstantArray[1.2, nA], {0.2, 1.2, 0.2}]),
+      Automatic
+    }
   ];
 
   notesGrid = Grid[
@@ -702,10 +861,16 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{
         Background -> White
       ] & /@ notes2
     ),
-    Alignment -> Left, Spacings -> {0, 1.15}, BaseStyle -> {FontSize -> 14}
+    Alignment -> Left,
+    Spacings -> {0, 1.15},
+    BaseStyle -> {FontSize -> 14}
   ];
 
-  Grid[{{matrixGrid, Spacer[12], notesGrid}}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}]
+  Grid[
+    {{matrixGrid, Spacer[12], notesGrid}},
+    Alignment -> {Left, Center, Left},
+    Spacings -> {0, 0}
+  ]
 ];
 
 (* renderovanie pre tvar (A|E)                                            *)
@@ -790,6 +955,7 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
 
   Grid[{{matrixGrid, Spacer[12], notesGrid}}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}]
 ];
+
 
 augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[{{
   alignedAugmentedMatrixInverse[before, notes, hiBefore], Spacer[18],
