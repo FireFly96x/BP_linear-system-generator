@@ -31,17 +31,17 @@ opts: SolutionType -> Automatic | \"ONE\" | \"NONE\" | \"INFINITE\"   (Automatic
 
 GenElemGJ::usage = "GenElemGJ[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou Gaussovej-Jordanovej metódy \
 s explicitným zápisom elementárnych matíc E_i, takže po každom kroku platí M_i = E_i M_(i-1).
-diff: \"EASY\" (3x3), \"MEDIUM\" (5x5), \"HARD\" (6x6)
+diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (5x5)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> Automatic | \"ONE\" | \"NONE\" | \"INFINITE\"   (Automatic vyberá typ náhodne)";
 
 GenInverse::usage = "GenInverse[diff, mode, opts] vygeneruje didaktický príklad výpočtu inverznej matice pomocou Gauss-Jordanovej metódy v tvare (A|E) -> (E|A^(-1)).
-diff: \"EASY\" (3x3), \"MEDIUM\" (5x5), \"HARD\" (6x6)
+diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože inverzná matica existuje len pre regulárnu maticu)";
 
 GenLU::usage = "GenLU[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou LU rozkladu (Doolittle).
-diff: \"EASY\" (3x3), \"MEDIUM\" (5x5), \"HARD\" (6x6)
+diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože pre Doolittle bez pivotovania vyžadujeme regulárnu maticu s nenulovými hlavnými pivotmi počas rozkladu)";
 
@@ -115,6 +115,22 @@ Begin["`Private`"];
 (* ~-~-~ VALIDATION ~-~-~ *)
 
 DimensionByDifficulty[diff_String] := Switch[diff, "EASY", 3, "MEDIUM", 5, "HARD", 6];
+
+DimensionByMethodDifficulty[dimKey_String, diff_String] := Switch[
+  dimKey,
+
+  "Triangular" | "Gauss" | "GaussJordan" | "GaussJordanPivot",
+  Switch[diff, "EASY", 3, "MEDIUM", 5, "HARD", 6],
+
+  "Inverse" | "LU" | "Cholesky",
+  Switch[diff, "EASY", 3, "MEDIUM", 4, "HARD", 6],
+
+  "ElemGaussJordan" |  "Cramer", (*Cramer sa nemôže meniť - ma fixne kroky ku rozmerom*)
+  Switch[diff, "EASY", 3, "MEDIUM", 5, "HARD", 6],
+
+  _,
+  DimensionByDifficulty[diff]
+];
 
 ValidateDifficulty[diff_] := MemberQ[{"EASY", "MEDIUM", "HARD"}, diff];
 ValidateMode[mode_] := MemberQ[{"TASK", "TASK_RESULT", "TASK_STEPS_RESULT"}, mode];
@@ -529,8 +545,12 @@ rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, 
   notes = ConstantArray["", n];
   notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
 
-  hi1 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}|>];
-  hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "GreenCells" -> {{r, i}}|>];
+  hi1 = Join[hiBase, <|
+    "ActiveRow" -> r,
+    "PivotPos" -> {i, i},
+    "OrangeCells" -> {{r, i}}
+  |>];
+  hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "ZeroCells" -> {{r, i}}|>];
   hi3 = hi2;
 
   If[elimRes["DivG"] > 1,
@@ -557,8 +577,12 @@ rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_In
   notes = ConstantArray["", n];
   notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
 
-  hi1 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}|>];
-  hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "GreenCells" -> {{r, i}}|>];
+  hi1 = Join[hiBase, <|
+    "ActiveRow" -> r,
+    "PivotPos" -> {i, i},
+    "OrangeCells" -> {{r, i}}
+  |>];
+  hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "ZeroCells" -> {{r, i}}|>];
   hi3 = hi2;
 
   If[elimRes["DivG"] > 1,
@@ -752,7 +776,7 @@ labeledMatrixBlock[label_, body_] := Column[
 alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
   {
     nRows, nCols, nA, notes2, pivotPos, activeRows, sourceRows,
-    activeCols, sourceCols, greenCells, bar, boldDiagQ,
+    activeCols, sourceCols, ZeroCells, orangeCells, bar, boldDiagQ,
     cellBg, makeCell, makeBar, leftBracketCell, rightBracketCell,
     rows, matrixGrid, notesGrid
   },
@@ -779,8 +803,9 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
   ];
   sourceCols = Flatten @ {Lookup[hi, "SourceCols", {}]};
 
-  greenCells = Lookup[hi, "GreenCells", {}];
-  boldDiagQ = TrueQ @ Lookup[hi, "BoldDiagonal", False];
+  ZeroCells = Lookup[hi, "ZeroCells", {}];
+  orangeCells = Lookup[hi, "OrangeCells", {}];
+  boldDiagQ = True;
 
   bar = Style["|", GrayLevel[.35], FontSize -> 16];
 
@@ -803,15 +828,17 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
     ]
   ];
 
-  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isDiag, isPivot},
-    isGreen = MemberQ[greenCells, {i, j}];
+  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isOrange, isDiag, isPivot},
+    isGreen = MemberQ[ZeroCells, {i, j}];
+    isOrange = MemberQ[orangeCells, {i, j}];
     isDiag = boldDiagQ && (j <= nA) && (i === j);
     isPivot = ListQ[pivotPos] && pivotPos === {i, j};
 
     If[isGreen,
-      cell = Style[cell, Darker[Green], Bold],
-      If[isPivot || isDiag,
-        cell = Style[cell, Bold]
+      cell = Style[cell, Red, Bold],
+      If[isOrange,
+        cell = Style[cell, Orange, Bold],
+        If[isPivot || isDiag, cell = Style[cell, Bold]]
       ]
     ];
 
@@ -875,7 +902,7 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
 
 (* renderovanie pre tvar (A|E)                                            *)
 alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[
-  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, greenCells,
+  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, ZeroCells,
     bar, rowColor, sourceColor, boldIdentityQ, wrapBg, makeCell, makeBar,
     leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, showPivotQ},
 
@@ -886,7 +913,7 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
   pivotPos = Lookup[hi, "PivotPos", None];
   activeRow = Lookup[hi, "ActiveRow", None];
   sourceRows = Lookup[hi, "SourceRows", {}];
-  greenCells = Lookup[hi, "GreenCells", {}];
+  ZeroCells = Lookup[hi, "ZeroCells", {}];
   boldIdentityQ = TrueQ @ Lookup[hi, "BoldIdentity", False];
 
   bar = Style["|", GrayLevel[.35], FontSize -> 16];
@@ -903,7 +930,7 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
   showPivotQ = ListQ[pivotPos] && ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
 
   makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isIdentity},
-    isGreen = MemberQ[greenCells, {i, j}];
+    isGreen = MemberQ[ZeroCells, {i, j}];
     isIdentity = boldIdentityQ && j > nA && i === j - nA && val === 1;
 
     If[isGreen,
@@ -979,7 +1006,7 @@ augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := 
 $bRange = {-10, 10};
 nonzeroRange[min_, max_] := DeleteCases[Range[min, max], 0];
 
-$MaxBounds = 30; (*väčšie číslo sa nemôže ukázať*)
+$MaxBounds = 100; (*väčšie číslo sa nemôže ukázať*)
 $Bounds = Quotient[$MaxBounds, 1.4 + 0.156 Sqrt[$MaxBounds]];
 $MaxRetryCount = 150;
 
@@ -1883,7 +1910,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
             notes2 = ConstantArray["", n];
             notes2[[i]] = rowNoteDivide[i, p];
 
-            hi3 = <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "GreenCells" -> {{i, i}, {i, n + 1}}|>;
+            hi3 = <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>;
 
             (* ak bola aj kombinácia, 3; inak stačia 2 stlpce *)
             If[terms =!= {},
@@ -1978,7 +2005,7 @@ stepsTriangular[data_Association] := Module[{content = {}, n, aug, vars, tri, st
           <|
             "ActiveRow" -> i,
             "PivotPos" -> {i, i},
-            "GreenCells" -> {{i, i}, {i, n + 1}}
+            "ZeroCells" -> {{i, i}, {i, n + 1}}
           |>
         ];
 
@@ -2233,13 +2260,13 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
             AppendTo[content, augRender2[
               before, after, notes,
               <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
-              <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "GreenCells" -> {{i, i}, {i, n + 1}}|>
+              <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>
             ]];
             aug = after
           ]
         ],
         If[!showElemQ,
-          addMatrix[aug, ConstantArray["", n], <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "GreenCells" -> {{i, i}, {i, n + 1}}|>]
+          addMatrix[aug, ConstantArray["", n], <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>]
         ]
       ];
 
@@ -2304,7 +2331,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
         addMatrix[
           aug,
           notes,
-          <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "GreenCells" -> {{i, i}, {i, n + 1}}|>
+          <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>
         ];
 
         addGap[content, 6];
@@ -2425,7 +2452,7 @@ stepsInverseMatrix[data_Association] := Module[
       AppendTo[content, augRender2Inverse[
         before, after, notes,
         <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
-        <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "GreenCells" -> Table[{i, j}, {j, 1, 2 n}]|>
+        <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> Table[{i, j}, {j, 1, 2 n}]|>
       ]];
       augInv = after
     ];
@@ -4903,7 +4930,7 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
   resolveExtra = Lookup[spec, "ResolveExtra", (Missing["NotUsed"] &)];
   tri = resolveExtra[spec, {opts}];
 
-  n = DimensionByDifficulty[diff];
+  n = DimensionByMethodDifficulty[spec["DimKey"], diff];
   vars = buildVars[n];
 
   scrambleFn = spec["ScrambleFn"];
