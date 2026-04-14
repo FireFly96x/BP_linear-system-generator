@@ -554,7 +554,7 @@ applyJordanElimStep[
   ];
 
   g2 = rowAbsGCD[workAug[[r]]];
-  If[g2 > 1,
+  If[g2 =!= 1,
     workAug = applyElemDivideStep[content, workAug, r, g2, n, {i, i}]
   ];
 
@@ -575,7 +575,7 @@ rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, 
   hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "ZeroCells" -> {{r, i}}|>];
   hi3 = hi2;
 
-  If[elimRes["DivG"] > 1,
+  If[elimRes["DivG"] =!= 1,
     mid = elimRes["AugRaw"];
     after2 = elimRes["Aug"];
 
@@ -627,7 +627,10 @@ rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_In
 
 rowAbsGCD[row_List] := Module[{g = Apply[GCD, Abs[row]]}, If[g === 0, 1, g]];
 
-normalizeRow[row_List] := Module[{g = rowAbsGCD[row]}, If[g > 1, row/g, row]];
+normalizeRow[row_List] := Module[{g = rowAbsGCD[row], first},
+  first = FirstCase[Most[row], x_ /; x =!= 0, 1];
+  If[g > 1, row/g, If[first === -1, -row, row]]
+];
 
 choosePivotRow[aug_, i_Integer] := Module[
   {n = Length[aug], candidates, currentPivot, betterCandidates},
@@ -693,8 +696,11 @@ rowNoteElim[r_, i_, p2_, a2_] := Module[{leftPart, rightPart, op},
   Row[{"R", r, " \[LeftArrow] ", leftPart, op, rightPart}]
 ];
 
-rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{p, a, g1, p2, a2, rowRaw, g2, rowFinal, augRaw, augFinal},
-  p = aug[[i, i]]; a = aug[[r, i]];
+rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[
+  {p, a, g1, p2, a2, rowRaw, g2, first, div, rowFinal, augRaw, augFinal},
+
+  p = aug[[i, i]];
+  a = aug[[r, i]];
 
   If[a === 0,
     <|"Aug" -> aug, "AugRaw" -> aug, "p2" -> 0, "a2" -> 0, "DivG" -> 1|>,
@@ -702,15 +708,17 @@ rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{p, a, g1, p2, a2, rowR
     p2 = p/g1;
     a2 = a/g1;
 
-    (* medzi-krok *)
     rowRaw = p2*aug[[r]] - a2*aug[[i]];
     g2 = rowAbsGCD[rowRaw];
+    first = FirstCase[Most[rowRaw], x_ /; x =!= 0, 1];
 
-    rowFinal = If[g2 > 1, rowRaw/g2, rowRaw];
+    div = If[g2 > 1, g2, If[first === -1, -1, 1]];
+    rowFinal = If[div =!= 1, rowRaw/div, rowRaw];
+
     augRaw = ReplacePart[aug, r -> rowRaw];
     augFinal = ReplacePart[aug, r -> rowFinal];
 
-    <|"Aug" -> augFinal, "AugRaw" -> augRaw, "p2" -> p2, "a2" -> a2, "DivG" -> g2|>
+    <|"Aug" -> augFinal, "AugRaw" -> augRaw, "p2" -> p2, "a2" -> a2, "DivG" -> div|>
   ]
 ];
 
@@ -1069,6 +1077,42 @@ $Bounds = Quotient[$MaxBounds, 1.4 + 0.156 Sqrt[$MaxBounds]];
 $MaxRetryCount = 150;
 
 matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
+
+
+SetAttributes[appendNoneConclusionAndStop, HoldFirst];
+
+appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False, mIndex_: None] := Module[
+  {n, badIdx, notes},
+
+  n = data["n"];
+  badIdx = findContradictionRow[aug];
+  If[badIdx === Missing["NotFound"], Return[Null]];
+
+  appendStepHeader[content, "Analýza riadkov"];
+  AppendTo[content, "Po doprednej eliminácii sme dostali riadok tvaru 0 = k, kde k \[NotEqual] 0. To je spor, preto sústava nemá riešenie a ďalej už nemusíme pokračovať."];
+
+  notes = ConstantArray["", n];
+  notes[[badIdx]] = "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]];
+
+  If[TrueQ[showElemQ] && IntegerQ[mIndex],
+    AppendTo[content, namedAugmentedStateCard[
+      Subscript[Style["M", Italic], mIndex],
+      aug,
+      notes,
+      <|"ActiveRow" -> badIdx|>
+    ]],
+    AppendTo[content, alignedAugmentedMatrix[aug, notes, <|"ActiveRow" -> badIdx|>]]
+  ];
+
+  appendStepHeader[content, "Skúška správnosti"];
+  AppendTo[content, "Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
+  content = Join[content, verificationStepsNone[data]];
+
+  appendStepHeader[content, "Záver"];
+  AppendTo[content, "Sústava nemá riešenie."];
+
+  Throw[<|"Content" -> content, "Solution" -> "NONE"|>, "StopMatrixSteps"]
+];
 
 (* spoločný trace pre doprednú elimináciu *)
 collectForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[
@@ -1567,9 +1611,28 @@ makeDiagonalAug[diff_String, n_Integer, solType_String, triType_String] := Modul
     ,
 
     "NONE",
-  (* posledný riadok 0 = c, c != 0 *)
+    coeffPool = DeleteCases[kSetTri, 0];
+
+    (* posledný riadok ostáva spor 0 = c, c != 0 *)
     A[[idx]] = ConstantArray[0, n];
     b[[idx]] = RandomChoice[rhsNonzero];
+
+    (* horné pivotové riadky nech obsahujú aj ďalšie koeficienty *)
+    Do[
+      Do[
+        A[[i, j]] = RandomChoice[Join[{0, 0}, coeffPool]],
+        {j, i + 1, n}
+      ],
+      {i, 1, n - 1}
+    ];
+
+    (* posledná premenná aby nebola 0 vsade*)
+    Do[
+      If[A[[i, n]] === 0,
+        A[[i, n]] = RandomChoice[DeleteCases[coeffPool, -1 | 1]]
+      ],
+      {i, Max[1, n - 2], n - 1}
+    ];
 
     x = "NONE";
     badRow = idx;
@@ -2385,191 +2448,36 @@ stepsTriangular[data_Association] := Module[
   <|"Content" -> content, "Solution" -> sol|>
 ];
 
-stepsGauss[data_Association] := Module[
-  {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, idx, solLocal, tmp},
-  n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
-
-  addHeader[text_] := appendStepHeader[content, text];
-  addText[text_] := AppendTo[content, text];
-  addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
-
-  addHeader["Prepis sústavy do augmentovanej matice"];
-  addText["Sústavu zapíšeme do augmentovanej matice. Potom vynulujeme prvky pod hlavnou diagonálou."];
-  addMatrix[aug];
-
-  addHeader["Dopredná eliminácia (na horný trojuholník)"];
-  addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme pivot, podľa potreby prehodíme riadky a potom vynulujeme prvky pod pivotom."];
-
-  Do[
-    kPivot = choosePivotRowIfZero[aug, i];
-    If[kPivot =!= i,
-      before = aug;
-      after = rowApplySwap[before, i, kPivot];
-      notes = ConstantArray["", n];
-      notes[[i]] = rowNoteSwap[i, kPivot];
-      AppendTo[content, augRender2[
-        before, after, notes,
-        <|"ActiveRow" -> i, "SourceRows" -> {kPivot}, "PivotPos" -> {i, i}|>,
-        <|"ActiveRow" -> kPivot, "SourceRows" -> {i}, "PivotPos" -> {i, i}|>
-      ]];
-      aug = after;
-    ];
-
-    pNow = aug[[i, i]];
-    If[pNow === 0, Continue[]];
-
-    Do[
-      If[aug[[r, i]] =!= 0,
-        before = aug;
-        elimRes = rowApplyElimStable[before, r, i];
-        aug = rowAppendElimStep[content, before, elimRes, r, i, n, <|"SourceRows" -> {i}|>];
-      ],
-      {r, i + 1, n}
-    ],
-    {i, 1, n - 1}
-  ];
-
-  addHeader["Tvar po Gaussovej eliminácii"];
-  addText["Po týchto úpravách dostaneme hornú trojuholníkovú sústavu. Neznáme určíme spätným dosadzovaním od posledného riadku."];
-  addMatrix[aug, {}, <|"BoldDiagonal" -> True|>];
-
-  If[st === "INFINITE" && AnyTrue[aug, AllTrue[#, # === 0 &] &],
-    addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však pokračujeme ďalej, aby sme riešenie vedeli pekne zapísať pomocou parametra."];
-  ];
-
-  If[st === "NONE",
-    idx = FirstCase[Range[n], k_ /; aug[[k, k]] === 0 && aug[[k, n + 1]] =!= 0, Missing["NotFound"]];
-    addText["V jednom riadku vyjde rovnica tvaru 0 = k, kde k \[NotEqual] 0. Preto sústava nemá riešenie."];
-    If[IntegerQ[idx],
-      notes = ConstantArray["", n];
-      notes[[idx]] = "pivot = 0";
-      addMatrix[aug, notes, <|"ActiveRow" -> idx, "BoldDiagonal" -> True|>],
-      addMatrix[aug, {}, <|"BoldDiagonal" -> True|>]
-    ];
-
-    addHeader["Skúška správnosti"];
-    addText["Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
-    content = Join[content, verificationStepsNone[data]];
-
-    addHeader["Záver"];
-    addText["Sústava nemá riešenie."];
-
-    Return[<|"Content" -> content, "Solution" -> "NONE"|>];
-  ];
-
-  If[st === "ONE",
-    addHeader["Spätné dosadzovanie v rovniciach"];
-    tmp = gaussBackSubstEquations[aug, vars, ConstantArray[0, n], {}, content];
-    solLocal = tmp[[1]];
-    content = tmp[[2]];
-
-    addHeader["Skúška správnosti"];
-    addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
-    content = Join[content, verificationSteps[data, solLocal]];
-    Return[<|"Content" -> content, "Solution" -> solLocal|>];
-  ];
-
-  If[st === "INFINITE",
-    Module[{paramIdxs, paramSymbols},
-      paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-      paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
-
-      addHeader[
-        If[Length[paramIdxs] === 1,
-          "Spätné dosadzovanie s parametrom",
-          "Spätné dosadzovanie s parametrami"
-        ]
-      ];
-
-      addText[
-        If[Length[paramIdxs] === 1,
-          Row[{
-            "Voľnú premennú zvolíme ",
-            tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]], "."
-          }],
-          Row[{
-            "Voľné premenné zvolíme ",
-            tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]],
-            " a ",
-            tf[vars[[paramIdxs[[2]]]]], " = ", TraditionalForm[paramSymbols[[2]]], "."
-          }]
-        ]
-      ];
-
-      solLocal = ConstantArray[0, n];
-      Do[
-        solLocal[[paramIdxs[[k]]]] = paramSymbols[[k]];
-        ,
-        {k, 1, Length[paramIdxs]}
-      ];
-
-      tmp = gaussBackSubstEquations[aug, vars, solLocal, paramIdxs, content];
-      solLocal = tmp[[1]];
-      content = tmp[[2]];
-
-      addHeader["Skúška správnosti"];
-      addText[
-        If[Length[paramIdxs] === 1,
-          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
-          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
-        ]
-      ];
-      content = Join[content, verificationStepsInfinite[data, solLocal]];
-
-      addHeader["Záver"];
-      addText["Sústava má nekonečne veľa riešení."];
-      Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
-    ]
-  ];
-
-  <|"Content" -> content, "Solution" -> aug[[All, n + 1]]|>
-];
-
-stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] := Block[
-  {$ElemStepCounter = 0, $ElemMatrixCounter = 0},
+stepsGauss[data_Association] := Catch[
   Module[
-    {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, pNow, solLocal, solExprs, row, pivot, knownTerm, pivotRowFn, badIdx, needsNormalizationQ},
-
+    {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, solLocal, tmp},
     n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
-    pivotRowFn = If[pivotQ, choosePivotRow, choosePivotRowIfZero];
 
     addHeader[text_] := appendStepHeader[content, text];
     addText[text_] := AppendTo[content, text];
     addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
 
     addHeader["Prepis sústavy do augmentovanej matice"];
-    If[showElemQ,
-      addText["Sústavu zapíšeme do augmentovanej matice a označíme ju M₀. Pri každej úprave uvedieme aj príslušnú elementárnu maticu Eᵢ, takže bude platiť Mᵢ = Eᵢ · Mᵢ₋₁."];
-      AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], 0], aug]],
-      addText["Sústavu zapíšeme do augmentovanej matice. Úpravami ju prevedieme na tvar (I | x)."];
-      addMatrix[aug]
-    ];
+    addText["Sústavu zapíšeme do augmentovanej matice. Potom vynulujeme prvky pod hlavnou diagonálou."];
+    addMatrix[aug];
 
-    addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
-    addText[
-      If[showElemQ,
-        If[pivotQ,
-          "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom a každú úpravu zapíšeme aj pomocou elementárnej matice.",
-          "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky. Každú úpravu zapíšeme aj pomocou elementárnej matice."
-        ],
-        If[pivotQ,
-          "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom.",
-          "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky."
-        ]
-      ]
-    ];
+    addHeader["Dopredná eliminácia (na horný trojuholník)"];
+    addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme pivot, podľa potreby prehodíme riadky a potom vynulujeme prvky pod pivotom."];
 
     Do[
-      Module[{kPivot},
-        kPivot = pivotRowFn[aug, i];
-
-        If[pivotQ && kPivot =!= i,
-          addText[pivotSwapText[aug, i, kPivot]];
-        ];
-
-        If[kPivot =!= i,
-          aug = applyJordanSwapStep[content, aug, i, kPivot, n, showElemQ];
-        ];
+      kPivot = choosePivotRowIfZero[aug, i];
+      If[kPivot =!= i,
+        before = aug;
+        after = rowApplySwap[before, i, kPivot];
+        notes = ConstantArray["", n];
+        notes[[i]] = rowNoteSwap[i, kPivot];
+        AppendTo[content, augRender2[
+          before, after, notes,
+          <|"ActiveRow" -> i, "SourceRows" -> {kPivot}, "PivotPos" -> {i, i}|>,
+          <|"ActiveRow" -> kPivot, "SourceRows" -> {i}, "PivotPos" -> {i, i}|>
+        ]];
+        aug = after;
+        If[st === "NONE", appendNoneConclusionAndStop[content, aug, data]];
       ];
 
       pNow = aug[[i, i]];
@@ -2577,72 +2485,185 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
 
       Do[
         If[aug[[r, i]] =!= 0,
-          aug = applyJordanElimStep[content, aug, r, i, n, <|"SourceRows" -> {i}|>, showElemQ];
+          before = aug;
+          elimRes = rowApplyElimStable[before, r, i];
+          aug = rowAppendElimStep[content, before, elimRes, r, i, n, <|"SourceRows" -> {i}|>];
+          If[st === "NONE", appendNoneConclusionAndStop[content, aug, data]];
         ],
         {r, i + 1, n}
       ],
       {i, 1, n - 1}
     ];
 
+    addHeader["Tvar po Gaussovej eliminácii"];
+    addText["Po týchto úpravách dostaneme hornú trojuholníkovú sústavu. Neznáme určíme spätným dosadzovaním od posledného riadku."];
+    addMatrix[aug, {}, <|"BoldDiagonal" -> True|>];
+
     If[st === "INFINITE" && AnyTrue[aug, AllTrue[#, # === 0 &] &],
-      addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však spravíme aj spätnú úpravu, aby sa neznáme dali ľahšie zapísať pomocou parametra."];
+      addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však pokračujeme ďalej, aby sme riešenie vedeli pekne zapísať pomocou parametra."]
     ];
 
-    addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
-    addText[
-      If[showElemQ,
-        "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
-        "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
+    If[st === "ONE",
+      addHeader["Spätné dosadzovanie v rovniciach"];
+      tmp = gaussBackSubstEquations[aug, vars, ConstantArray[0, n], {}, content];
+      solLocal = tmp[[1]];
+      content = tmp[[2]];
+
+      addHeader["Skúška správnosti"];
+      addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
+      content = Join[content, verificationSteps[data, solLocal]];
+      Return[<|"Content" -> content, "Solution" -> solLocal|>];
+    ];
+
+    If[st === "INFINITE",
+      Module[{paramIdxs, paramSymbols},
+        paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
+        paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+
+        addHeader[
+          If[Length[paramIdxs] === 1,
+            "Spätné dosadzovanie s parametrom",
+            "Spätné dosadzovanie s parametrami"
+          ]
+        ];
+
+        addText[
+          If[Length[paramIdxs] === 1,
+            Row[{
+              "Voľnú premennú zvolíme ",
+              tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]], "."
+            }],
+            Row[{
+              "Voľné premenné zvolíme ",
+              tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]],
+              " a ",
+              tf[vars[[paramIdxs[[2]]]]], " = ", TraditionalForm[paramSymbols[[2]]], "."
+            }]
+          ]
+        ];
+
+        solLocal = ConstantArray[0, n];
+        Do[
+          solLocal[[paramIdxs[[k]]]] = paramSymbols[[k]],
+          {k, 1, Length[paramIdxs]}
+        ];
+
+        tmp = gaussBackSubstEquations[aug, vars, solLocal, paramIdxs, content];
+        solLocal = tmp[[1]];
+        content = tmp[[2]];
+
+        addHeader["Skúška správnosti"];
+        addText[
+          If[Length[paramIdxs] === 1,
+            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
+            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
+          ]
+        ];
+        content = Join[content, verificationStepsInfinite[data, solLocal]];
+
+        addHeader["Záver"];
+        addText["Sústava má nekonečne veľa riešení."];
+        Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
       ]
     ];
 
-    Do[
-      pNow = aug[[i, i]];
-      If[pNow === 0, Continue[]];
+    <|"Content" -> content, "Solution" -> aug[[All, n + 1]]|>
+  ],
+  "StopMatrixSteps"
+];
 
-      Do[
-        If[aug[[r, i]] =!= 0,
-          aug = applyJordanElimStep[content, aug, r, i, n, <||>, showElemQ];
-        ],
-        {r, 1, i - 1}
-      ],
-      {i, n, 2, -1}
-    ];
+stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] := Block[
+  {$ElemStepCounter = 0, $ElemMatrixCounter = 0},
+  Catch[
+    Module[
+      {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, pNow, solLocal, solExprs, row, pivot, knownTerm, pivotRowFn},
 
-    If[st === "NONE",
-      badIdx = findContradictionRow[aug];
-      addHeader["Analýza riadkov"];
-      addText["Hľadáme riadok tvaru 0 = k, kde k \[NotEqual] 0. Taký riadok znamená spor."];
-      notes = ConstantArray["", n];
-      If[IntegerQ[badIdx], notes[[badIdx]] = "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]]];
+      n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
+      pivotRowFn = If[pivotQ, choosePivotRow, choosePivotRowIfZero];
+
+      addHeader[text_] := appendStepHeader[content, text];
+      addText[text_] := AppendTo[content, text];
+      addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
+
+      addHeader["Prepis sústavy do augmentovanej matice"];
       If[showElemQ,
-        AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], $ElemMatrixCounter], aug, notes, <|"ActiveRow" -> If[IntegerQ[badIdx], badIdx, None]|>]],
-        addMatrix[aug, notes, <|"ActiveRow" -> If[IntegerQ[badIdx], badIdx, None]|>]
+        addText["Sústavu zapíšeme do augmentovanej matice a označíme ju M₀. Pri každej úprave uvedieme aj príslušnú elementárnu maticu Eᵢ, takže bude platiť Mᵢ = Eᵢ · Mᵢ₋₁."];
+        AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], 0], aug]],
+        addText["Sústavu zapíšeme do augmentovanej matice. Úpravami ju prevedieme na tvar (I | x)."];
+        addMatrix[aug]
       ];
 
-      addHeader["Skúška správnosti"];
-      addText["Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
-      content = Join[content, verificationStepsNone[data]];
+      addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
+      addText[
+        If[showElemQ,
+          If[pivotQ,
+            "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom a každú úpravu zapíšeme aj pomocou elementárnej matice.",
+            "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky. Každú úpravu zapíšeme aj pomocou elementárnej matice."
+          ],
+          If[pivotQ,
+            "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom.",
+            "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky."
+          ]
+        ]
+      ];
 
-      addHeader["Záver"];
-      addText["Sústava nemá riešenie."];
+      Do[
+        Module[{kPivot},
+          kPivot = pivotRowFn[aug, i];
 
-      Return[<|"Content" -> content, "Solution" -> "NONE"|>];
-    ];
+          If[pivotQ && kPivot =!= i,
+            addGap[content, 1];
+            addText[pivotSwapText[aug, i, kPivot]];
+          ];
 
-    needsNormalizationQ = AnyTrue[Range[n], aug[[#, #]] =!= 0 && aug[[#, #]] =!= 1 &];
+          If[kPivot =!= i,
+            aug = applyJordanSwapStep[content, aug, i, kPivot, n, showElemQ];
+            If[st === "NONE",
+              appendNoneConclusionAndStop[content, aug, data, showElemQ, $ElemMatrixCounter]
+            ];
+          ];
+        ];
 
-    If[needsNormalizationQ,
-      addHeader["Normalizácia pivotov na 1"];
-      If[showElemQ,
-        addText["Vydelíme každý nenulový pivot jeho hodnotou. Tým dostaneme v ľavej časti jednotkovú maticu I."];
+        pNow = aug[[i, i]];
+        If[pNow === 0, Continue[]];
+
+        Do[
+          If[aug[[r, i]] =!= 0,
+            aug = applyJordanElimStep[content, aug, r, i, n, <|"SourceRows" -> {i}|>, showElemQ];
+            If[st === "NONE",
+              appendNoneConclusionAndStop[content, aug, data, showElemQ, $ElemMatrixCounter]
+            ];
+          ],
+          {r, i + 1, n}
+        ],
+        {i, 1, n - 1}
+      ];
+
+      If[st === "INFINITE" && AnyTrue[aug, AllTrue[#, # === 0 &] &],
+        addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však spravíme aj spätnú úpravu, aby sa neznáme dali ľahšie zapísať pomocou parametra."]
+      ];
+
+      addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
+      addText[
+        If[showElemQ,
+          "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
+          "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
+        ]
       ];
 
       Do[
         pNow = aug[[i, i]];
         If[pNow === 0, Continue[]];
 
-        If[pNow =!= 1,
+        Do[
+          If[aug[[r, i]] =!= 0,
+            aug = applyJordanElimStep[content, aug, r, i, n, <||>, showElemQ];
+          ],
+          {r, 1, i - 1}
+        ];
+
+        pNow = aug[[i, i]];
+        If[pNow =!= 0 && pNow =!= 1,
           If[showElemQ,
             aug = applyElemDivideStep[content, aug, i, pNow, n, {i, i}],
             Module[{before, after},
@@ -2655,160 +2676,168 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
                 <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
                 <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>
               ]];
-              aug = after
+              aug = after;
             ]
-          ],
-          If[!showElemQ,
-            addMatrix[aug, ConstantArray["", n], <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>]
           ]
         ];
-
-        addGap[content, 6];
-        AppendTo[content, highlightGrid @ Grid[
-          {{tf[lhsStyle[vars[[i]]]], "=", tft[aug[[i, n + 1]]] }},
-          Alignment -> {{Right, Center, Left}},
-          BaseStyle -> {FontSize -> 16}
-        ]];
-        addGap[content, 6];
         ,
-        {i, 1, n}
-      ]
-    ];
+        {i, n, 2, -1}
+      ];
 
-    addHeader["Hotový tvar (I | x)"];
-    addText["Po úpravách dostaneme tvar (I | x). Riešenie prečítame z pravej strany."];
-
-    notes = If[
-      st === "ONE",
-      Table[
-        Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[aug[[i, n + 1]]]}],
-        {i, 1, n}
-      ],
-      ConstantArray["", n]
-    ];
-
-    If[showElemQ,
-      AppendTo[
-        content,
-        namedAugmentedStateCard[
-          Subscript[Style["M", Italic], $ElemMatrixCounter],
-          aug,
-          notes,
-          <|"BoldDiagonal" -> True|>
-        ]
-      ],
-      addMatrix[aug, notes]
-    ];
-
-    If[st === "INFINITE",
-      Module[{paramIdxs, paramSymbols},
-        paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-        paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
-
-        addHeader["Analýza riadkov"];
-        addText[
-          If[Length[paramIdxs] === 1,
-            "Jeden nulový riadok znamená, že jedna premenná je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho.",
-            "Dva nulové riadky znamenajú, že dve premenné sú voľné. Označíme ich parametrami a ostatné premenné vyjadríme pomocou nich."
-          ]
-        ];
-
-        notes = ConstantArray["", n];
-        Scan[(notes[[#]] = "nulový riadok -> parameter") &, paramIdxs];
-
+      pNow = aug[[1, 1]];
+      If[pNow =!= 0 && pNow =!= 1,
         If[showElemQ,
-          AppendTo[content,
-            namedAugmentedStateCard[
-              Subscript[Style["M", Italic], $ElemMatrixCounter],
-              aug,
-              notes,
-              <|"ActiveRows" -> paramIdxs|>
-            ]
-          ],
-          addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>]
-        ];
-
-        Do[
-          addText[Row[{"Premennú ", vars[[paramIdxs[[k]]]], " označíme parametrom ", TraditionalForm[paramSymbols[[k]]], "."}]];
-          addGap[content, 6];
-          AppendTo[content, highlightGrid @ Grid[
-            {{tf[vars[[paramIdxs[[k]]]]], "=", TraditionalForm[paramSymbols[[k]]]}},
-            Alignment -> {{Right, Center, Left}},
-            BaseStyle -> {FontSize -> 16}
-          ]];
-          addGap[content, 6];
-          ,
-          {k, 1, Length[paramIdxs]}
-        ];
-
-        If[!showElemQ, addHeader["Vyjadrenie ostatných premenných pomocou parametrov"]];
-
-        solExprs = ConstantArray[0, n];
-        Do[
-          solExprs[[paramIdxs[[k]]]] = paramSymbols[[k]];
-          ,
-          {k, 1, Length[paramIdxs]}
-        ];
-
-        Do[
-          If[MemberQ[paramIdxs, i], Continue[]];
-
-          row = aug[[i]];
-          pivot = row[[i]];
-          If[pivot === 0, Continue[]];
-
-          knownTerm = Total@Table[If[j === i, 0, row[[j]]*solExprs[[j]]], {j, 1, n}];
-          solExprs[[i]] = Expand[(row[[n + 1]] - knownTerm)/pivot];
-
-          If[!showElemQ,
+          aug = applyElemDivideStep[content, aug, 1, pNow, n, {1, 1}],
+          Module[{before, after},
+            before = aug;
+            after = rowApplyDivide[before, 1, pNow];
             notes = ConstantArray["", n];
-            notes[[i]] = Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[solExprs[[i]]]}];
+            notes[[1]] = rowNoteDivide[1, pNow];
+            AppendTo[content, augRender2[
+              before, after, notes,
+              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}|>,
+              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}, "ZeroCells" -> {{1, 1}, {1, n + 1}}|>
+            ]];
+            aug = after;
+          ]
+        ]
+      ];
 
-            addMatrix[
-              aug,
-              notes,
-              <|
-                "ActiveRow" -> i,
-                "PivotPos" -> {i, i},
-                "ZeroCells" -> {{i, i}, {i, n + 1}}
-              |>
-            ];
+      addHeader["Hotový tvar (I | x)"];
+      addText["Po úpravách dostaneme tvar (I | x). Riešenie prečítame z pravej strany."];
 
+      notes = If[
+        st === "ONE",
+        Table[
+          Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[aug[[i, n + 1]]]}],
+          {i, 1, n}
+        ],
+        ConstantArray["", n]
+      ];
+
+      If[showElemQ,
+        AppendTo[
+          content,
+          namedAugmentedStateCard[
+            Subscript[Style["M", Italic], $ElemMatrixCounter],
+            aug,
+            notes,
+            <|"BoldDiagonal" -> True|>
+          ]
+        ],
+        addMatrix[aug, notes]
+      ];
+
+      If[st === "INFINITE",
+        Module[{paramIdxs, paramSymbols},
+          paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
+          paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+
+          addHeader["Analýza riadkov"];
+          addText[
+            If[Length[paramIdxs] === 1,
+              "Jeden nulový riadok znamená, že jedna premenná je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho.",
+              "Dva nulové riadky znamenajú, že dve premenné sú voľné. Označíme ich parametrami a ostatné premenné vyjadríme pomocou nich."
+            ]
+          ];
+
+          notes = ConstantArray["", n];
+          Scan[(notes[[#]] = "nulový riadok -> parameter") &, paramIdxs];
+
+          If[showElemQ,
+            AppendTo[content,
+              namedAugmentedStateCard[
+                Subscript[Style["M", Italic], $ElemMatrixCounter],
+                aug,
+                notes,
+                <|"ActiveRows" -> paramIdxs|>
+              ]
+            ],
+            addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>]
+          ];
+
+          Do[
+            addText[Row[{"Premennú ", vars[[paramIdxs[[k]]]], " označíme parametrom ", TraditionalForm[paramSymbols[[k]]], "."}]];
             addGap[content, 6];
             AppendTo[content, highlightGrid @ Grid[
-              {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]] }},
+              {{tf[vars[[paramIdxs[[k]]]]], "=", TraditionalForm[paramSymbols[[k]]] }},
               Alignment -> {{Right, Center, Left}},
               BaseStyle -> {FontSize -> 16}
             ]];
             addGap[content, 6];
+            ,
+            {k, 1, Length[paramIdxs]}
           ];
-          ,
-          {i, n, 1, -1}
-        ];
 
-        addHeader["Skúška správnosti"];
-        addText[
-          If[Length[paramIdxs] === 1,
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
-          ]
-        ];
-        content = Join[content, verificationStepsInfinite[data, solExprs]];
+          If[!showElemQ, addHeader["Vyjadrenie ostatných premenných pomocou parametrov"]];
 
-        addHeader["Záver"];
-        addText["Sústava má nekonečne veľa riešení."];
+          solExprs = ConstantArray[0, n];
+          Do[
+            solExprs[[paramIdxs[[k]]]] = paramSymbols[[k]],
+            {k, 1, Length[paramIdxs]}
+          ];
 
-        Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
-      ]
-    ];
+          Do[
+            If[MemberQ[paramIdxs, i], Continue[]];
 
-    solLocal = aug[[All, n + 1]];
+            row = aug[[i]];
+            pivot = row[[i]];
+            If[pivot === 0, Continue[]];
 
-    addHeader["Skúška správnosti"];
-    addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
-    content = Join[content, verificationSteps[data, solLocal]];
+            knownTerm = Total@Table[If[j === i, 0, row[[j]]*solExprs[[j]]], {j, 1, n}];
+            solExprs[[i]] = Expand[(row[[n + 1]] - knownTerm)/pivot];
 
-    <|"Content" -> content, "Solution" -> solLocal|>
+            If[!showElemQ,
+              notes = ConstantArray["", n];
+              notes[[i]] = Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[solExprs[[i]]]}];
+
+              addMatrix[
+                aug,
+                notes,
+                <|
+                  "ActiveRow" -> i,
+                  "PivotPos" -> {i, i},
+                  "ZeroCells" -> {{i, i}, {i, n + 1}}
+                |>
+              ];
+
+              addGap[content, 6];
+              AppendTo[content, highlightGrid @ Grid[
+                {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]] }},
+                Alignment -> {{Right, Center, Left}},
+                BaseStyle -> {FontSize -> 16}
+              ]];
+              addGap[content, 6];
+            ];
+            ,
+            {i, n, 1, -1}
+          ];
+
+          addHeader["Skúška správnosti"];
+          addText[
+            If[Length[paramIdxs] === 1,
+              "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
+              "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
+            ]
+          ];
+          content = Join[content, verificationStepsInfinite[data, solExprs]];
+
+          addHeader["Záver"];
+          addText["Sústava má nekonečne veľa riešení."];
+
+          Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
+        ]
+      ];
+
+      solLocal = aug[[All, n + 1]];
+
+      addHeader["Skúška správnosti"];
+      addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
+      content = Join[content, verificationSteps[data, solLocal]];
+
+      <|"Content" -> content, "Solution" -> solLocal|>
+    ],
+    "StopMatrixSteps"
   ]
 ];
 
