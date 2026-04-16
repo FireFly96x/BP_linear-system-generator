@@ -33,27 +33,27 @@ GenElemGJ::usage = "GenElemGJ[diff, mode, opts] vygeneruje didaktický príklad 
 s explicitným zápisom elementárnych matíc E_i, takže po každom kroku platí M_i = E_i M_(i-1).
 diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (5x5)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
-opts: SolutionType -> Automatic | \"ONE\" | \"NONE\" | \"INFINITE\"   (Automatic vyberá typ náhodne)";
+opts: SolutionType -> \"ONE\"";
 
 GenInverse::usage = "GenInverse[diff, mode, opts] vygeneruje didaktický príklad výpočtu inverznej matice pomocou Gauss-Jordanovej metódy v tvare (A|E) -> (E|A^(-1)).
 diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
-opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože inverzná matica existuje len pre regulárnu maticu)";
+opts: SolutionType -> \"ONE\"";
 
 GenLU::usage = "GenLU[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou LU rozkladu (Doolittle).
 diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
-opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože pre Doolittle bez pivotovania vyžadujeme regulárnu maticu s nenulovými hlavnými pivotmi počas rozkladu)";
+opts: SolutionType -> \"ONE\"";
 
 GenCholesky::usage = "GenCholesky[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou Choleského rozkladu.
 diff: \"EASY\" (3x3), \"MEDIUM\" (5x5), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
-opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože Choleského rozklad vyžaduje symetrickú kladne definitnú maticu)";
+opts: SolutionType -> \"ONE\"";
 
 GenCramer::usage = "GenCramer[diff, mode, opts] vygeneruje didaktický príklad riešenia sústavy lineárnych rovníc pomocou Cramerovho pravidla.
 diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (5x5)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
-opts: SolutionType -> \"ONE\"   (iba jeden typ riešenia, pretože Cramerovo pravidlo vyžaduje regulárnu maticu s nenulovým determinantom)";
+opts: SolutionType -> \"ONE\"";
 
 GenTriangular::baddiff  = "Neplatná úroveň obtiažnosti `1`. Použiť \"EASY\"|\"MEDIUM\"|\"HARD\".";
 GenTriangular::badmode  = "Neplatný režim výstupu `1`. Použiť \"TASK\"|\"TASK_RESULT\"|\"TASK_STEPS_RESULT\".";
@@ -75,23 +75,23 @@ GenGaussJordanPivot::badst   = GenTriangular::badst;
 GenGaussJordanPivot::fail    = GenTriangular::fail;
 GenElemGJ::baddiff = GenTriangular::baddiff;
 GenElemGJ::badmode = GenTriangular::badmode;
-GenElemGJ::badst   = GenTriangular::badst;
+GenElemGJ::badst   = "Pre túto metódu je povolené len SolutionType -> \"ONE\".";
 GenElemGJ::fail    = GenTriangular::fail;
 GenInverse::baddiff = GenTriangular::baddiff;
 GenInverse::badmode = GenTriangular::badmode;
-GenInverse::badst = GenTriangular::badst;
+GenInverse::badst = "Pre túto metódu je povolené len SolutionType -> \"ONE\".";
 GenInverse::fail = "Nepodarilo sa vygenerovať regulárnu maticu pre výpočet inverznej matice.";
 GenLU::baddiff = GenTriangular::baddiff;
 GenLU::badmode = GenTriangular::badmode;
-GenLU::badst   = GenTriangular::badst;
+GenLU::badst   = "Pre túto metódu je povolené len SolutionType -> \"ONE\".";
 GenLU::fail    = "Nepodarilo sa vygenerovať sústavu vhodnú pre LU rozklad bez pivotovania.";
 GenCholesky::baddiff = GenTriangular::baddiff;
 GenCholesky::badmode = GenTriangular::badmode;
-GenCholesky::badst   = GenTriangular::badst;
+GenCholesky::badst   = "Pre túto metódu je povolené len SolutionType -> \"ONE\".";
 GenCholesky::fail    = "Nepodarilo sa vygenerovať symetrickú kladne definitnú sústavu vhodnú pre Choleského rozklad.";
 GenCramer::baddiff = GenTriangular::baddiff;
 GenCramer::badmode = GenTriangular::badmode;
-GenCramer::badst   = GenTriangular::badst;
+GenCramer::badst   = "Pre túto metódu je povolené len SolutionType -> \"ONE\".";
 GenCramer::fail    = "Nepodarilo sa vygenerovať regulárnu sústavu vhodnú pre Cramerovo pravidlo.";
 
 $CommonGeneratorOptions = {SolutionType -> Automatic, TriangularType -> Automatic};
@@ -100,7 +100,7 @@ Options[GenTriangular] = $CommonGeneratorOptions;
 Options[GenGauss] = $CommonGeneratorOptions;
 Options[GenGaussJordan] = $CommonGeneratorOptions;
 Options[GenGaussJordanPivot] = $CommonGeneratorOptions;
-Options[GenElemGJ] = $CommonGeneratorOptions;
+Options[GenElemGJ] = {SolutionType -> "ONE"};
 Options[GenInverse] = {SolutionType -> "ONE"};
 Options[GenLU] = {SolutionType -> "ONE"};
 Options[GenCholesky] = {SolutionType -> "ONE"};
@@ -138,6 +138,15 @@ ValidateSolutionType[st_] := TrueQ[st === Automatic] || MemberQ[{"ONE", "NONE", 
 ResolveSolutionType[st_] := If[st =!= Automatic, st, RandomChoice[{0.8, 0.1, 0.1} -> {"ONE", "NONE", "INFINITE"}]];
 validateTriangularType[tri_] := TrueQ[tri === Automatic] || MemberQ[{"L", "U"}, tri];
 resolveTriangularType[tri_] := If[tri === Automatic, RandomChoice[{"L", "U"}], tri];
+
+(* validácia metód, ktoré povoľujú len jedno riešenie *)
+validateOnlyOneSolutionType[specLocal_, passedOpts_] := With[
+  {stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
+  If[stOpt =!= "ONE",
+    Message[MessageName[specLocal["MsgPrefix"], "badst"], stOpt];
+    False, True
+  ]
+];
 
 (* ~-~-~ CELL PRINTING ~-~-~ *)
 
@@ -5334,15 +5343,7 @@ GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "SectionTitle" -> "Výpočet inverznej matice",
     "ScrambleFn" -> genScrambleGauss,
     "StepsFn" -> stepsInverseMatrix,
-    "ValidateExtra" -> Function[{specLocal, passedOpts},
-      With[{stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
-        If[stOpt =!= "ONE",
-          Message[MessageName[specLocal["MsgPrefix"], "badst"], stOpt];
-          False,
-          True
-        ]
-      ]
-    ],
+    "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
     "TaskPrinter" -> printTaskInverse,
     "ResultPrinter" -> printResultInverse,
@@ -5362,15 +5363,7 @@ GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "SectionTitle" -> "LU rozklad (Doolittle)",
     "ScrambleFn" -> genScrambleLU,
     "StepsFn" -> stepsLU,
-    "ValidateExtra" -> Function[{specLocal, passedOpts},
-      With[{stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
-        If[stOpt =!= "ONE",
-          Message[MessageName[specLocal["MsgPrefix"], "badst"], stOpt];
-          False,
-          True
-        ]
-      ]
-    ],
+    "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
     "TaskPrinter" -> printTaskLU,
     "ResultPrinter" -> printResultLU,
@@ -5389,15 +5382,7 @@ GenCholesky[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "SectionTitle" -> "Choleského rozklad",
     "ScrambleFn" -> genScrambleCholesky,
     "StepsFn" -> stepsCholesky,
-    "ValidateExtra" -> Function[{specLocal, passedOpts},
-      With[{stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
-        If[stOpt =!= "ONE",
-          Message[MessageName[specLocal["MsgPrefix"], "badst"], stOpt];
-          False,
-          True
-        ]
-      ]
-    ],
+    "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
     "TaskPrinter" -> printTaskCholesky,
     "ResultPrinter" -> printResultCholesky,
@@ -5416,15 +5401,7 @@ GenCramer[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "SectionTitle" -> "Cramerovo pravidlo",
     "ScrambleFn" -> genScrambleCramer,
     "StepsFn" -> stepsCramer,
-    "ValidateExtra" -> Function[{specLocal, passedOpts},
-      With[{stOpt = OptionValue[specLocal["EntryFn"], passedOpts, SolutionType]},
-        If[stOpt =!= "ONE",
-          Message[MessageName[specLocal["MsgPrefix"], "badst"], stOpt];
-          False,
-          True
-        ]
-      ]
-    ],
+    "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
     "TaskPrinter" -> printTaskCramer,
     "ResultPrinter" -> printResultCramer
