@@ -164,80 +164,6 @@ appendStepHeader[content_, text_, gap_: 2] := (
   If[Length[content] > 0, addGap[content, gap]]; AppendTo[content, makeStepHeader[text]]
 );
 
-(* rovnice pre dosadzovanie v gauss *)
-gaussBackSubstEquations[aug_, vars_, sol0_, skipIdxs_, content_] := Module[
-  {n = Length[aug], sol = sol0, row, pivot, rhsVal, terms, symExpr, subExpr, sumProducts, exprVal, boldVal, coeffTimes, out = content, skipList},
-
-  skipList = Flatten @ {skipIdxs};
-
-  boldVal[val_] := Style[
-    If[IntegerQ[val] && val < 0, Row[{"(", tft[val], ")"}],
-      If[IntegerQ[val], tft[val], TraditionalForm[val]]
-    ],
-    Bold
-  ];
-
-  coeffTimes[a_, x_] := If[a === 1, x, Row[{tf[a], "\[CenterDot]", x}]];
-
-  Do[
-    If[MemberQ[skipList, i], Continue[]];
-
-    row = aug[[i]];
-    pivot = row[[i]];
-    rhsVal = row[[n + 1]];
-
-    If[pivot === 0, Continue[]];
-
-    terms = Select[Table[{row[[j]], sol[[j]]}, {j, i + 1, n}], #[[1]] =!= 0 &];
-
-    symExpr = Row @ Flatten @ Join[
-      {tft[rhsVal]},
-      Table[
-        With[{a = row[[j]], v = Style[tf[vars[[j]]], Bold]},
-          {If[a > 0, " - ", " + "], coeffTimes[Abs[a], v]}
-        ],
-        {j, i + 1, n}
-      ]
-    ];
-
-    AppendTo[out, Which[
-      pivot === 1, Row[{tf[lhsStyle[vars[[i]]]], " = ", symExpr}],
-      pivot === -1, Row[{tf[lhsStyle[vars[[i]]]], " = -(", symExpr, ")"}],
-      True, Row[{tf[lhsStyle[vars[[i]]]], " = (", symExpr, ") / ", tf[pivot]}]
-    ]];
-
-    subExpr = Row @ Flatten @ Join[
-      {tft[rhsVal]},
-      Table[
-        With[{a = row[[j]], val = boldVal[sol[[j]]]},
-          {If[a > 0, " - ", " + "], coeffTimes[Abs[a], val]}
-        ],
-        {j, i + 1, n}
-      ]
-    ];
-
-    AppendTo[out, Which[
-      pivot === 1, Row[{tf[lhsStyle[vars[[i]]]], " = ", subExpr}],
-      pivot === -1, Row[{tf[lhsStyle[vars[[i]]]], " = -(", subExpr, ")"}],
-      True, Row[{tf[lhsStyle[vars[[i]]]], " = (", subExpr, ") / ", tf[pivot]}]
-    ]];
-
-    sumProducts = Total[terms[[All, 1]]*terms[[All, 2]]];
-    exprVal = Together[(rhsVal - sumProducts)/pivot];
-    sol[[i]] = exprVal;
-
-    AppendTo[out, highlightGrid @ Grid[
-      {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[exprVal]}},
-      Alignment -> {{Right, Center, Left}},
-      BaseStyle -> {FontSize -> 16}
-    ]];
-    ,
-    {i, n, 1, -1}
-  ];
-
-  {sol, out}
-];
-
 (* ~-~-~ STEP RENDERING ~-~-~ *)
 
 withStepCounter[renderFn_] := Block[{stepsCounter = 0}, renderFn[]];
@@ -632,59 +558,7 @@ normalizeRow[row_List] := Module[{g = rowAbsGCD[row], first},
   If[g > 1, row/g, If[first === -1, -row, row]]
 ];
 
-choosePivotRow[aug_, i_Integer] := Module[
-  {n = Length[aug], candidates, currentPivot, betterCandidates},
-
-  candidates = Select[Range[i, n], aug[[#, i]] =!= 0 &];
-  If[candidates === {}, Return[i]];
-
-  currentPivot = aug[[i, i]];
-
-  If[currentPivot =!= 0,
-    betterCandidates = Select[candidates, Abs[aug[[#, i]]] < Abs[currentPivot] &];
-    If[betterCandidates === {},
-      i,
-      First @ MinimalBy[betterCandidates, Abs[aug[[#, i]]] &]
-    ],
-    First @ MinimalBy[candidates, Abs[aug[[#, i]]] &]
-  ]
-];
-
-(* obmedzené "pivotovanie" pre obyčajny gauss *)
-choosePivotRowIfZero[aug_, i_Integer] := Module[{n = Length[aug], candidates},
-  If[aug[[i, i]] =!= 0, Return[i]];
-  candidates = Select[Range[i + 1, n], aug[[#, i]] =!= 0 &];
-  If[candidates === {}, i, First[candidates]]
-];
-
 rowNoteSwap[i_, k_] := Row[{"R", i, " \[LeftRightArrow] R", k}];
-
-pivotSwapText[aug_, i_Integer, k_Integer] := Module[{currentPivot, newPivot},
-  currentPivot = aug[[i, i]];
-  newPivot = aug[[k, i]];
-
-  If[currentPivot === 0,
-    Row[{
-      "V ", i, ". stĺpci je aktuálny pivot nulový, preto si nižšie vyberieme nenulový pivot ",
-      tf[newPivot], " z riadku R", k, "."
-    }],
-    Row[{
-      "V ", i, ". stĺpci sa nižšie nachádza menší pivot v absolútnej hodnote. Preto namiesto ",
-      tf[currentPivot], " zvolíme ", tf[newPivot], " a prehodíme R", i, " a R", k, "."
-    }]
-  ]
-];
-
-pivotSwapColumns[pivotCount_Integer] := Module[{possibleCols},
-  possibleCols = Range[Max[0, pivotCount - 1]];
-
-  Which[
-    possibleCols === {}, {},
-    Length[possibleCols] === 1, {1},
-    Length[possibleCols] === 2, {1, 2},
-    True, {2, Last[possibleCols]}
-  ]
-];
 
 rowApplySwap[aug_, i_Integer, k_Integer] := ReplacePart[aug, {i -> aug[[k]], k -> aug[[i]]}];
 
@@ -697,7 +571,7 @@ rowNoteElim[r_, i_, p2_, a2_] := Module[{leftPart, rightPart, op},
 ];
 
 rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[
-  {p, a, g1, p2, a2, rowRaw, g2, first, div, rowFinal, augRaw, augFinal},
+  {p, a, g1, p2, a2, rowRaw, g2, div, rowFinal, augRaw, augFinal},
 
   p = aug[[i, i]];
   a = aug[[r, i]];
@@ -710,9 +584,8 @@ rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[
 
     rowRaw = p2*aug[[r]] - a2*aug[[i]];
     g2 = rowAbsGCD[rowRaw];
-    first = FirstCase[Most[rowRaw], x_ /; x =!= 0, 1];
 
-    div = If[g2 > 1, g2, If[first === -1, -1, 1]];
+    div = If[g2 > 1, g2, If[rowRaw[[r]] === -1, -1, 1]];
     rowFinal = If[div =!= 1, rowRaw/div, rowRaw];
 
     augRaw = ReplacePart[aug, r -> rowRaw];
@@ -1073,7 +946,7 @@ $bRange = {-10, 10};
 nonzeroRange[min_, max_] := DeleteCases[Range[min, max], 0];
 
 $MaxBounds = 20; (*väčšie číslo sa nemôže ukázať*)
-$Bounds = Quotient[$MaxBounds, 1.4 + 0.156 Sqrt[$MaxBounds]];
+$Bounds = 4 + Quotient[$MaxBounds, 1.4 + 0.156 Sqrt[$MaxBounds]];
 $MaxRetryCount = 150;
 
 matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
@@ -1112,211 +985,6 @@ appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False,
   AppendTo[content, "Sústava nemá riešenie."];
 
   Throw[<|"Content" -> content, "Solution" -> "NONE"|>, "StopMatrixSteps"]
-];
-
-(* spoločný trace pre doprednú elimináciu *)
-collectForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[
-  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
-
-  workAug = aug;
-  n = Length[workAug];
-
-  pivotRowFn = Switch[pivotMode,
-    "MIN", choosePivotRow,
-    _, choosePivotRowIfZero
-  ];
-
-  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
-
-  Do[
-    pivotRow = pivotRowFn[workAug, i];
-
-    If[pivotRow =!= i,
-      workAug = rowApplySwap[workAug, i, pivotRow];
-      AppendTo[trace, <|
-        "Type" -> "Swap",
-        "PivotCol" -> i,
-        "Row" -> i,
-        "SourceRow" -> pivotRow,
-        "Matrix" -> workAug
-      |>];
-    ];
-
-    pivotValue = workAug[[i, i]];
-    If[pivotValue === 0, Continue[]];
-
-    Do[
-      If[workAug[[r, i]] =!= 0,
-        elimRes = rowApplyElimStable[workAug, r, i];
-
-        If[elimRes["DivG"] > 1,
-          AppendTo[trace, <|
-            "Type" -> "ElimRaw",
-            "PivotCol" -> i,
-            "Row" -> r,
-            "Matrix" -> elimRes["AugRaw"]
-          |>]
-        ];
-
-        workAug = elimRes["Aug"];
-        AppendTo[trace, <|
-          "Type" -> "ElimFinal",
-          "PivotCol" -> i,
-          "Row" -> r,
-          "Matrix" -> workAug
-        |>];
-      ],
-      {r, i + 1, n}
-    ],
-    {i, 1, n - 1}
-  ];
-
-  <|
-    "FinalAug" -> workAug,
-    "Trace" -> trace
-  |>
-];
-
-forwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[
-  {traceData, limit},
-
-  limit = $MaxBounds;
-  traceData = collectForwardEliminationTrace[aug, pivotMode];
-
-  AllTrue[
-    traceData["Trace"],
-    matrixMaxAbs[#["Matrix"]] <= limit &
-  ]
-];
-
-collectInverseEliminationTrace[aug_, pivotMode_: "MIN"] := Module[
-  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}, after},
-
-  workAug = aug;
-  n = Length[workAug];
-
-  pivotRowFn = Switch[pivotMode,
-    "MIN", choosePivotRow,
-    _, choosePivotRowIfZero
-  ];
-
-  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
-
-  (* dopredná eliminácia *)
-  Do[
-    pivotRow = pivotRowFn[workAug, i];
-
-    If[pivotRow =!= i,
-      workAug = rowApplySwap[workAug, i, pivotRow];
-      AppendTo[trace, <|
-        "Type" -> "Swap",
-        "Phase" -> "Forward",
-        "PivotCol" -> i,
-        "Row" -> i,
-        "SourceRow" -> pivotRow,
-        "Matrix" -> workAug
-      |>];
-    ];
-
-    pivotValue = workAug[[i, i]];
-    If[pivotValue === 0, Continue[]];
-
-    Do[
-      If[workAug[[r, i]] =!= 0,
-        elimRes = rowApplyElimStable[workAug, r, i];
-
-        If[elimRes["DivG"] > 1,
-          AppendTo[trace, <|
-            "Type" -> "ElimRaw",
-            "Phase" -> "Forward",
-            "PivotCol" -> i,
-            "Row" -> r,
-            "Matrix" -> elimRes["AugRaw"]
-          |>]
-        ];
-
-        workAug = elimRes["Aug"];
-        AppendTo[trace, <|
-          "Type" -> "ElimFinal",
-          "Phase" -> "Forward",
-          "PivotCol" -> i,
-          "Row" -> r,
-          "Matrix" -> workAug
-        |>];
-      ],
-      {r, i + 1, n}
-    ],
-    {i, 1, n - 1}
-  ];
-
-  (* spätná eliminácia *)
-  Do[
-    pivotValue = workAug[[i, i]];
-    If[pivotValue === 0, Continue[]];
-
-    Do[
-      If[workAug[[r, i]] =!= 0,
-        elimRes = rowApplyElimStable[workAug, r, i];
-
-        If[elimRes["DivG"] > 1,
-          AppendTo[trace, <|
-            "Type" -> "ElimRaw",
-            "Phase" -> "Backward",
-            "PivotCol" -> i,
-            "Row" -> r,
-            "Matrix" -> elimRes["AugRaw"]
-          |>]
-        ];
-
-        workAug = elimRes["Aug"];
-        AppendTo[trace, <|
-          "Type" -> "ElimFinal",
-          "Phase" -> "Backward",
-          "PivotCol" -> i,
-          "Row" -> r,
-          "Matrix" -> workAug
-        |>];
-      ],
-      {r, 1, i - 1}
-    ],
-    {i, n, 2, -1}
-  ];
-
-  (* normalizácia pivotov *)
-  Do[
-    pivotValue = workAug[[i, i]];
-    If[pivotValue === 0, Continue[]];
-
-    If[pivotValue =!= 1,
-      after = rowApplyDivide[workAug, i, pivotValue];
-      workAug = after;
-
-      AppendTo[trace, <|
-        "Type" -> "Divide",
-        "Phase" -> "Normalize",
-        "Row" -> i,
-        "Matrix" -> workAug
-      |>];
-    ],
-    {i, 1, n}
-  ];
-
-  <|
-    "FinalAug" -> workAug,
-    "Trace" -> trace
-  |>
-];
-
-inverseEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[
-  {traceData, limit},
-
-  limit = $MaxBounds;
-  traceData = collectInverseEliminationTrace[aug, pivotMode];
-
-  AllTrue[
-    traceData["Trace"],
-    matrixMaxAbs[#["Matrix"]] <= limit &
-  ]
 ];
 
 luSolveData[A_, b_] := Module[
@@ -1472,7 +1140,7 @@ generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, 
 
   resolvedBoundCheckFn = If[
     boundCheckFn === Automatic,
-    forwardEliminationWithinBoundsQ,
+    gaussForwardEliminationWithinBoundsQ,
     boundCheckFn
   ];
 
@@ -1739,167 +1407,6 @@ genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Ga
       If[s =!= 1, aug[[i]] = s*aug[[i]]];
     ]
   ];
-  aug
-];
-
-genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{n, pairs, chosenPairs, kSet, bnd, maxAttempts, maxKTries, aug, r, i, k, rowNew, currentLower, okQ},
-  n = Length[aug0];
-  pairs = Flatten[Table[{r, i}, {i, 1, n - 1}, {r, i + 1, n}], 1];
-
-  kSet = kSetGauss;
-  bnd = $Bounds;
-
-  maxAttempts = 40;   (* koľkokrát reštartovať celý scramble *)
-  maxKTries = 5;     (* koľko rôznych k skúsiť pre jeden pár *)
-
-  Do[
-    aug = genScrambleTriang[diff, aug0, "U", solType, False];
-    aug = Map[normalizeRow, aug];
-
-    chosenPairs = RandomSample[pairs, Length[pairs]];
-
-    Do[
-      {r, i} = pair;
-      okQ = False;
-      Do[
-        k = RandomChoice[kSet];
-        rowNew = aug[[r]] + k aug[[i]];
-        rowNew = normalizeRow[rowNew];
-        If[Max[Abs[rowNew]] <= bnd, aug[[r]] = rowNew; okQ = True; Break[];];
-        ,
-        {t, 1, maxKTries}
-      ];
-      , {pair, chosenPairs}
-    ];
-    currentLower = lowerNonzeroCount[aug[[All, 1 ;; n]]];
-    If[currentLower == Length[pairs], Return[aug]];
-    , {attempt, 1, maxAttempts}
-  ];
-  aug
-];
-
-pivotSwapColumns[pivotCount_Integer] := Module[{possibleCols},
-  possibleCols = Range[Max[0, pivotCount - 1]];
-
-  Which[
-    possibleCols === {}, {},
-    Length[possibleCols] === 1, {1},
-    Length[possibleCols] === 2, {1, 2},
-    True, {2, Last[possibleCols]}
-  ]
-];
-
-meaningfulPivotSwapColumns[trace_List] := Module[
-  {cols = {}, step, prev, i, k, currentPivot, newPivot},
-
-  Do[
-    step = trace[[t]];
-    If[Lookup[step, "Type", None] =!= "Swap" || t == 1, Continue[]];
-
-    prev = trace[[t - 1, "Matrix"]];
-    i = step["PivotCol"];
-    k = step["SourceRow"];
-
-    currentPivot = prev[[i, i]];
-    newPivot = prev[[k, i]];
-
-    If[
-      currentPivot =!= 0 &&
-          newPivot =!= 0 &&
-          Abs[newPivot] < Abs[currentPivot],
-      AppendTo[cols, i]
-    ];
-    ,
-    {t, 1, Length[trace]}
-  ];
-
-  cols
-];
-
-prepareForcedAdjacentSwap[aug_, i_Integer, bnd_Integer] := Module[
-  {work = aug, rowI, rowK, factors, chosen},
-
-  If[i >= Length[aug], Return[work]];
-
-  rowI = work[[i]];
-  rowK = work[[i + 1]];
-
-  If[rowI[[i]] === 0 || rowK[[i]] === 0, Return[work]];
-
-  factors = {2, 3, -2, -3};
-
-  chosen = SelectFirst[
-    factors,
-    Module[{cand = # rowK},
-      Max[Abs[cand]] <= bnd &&
-          Abs[cand[[i]]] > Abs[rowI[[i]]]
-    ] &,
-    Missing["NotFound"]
-  ];
-
-  If[chosen =!= Missing["NotFound"],
-    work[[i + 1]] = chosen work[[i + 1]];
-  ];
-
-  rowApplySwap[work, i, i + 1]
-];
-
-genScrambleGaussPivot[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
-  {aug, n, pivotCount, plannedCols, bnd, tries = 0, trace, goodCols, rowI, rowK, chosen},
-
-  n = Length[aug0];
-  bnd = $Bounds;
-
-  pivotCount = Count[
-    aug0[[All, 1 ;; n]],
-    row_ /; !AllTrue[row, # === 0 &]
-  ];
-
-  plannedCols = pivotSwapColumns[pivotCount];
-
-  While[tries < $MaxRetryCount,
-    aug = genScrambleGauss[diff, aug0, triType, solType];
-
-    Do[
-      If[i >= n, Continue[]];
-
-      rowI = aug[[i]];
-      rowK = aug[[i + 1]];
-
-      If[rowI[[i]] === 0 || rowK[[i]] === 0, Continue[]];
-
-      chosen = SelectFirst[
-        {2, 3, -2, -3},
-        Module[{cand = # rowK},
-          Max[Abs[cand]] <= bnd &&
-              cand[[i]] =!= 0 &&
-              Abs[cand[[i]]] > Abs[rowI[[i]]]
-        ] &,
-        Missing["NotFound"]
-      ];
-
-      If[chosen =!= Missing["NotFound"],
-        aug[[i + 1]] = chosen aug[[i + 1]]
-      ];
-
-      aug = rowApplySwap[aug, i, i + 1];
-      ,
-      {i, Reverse[plannedCols]}
-    ];
-
-    trace = collectForwardEliminationTrace[aug, "MIN"]["Trace"];
-    goodCols = meaningfulPivotSwapColumns[trace];
-
-    goodCols = DeleteDuplicates[goodCols];
-
-    If[
-      (n == 3 && Length[goodCols] == 1) ||
-          (n > 3 && Length[goodCols] >= 2),
-      Return[aug]
-    ];
-    tries++;
-  ];
-
   aug
 ];
 genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
@@ -2448,6 +1955,485 @@ stepsTriangular[data_Association] := Module[
   <|"Content" -> content, "Solution" -> sol|>
 ];
 
+(* ~-~-~ GAUSS / GAUSS-JORDAN HELPERS ~-~-~ *)
+
+(* riadky spätného dosadzovania pre Gaussa *)
+appendGaussBackSubstitutionSteps[aug_, vars_, sol0_, skipIdxs_, content_] := Module[
+  {n = Length[aug], sol = sol0, row, pivot, rhsVal, terms, symExpr, subExpr, sumProducts, exprVal, boldVal, coeffTimes, out = content, skipList},
+
+  skipList = Flatten @ {skipIdxs};
+
+  boldVal[val_] := Style[
+    If[IntegerQ[val] && val < 0, Row[{"(", tft[val], ")"}],
+      If[IntegerQ[val], tft[val], TraditionalForm[val]]
+    ],
+    Bold
+  ];
+
+  coeffTimes[a_, x_] := If[a === 1, x, Row[{tf[a], "\[CenterDot]", x}]];
+
+  Do[
+    If[MemberQ[skipList, i], Continue[]];
+
+    row = aug[[i]];
+    pivot = row[[i]];
+    rhsVal = row[[n + 1]];
+
+    If[pivot === 0, Continue[]];
+
+    terms = Select[Table[{row[[j]], sol[[j]]}, {j, i + 1, n}], #[[1]] =!= 0 &];
+    sumProducts = If[terms === {}, 0, Total[terms[[All, 1]]*terms[[All, 2]]]];
+    exprVal = Together[(rhsVal - sumProducts)/pivot];
+    sol[[i]] = exprVal;
+
+    If[terms =!= {},
+      symExpr = Row @ Flatten @ Join[
+        {tft[rhsVal]},
+        Table[
+          With[{a = row[[j]], v = Style[tf[vars[[j]]], Bold]},
+            {If[a > 0, " - ", " + "], coeffTimes[Abs[a], v]}
+          ],
+          {j, i + 1, n}
+        ]
+      ];
+
+      AppendTo[out, Which[
+        pivot === 1, Row[{tf[lhsStyle[vars[[i]]]], " = ", symExpr}],
+        pivot === -1, Row[{tf[lhsStyle[vars[[i]]]], " = -(", symExpr, ")"}],
+        True, Row[{tf[lhsStyle[vars[[i]]]], " = (", symExpr, ") / ", tf[pivot]}]
+      ]];
+
+      subExpr = Row @ Flatten @ Join[
+        {tft[rhsVal]},
+        Table[
+          With[{a = row[[j]], val = boldVal[sol[[j]]]},
+            {If[a > 0, " - ", " + "], coeffTimes[Abs[a], val]}
+          ],
+          {j, i + 1, n}
+        ]
+      ];
+
+      AppendTo[out, Which[
+        pivot === 1, Row[{tf[lhsStyle[vars[[i]]]], " = ", subExpr}],
+        pivot === -1, Row[{tf[lhsStyle[vars[[i]]]], " = -(", subExpr, ")"}],
+        True, Row[{tf[lhsStyle[vars[[i]]]], " = (", subExpr, ") / ", tf[pivot]}]
+      ]];
+    ];
+
+    AppendTo[out, highlightGrid @ Grid[
+      {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[exprVal]}},
+      Alignment -> {{Right, Center, Left}},
+      BaseStyle -> {FontSize -> 16}
+    ]];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  {sol, out}
+];
+(* výber riadku s najmenším pivotom v absolútnej hodnote *)
+gaussPivotRowByMinAbs[aug_, i_Integer] := Module[
+  {n = Length[aug], candidates, currentPivot, betterCandidates},
+
+  candidates = Select[Range[i, n], aug[[#, i]] =!= 0 &];
+  If[candidates === {}, Return[i]];
+
+  currentPivot = aug[[i, i]];
+
+  If[currentPivot =!= 0,
+    betterCandidates = Select[candidates, Abs[aug[[#, i]]] < Abs[currentPivot] &];
+    If[betterCandidates === {},
+      i,
+      First @ MinimalBy[betterCandidates, Abs[aug[[#, i]]] &]
+    ],
+    First @ MinimalBy[candidates, Abs[aug[[#, i]]] &]
+  ]
+];
+
+(* výber prvého nenulového pivotu pod diagonálou *)
+gaussPivotRowByNonzero[aug_, i_Integer] := Module[{n = Length[aug], candidates},
+  If[aug[[i, i]] =!= 0, Return[i]];
+  candidates = Select[Range[i + 1, n], aug[[#, i]] =!= 0 &];
+  If[candidates === {}, i, First[candidates]]
+];
+
+(* vysvetlenie výmeny pivotových riadkov *)
+gaussPivotSwapExplanation[aug_, i_Integer, k_Integer] := Module[{currentPivot, newPivot},
+  currentPivot = aug[[i, i]];
+  newPivot = aug[[k, i]];
+
+  If[currentPivot === 0,
+    Row[{
+      "V ", i, ". stĺpci je aktuálny pivot nulový, preto si nižšie vyberieme nenulový pivot ",
+      tf[newPivot], " z riadku R", k, "."
+    }],
+    Row[{
+      "V ", i, ". stĺpci sa nižšie nachádza menší pivot v absolútnej hodnote. Preto namiesto ",
+      tf[currentPivot], " zvolíme ", tf[newPivot], " a prehodíme R", i, " a R", k, "."
+    }]
+  ]
+];
+
+(* stĺpce, v ktorých vynucujeme pivotovanie *)
+gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{possibleCols},
+  possibleCols = Range[Max[0, pivotCount - 1]];
+
+  Which[
+    possibleCols === {}, {},
+    Length[possibleCols] === 1, {1},
+    Length[possibleCols] === 2, {1, 2},
+    True, {2, Last[possibleCols]}
+  ]
+];
+
+(* stĺpce so zmysluplnou výmenou pivotu *)
+gaussObservedPivotSwapColumns[trace_List] := Module[
+  {cols = {}, step, prev, i, k, currentPivot, newPivot},
+
+  Do[
+    step = trace[[t]];
+    If[Lookup[step, "Type", None] =!= "Swap" || t == 1, Continue[]];
+
+    prev = trace[[t - 1, "Matrix"]];
+    i = step["PivotCol"];
+    k = step["SourceRow"];
+
+    currentPivot = prev[[i, i]];
+    newPivot = prev[[k, i]];
+
+    If[
+      currentPivot =!= 0 &&
+          newPivot =!= 0 &&
+          Abs[newPivot] < Abs[currentPivot],
+      AppendTo[cols, i]
+    ];
+    ,
+    {t, 1, Length[trace]}
+  ];
+
+  cols
+];
+
+(* vynútenie susednej výmeny pre pivotovanie *)
+gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[
+  {work = aug, rowI, rowK, factors, chosen},
+
+  If[i >= Length[aug], Return[work]];
+
+  rowI = work[[i]];
+  rowK = work[[i + 1]];
+
+  If[rowI[[i]] === 0 || rowK[[i]] === 0, Return[work]];
+
+  factors = {2, 3, -2, -3};
+
+  chosen = SelectFirst[
+    factors,
+    Module[{cand = # rowK},
+      Max[Abs[cand]] <= bnd &&
+          cand[[i]] =!= 0 &&
+          Abs[cand[[i]]] > Abs[rowI[[i]]]
+    ] &,
+    Missing["NotFound"]
+  ];
+
+  If[chosen =!= Missing["NotFound"],
+    work[[i + 1]] = chosen work[[i + 1]];
+  ];
+
+  rowApplySwap[work, i, i + 1]
+];
+
+(* trace doprednej eliminácie pre Gaussa *)
+gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[
+  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
+
+  workAug = aug;
+  n = Length[workAug];
+
+  pivotRowFn = Switch[pivotMode,
+    "MIN", gaussPivotRowByMinAbs,
+    _, gaussPivotRowByNonzero
+  ];
+
+  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
+
+  Do[
+    pivotRow = pivotRowFn[workAug, i];
+
+    If[pivotRow =!= i,
+      workAug = rowApplySwap[workAug, i, pivotRow];
+      AppendTo[trace, <|
+        "Type" -> "Swap",
+        "PivotCol" -> i,
+        "Row" -> i,
+        "SourceRow" -> pivotRow,
+        "Matrix" -> workAug
+      |>];
+    ];
+
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    Do[
+      If[workAug[[r, i]] =!= 0,
+        elimRes = rowApplyElimStable[workAug, r, i];
+
+        If[elimRes["DivG"] > 1,
+          AppendTo[trace, <|
+            "Type" -> "ElimRaw",
+            "PivotCol" -> i,
+            "Row" -> r,
+            "Matrix" -> elimRes["AugRaw"]
+          |>]
+        ];
+
+        workAug = elimRes["Aug"];
+        AppendTo[trace, <|
+          "Type" -> "ElimFinal",
+          "PivotCol" -> i,
+          "Row" -> r,
+          "Matrix" -> workAug
+        |>];
+      ],
+      {r, i + 1, n}
+    ],
+    {i, 1, n - 1}
+  ];
+
+  <|
+    "FinalAug" -> workAug,
+    "Trace" -> trace
+  |>
+];
+
+(* kontrola medzí počas Gaussovej eliminácie *)
+gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[
+  {traceData, limit},
+
+  limit = $MaxBounds;
+  traceData = gaussForwardEliminationTrace[aug, pivotMode];
+
+  AllTrue[
+    traceData["Trace"],
+    matrixMaxAbs[#["Matrix"]] <= limit &
+  ]
+];
+
+(* trace celej Gauss-Jordanovej eliminácie *)
+gaussJordanEliminationTrace[aug_, pivotMode_: "MIN"] := Module[
+  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}, after},
+
+  workAug = aug;
+  n = Length[workAug];
+
+  pivotRowFn = Switch[pivotMode,
+    "MIN", gaussPivotRowByMinAbs,
+    _, gaussPivotRowByNonzero
+  ];
+
+  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
+
+  Do[
+    pivotRow = pivotRowFn[workAug, i];
+
+    If[pivotRow =!= i,
+      workAug = rowApplySwap[workAug, i, pivotRow];
+      AppendTo[trace, <|
+        "Type" -> "Swap",
+        "Phase" -> "Forward",
+        "PivotCol" -> i,
+        "Row" -> i,
+        "SourceRow" -> pivotRow,
+        "Matrix" -> workAug
+      |>];
+    ];
+
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    Do[
+      If[workAug[[r, i]] =!= 0,
+        elimRes = rowApplyElimStable[workAug, r, i];
+
+        If[elimRes["DivG"] > 1,
+          AppendTo[trace, <|
+            "Type" -> "ElimRaw",
+            "Phase" -> "Forward",
+            "PivotCol" -> i,
+            "Row" -> r,
+            "Matrix" -> elimRes["AugRaw"]
+          |>]
+        ];
+
+        workAug = elimRes["Aug"];
+        AppendTo[trace, <|
+          "Type" -> "ElimFinal",
+          "Phase" -> "Forward",
+          "PivotCol" -> i,
+          "Row" -> r,
+          "Matrix" -> workAug
+        |>];
+      ],
+      {r, i + 1, n}
+    ],
+    {i, 1, n - 1}
+  ];
+
+  Do[
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    Do[
+      If[workAug[[r, i]] =!= 0,
+        elimRes = rowApplyElimStable[workAug, r, i];
+
+        If[elimRes["DivG"] > 1,
+          AppendTo[trace, <|
+            "Type" -> "ElimRaw",
+            "Phase" -> "Backward",
+            "PivotCol" -> i,
+            "Row" -> r,
+            "Matrix" -> elimRes["AugRaw"]
+          |>]
+        ];
+
+        workAug = elimRes["Aug"];
+        AppendTo[trace, <|
+          "Type" -> "ElimFinal",
+          "Phase" -> "Backward",
+          "PivotCol" -> i,
+          "Row" -> r,
+          "Matrix" -> workAug
+        |>];
+      ],
+      {r, 1, i - 1}
+    ],
+    {i, n, 2, -1}
+  ];
+
+  Do[
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    If[pivotValue =!= 1,
+      after = rowApplyDivide[workAug, i, pivotValue];
+      workAug = after;
+
+      AppendTo[trace, <|
+        "Type" -> "Divide",
+        "Phase" -> "Normalize",
+        "Row" -> i,
+        "Matrix" -> workAug
+      |>];
+    ],
+    {i, 1, n}
+  ];
+
+  <|
+    "FinalAug" -> workAug,
+    "Trace" -> trace
+  |>
+];
+
+(* kontrola medzí počas Gauss-Jordanovej eliminácie *)
+gaussJordanEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[
+  {traceData, limit},
+
+  limit = $MaxBounds;
+  traceData = gaussJordanEliminationTrace[aug, pivotMode];
+
+  AllTrue[
+    traceData["Trace"],
+    matrixMaxAbs[#["Matrix"]] <= limit &
+  ]
+];
+
+(* premiešanie sústavy pre Gaussovu metódu *)
+genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{n, pairs, chosenPairs, kSet, bnd, maxAttempts, maxKTries, aug, r, i, k, rowNew, currentLower, okQ},
+  n = Length[aug0];
+  pairs = Flatten[Table[{r, i}, {r, 2, n}, {i, 1, r - 1}], 1]; (* (2,1) => R2=R2+k.R1; (3,1); (3,2) *)
+
+  kSet = kSetGauss;
+  bnd = $Bounds;
+
+  maxAttempts = $MaxRetryCount;   (* koľkokrát reštartovať celý scramble *)
+  maxKTries = 10;     (* koľko rôznych k skúsiť pre jeden pár *)
+
+  Do[
+    aug = genScrambleTriang[diff, aug0, "U", solType, False];
+    aug = Map[normalizeRow, aug];
+
+    chosenPairs = If[solType === "ONE", RandomSample[pairs, Length[pairs]], pairs];
+
+    Do[
+      {r, i} = pair;
+
+      okQ = False;
+      Do[
+        k = RandomChoice[kSet];
+        rowNew = aug[[r]] + k aug[[i]];
+        rowNew = normalizeRow[rowNew];
+
+        If[
+          Max[Abs[rowNew]] <= bnd,
+          aug[[r]] = rowNew;
+          okQ = True;
+          Break[];
+        ];
+        ,
+        {t, 1, maxKTries}
+      ];
+      ,
+      {pair, chosenPairs}
+    ];
+
+    currentLower = lowerNonzeroCount[aug[[All, 1 ;; n]]];
+    If[currentLower == Length[pairs], Return[aug]];
+    ,
+    {attempt, 1, maxAttempts}
+  ];
+  aug
+];
+
+(* premiešanie sústavy pre pivotovaný Gauss-Jordan *)
+genScrambleGaussJordanPivot[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
+  {aug, n, pivotCount, plannedCols, bnd, tries = 0, trace, observedCols},
+
+  n = Length[aug0];
+  bnd = $Bounds;
+
+  pivotCount = Count[
+    aug0[[All, 1 ;; n]],
+    row_ /; !AllTrue[row, # === 0 &]
+  ];
+
+  plannedCols = gaussPlannedPivotSwapColumns[pivotCount];
+
+  While[tries < $MaxRetryCount,
+    aug = genScrambleGauss[diff, aug0, triType, solType];
+
+    Do[
+      aug = gaussForceAdjacentPivotSwap[aug, i, bnd];
+      ,
+      {i, Reverse[plannedCols]}
+    ];
+
+    trace = gaussForwardEliminationTrace[aug, "MIN"]["Trace"];
+    observedCols = DeleteDuplicates[gaussObservedPivotSwapColumns[trace]];
+
+    If[
+      (n == 3 && Length[observedCols] == 1) ||
+          (n > 3 && Length[observedCols] >= 2),
+      Return[aug]
+    ];
+    tries++;
+  ];
+
+  aug
+];
+
+(* kroky riešenia Gaussovou metódou *)
 stepsGauss[data_Association] := Catch[
   Module[
     {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, solLocal, tmp},
@@ -2465,7 +2451,7 @@ stepsGauss[data_Association] := Catch[
     addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme pivot, podľa potreby prehodíme riadky a potom vynulujeme prvky pod pivotom."];
 
     Do[
-      kPivot = choosePivotRowIfZero[aug, i];
+      kPivot = gaussPivotRowByNonzero[aug, i];
       If[kPivot =!= i,
         before = aug;
         after = rowApplySwap[before, i, kPivot];
@@ -2505,7 +2491,7 @@ stepsGauss[data_Association] := Catch[
 
     If[st === "ONE",
       addHeader["Spätné dosadzovanie v rovniciach"];
-      tmp = gaussBackSubstEquations[aug, vars, ConstantArray[0, n], {}, content];
+      tmp = appendGaussBackSubstitutionSteps[aug, vars, ConstantArray[0, n], {}, content];
       solLocal = tmp[[1]];
       content = tmp[[2]];
 
@@ -2548,7 +2534,7 @@ stepsGauss[data_Association] := Catch[
           {k, 1, Length[paramIdxs]}
         ];
 
-        tmp = gaussBackSubstEquations[aug, vars, solLocal, paramIdxs, content];
+        tmp = appendGaussBackSubstitutionSteps[aug, vars, solLocal, paramIdxs, content];
         solLocal = tmp[[1]];
         content = tmp[[2]];
 
@@ -2572,14 +2558,15 @@ stepsGauss[data_Association] := Catch[
   "StopMatrixSteps"
 ];
 
-stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] := Block[
+(* spoločné kroky pre Gauss-Jordanove varianty *)
+stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] := Block[
   {$ElemStepCounter = 0, $ElemMatrixCounter = 0},
   Catch[
     Module[
       {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, pNow, solLocal, solExprs, row, pivot, knownTerm, pivotRowFn},
 
       n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
-      pivotRowFn = If[pivotQ, choosePivotRow, choosePivotRowIfZero];
+      pivotRowFn = If[pivotQ, gaussPivotRowByMinAbs, gaussPivotRowByNonzero];
 
       addHeader[text_] := appendStepHeader[content, text];
       addText[text_] := AppendTo[content, text];
@@ -2613,7 +2600,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
 
           If[pivotQ && kPivot =!= i,
             addGap[content, 1];
-            addText[pivotSwapText[aug, i, kPivot]];
+            addText[gaussPivotSwapExplanation[aug, i, kPivot]];
           ];
 
           If[kPivot =!= i,
@@ -2841,6 +2828,7 @@ stepsGaussJordanCore[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] :=
   ]
 ];
 
+(* kroky výpočtu inverznej matice pomocou Gauss-Jordana *)
 stepsInverseMatrix[data_Association] := Module[
   {content = {}, n, A, b, vars, augInv, invMatrix, xResult,
     addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow},
@@ -2864,7 +2852,7 @@ stepsInverseMatrix[data_Association] := Module[
   addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme vhodný pivot a vynulujeme prvky pod ním."];
 
   Do[
-    kPivot = choosePivotRow[augInv, i];
+    kPivot = gaussPivotRowByMinAbs[augInv, i];
 
     If[kPivot =!= i,
       before = augInv;
@@ -4919,7 +4907,6 @@ printDefaultTask[data_Association, vars_List] := Module[{},
     Alignment -> Left,
     Spacings -> {0, 0.8}
   ];
-  printTextCell["Použite augmentovanú maticu."];
 ];
 
 printTaskInverse[data_Association, vars_List] := Module[{},
@@ -5218,9 +5205,10 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
     taskPrinter[data, vars]
   ];
 
-  If[KeyExistsQ[data, "RetryCount"],
-    printTextCell["Počet pregenerovaní: " <> ToString[data["RetryCount"]]];
-  ];
+  (*pre kontrolu efektivnosti - či je vela retries*)
+  (*If[KeyExistsQ[data, "RetryCount"],*)
+    (*printTextCell["Počet pregenerovaní: " <> ToString[data["RetryCount"]]];*)
+  (*];*)
 
   If[mode === "TASK_STEPS_RESULT",
     withStepCounter @ Function[Null,
@@ -5271,6 +5259,7 @@ GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
+(* generátor Gaussovej eliminačnej metódy *)
 GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   spec = <|
     "EntryFn" -> GenGauss,
@@ -5287,6 +5276,7 @@ GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
+(* generátor Gauss-Jordanovej metódy *)
 GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   spec = <|
     "EntryFn" -> GenGaussJordan,
@@ -5294,7 +5284,7 @@ GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spe
     "DimKey" -> "GaussJordan",
     "SectionTitle" -> "Gauss-Jordanova metóda",
     "ScrambleFn" -> genScrambleGauss,
-    "StepsFn" -> (stepsGaussJordanCore[#, False, False] &),
+    "StepsFn" -> (stepsGaussJordanShared[#, False, False] &),
     "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
     "UseForwardBoundRetry" -> True,
@@ -5303,14 +5293,15 @@ GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spe
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
+(* generátor pivotovaného Gauss-Jordana *)
 GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   spec = <|
     "EntryFn" -> GenGaussJordanPivot,
     "MsgPrefix" -> GenGaussJordanPivot,
     "DimKey" -> "GaussJordanPivot",
     "SectionTitle" -> "Gauss-Jordanova metóda s pivotovaním",
-    "ScrambleFn" -> genScrambleGaussPivot,
-    "StepsFn" -> (stepsGaussJordanCore[#, True, False] &),
+    "ScrambleFn" -> genScrambleGaussJordanPivot,
+    "StepsFn" -> (stepsGaussJordanShared[#, True, False] &),
     "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
     "UseForwardBoundRetry" -> True,
@@ -5319,6 +5310,7 @@ GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
+(* generátor Gauss-Jordana s elementárnymi maticami *)
 GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   spec = <|
     "EntryFn" -> GenElemGJ,
@@ -5326,7 +5318,7 @@ GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "DimKey" -> "ElemGaussJordan",
     "SectionTitle" -> "Gauss-Jordanova metóda pomocou elementárnych matíc",
     "ScrambleFn" -> genScrambleGauss,
-    "StepsFn" -> (stepsGaussJordanCore[#, False, True] &),
+    "StepsFn" -> (stepsGaussJordanShared[#, False, True] &),
     "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
     "UseForwardBoundRetry" -> True,
@@ -5336,6 +5328,7 @@ GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
+(* generátor výpočtu inverznej matice *)
 GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   spec = <|
     "EntryFn" -> GenInverse,
@@ -5359,7 +5352,7 @@ GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
     "UseForwardBoundRetry" -> True,
     "ForwardPivotMode" -> "MIN",
     "ForwardBoundAugFn" -> Function[data, Join[data["A"], IdentityMatrix[data["n"]], 2]],
-    "ForwardBoundCheckFn" -> inverseEliminationWithinBoundsQ
+    "ForwardBoundCheckFn" -> gaussJordanEliminationWithinBoundsQ
   |>;
   runMatrixGenerator[spec, diff, mode, opts]
 ];
