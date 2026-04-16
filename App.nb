@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      5327,        117]
-NotebookOptionsPosition[      4791,         99]
-NotebookOutlinePosition[      5276,        118]
-CellTagsIndexPosition[      5233,        115]
+NotebookDataLength[      7760,        162]
+NotebookOptionsPosition[      7224,        144]
+NotebookOutlinePosition[      7709,        163]
+CellTagsIndexPosition[      7666,        160]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -28,46 +28,79 @@ Cell[BoxData[{
   "\[IndentingNewLine]"}], "\n", 
  RowBox[{
   RowBox[{
-   RowBox[{"<<", "\"\<MatrixGenerator.wl\>\""}], ";"}], 
-  "\[IndentingNewLine]"}], "\n", 
- RowBox[{
-  RowBox[{"(*", 
+   RowBox[{"<<", "\"\<MatrixGenerator.wl\>\""}], ";"}], "\[IndentingNewLine]",
+   "\[IndentingNewLine]", 
+  RowBox[{"(*", " ", 
    RowBox[{
-    RowBox[{"GenGauss", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n", 
-    RowBox[{"GenGaussJordan", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n", 
-    RowBox[{"GenGaussJordanPivot", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n", 
-    RowBox[{"GenElemGJ", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n", 
-    RowBox[{"GenInverse", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n", 
-    RowBox[{"GenLU", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n", 
-    RowBox[{"GenCholesky", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n", 
-    RowBox[{"GenCramer", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}]}], 
-   "*)"}]}]}], "Input",
+    RowBox[{
+    "V\[SHacek]etky", " ", "gener\[AAcute]tory", " ", "maj\[UAcute]", " ", 
+     RowBox[{
+      RowBox[{"EASY", "/", "MEDIUM"}], "/", "HARD"}]}], ";", " ", 
+    RowBox[{
+     RowBox[{
+      RowBox[{"TASK", "/", "TASK_RESULT"}], "/", "TASK_STEPS"}], 
+     "_RESULT"}]}], " ", "*)"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{
+     RowBox[{
+     "\[DownArrow]", " ", "Gaussove", " ", "\[DownArrow]", " ", 
+      "maj\[UAcute]"}], " ", "SolutionType"}], "->", 
+    RowBox[{
+     RowBox[{
+      RowBox[{"\"\<ONE\>\"", "/", "\"\<NONE\>\""}], "/", "\"\<INFINITE\>\""}],
+      " ", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+     RowBox[{"GenGauss", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+     RowBox[{"GenGaussJordan", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+     RowBox[{"GenGaussJordanPivot", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}]}]}], 
+   "\[IndentingNewLine]", "*)"}], "\[IndentingNewLine]", "\n", 
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{
+     RowBox[{
+     "\[DownArrow]", " ", "ostatn\[EAcute]", " ", "\[DownArrow]", " ", 
+      "maj\[UAcute]"}], " ", "iba", " ", "SolutionType"}], "->", 
+    RowBox[{"\"\<ONE\>\"", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+     RowBox[{"GenElemGJ", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+     RowBox[{"GenInverse", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+     RowBox[{"GenLU", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+     RowBox[{"GenCholesky", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+     RowBox[{"GenCramer", "[", 
+      RowBox[{"\"\<MEDIUM\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}]}]}], 
+   "\[IndentingNewLine]", "*)"}], "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+   "gener\[AAcute]tory", " ", "GenElimination", " ", "a", " ", 
+    "GenSubstitution", " ", "s\[UAcute]", " ", "v", " ", "bal\[IAcute]ku", " ", 
+    RowBox[{"EquationGenerator", ".", "wl"}]}], " ", "*)"}]}]}], "Input",
  CellChangeTimes->{{3.9850775989463177`*^9, 3.9850775989463177`*^9}, 
-   3.985077650895849*^9, 3.985080825766567*^9, 3.985080910707653*^9},
+   3.985077650895849*^9, 3.985080825766567*^9, 3.985080910707653*^9, {
+   3.9851819331122913`*^9, 3.9851821684071445`*^9}, {3.9851821990606937`*^9, 
+   3.9851822417537785`*^9}},
  CellLabel->
-  "In[433]:=",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"],
+  "In[421]:=",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"],
 
 Cell[BoxData[
  RowBox[{
   RowBox[{"GenGauss", "[", 
-   RowBox[{"\"\<HARD\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-    RowBox[{"SolutionType", "->", "\"\<NONE\>\""}]}], "]"}], "\n"}]], "Input",
+   RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+    RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\n"}]], "Input",
  CellChangeTimes->{{3.985077657787901*^9, 3.9850776583711815`*^9}, {
    3.985077715938463*^9, 3.985077734321596*^9}, {3.9850781142839622`*^9, 
    3.98507812629056*^9}, {3.9850781633611813`*^9, 3.9850781654977474`*^9}, 
@@ -94,8 +127,20 @@ Cell[BoxData[
    3.985161421246872*^9}, {3.985162490242382*^9, 3.9851624912913*^9}, 
    3.9851626736917706`*^9, {3.98516274268898*^9, 3.985162743292959*^9}, {
    3.985166160712017*^9, 3.9851661779776344`*^9}, {3.985166576494631*^9, 
-   3.9851665769289513`*^9}},
- CellLabel->"",ExpressionUUID->"7719299b-d2c5-3c45-a8c8-b9b58ee03f45"]
+   3.9851665769289513`*^9}, 3.985181995428318*^9, {3.9851822604674263`*^9, 
+   3.9851822771096134`*^9}, 3.985182407243765*^9, 3.9851827331587753`*^9, 
+   3.9851828062327976`*^9, {3.985182836872473*^9, 3.9851828413037415`*^9}, {
+   3.9851836886892414`*^9, 3.9851836980337143`*^9}, {3.9853304727225456`*^9, 
+   3.985330473357403*^9}, {3.9853305210657196`*^9, 3.9853305247130375`*^9}, {
+   3.9853309571030464`*^9, 3.9853309574187775`*^9}, {3.985332735627884*^9, 
+   3.985332737063305*^9}, {3.985335848482172*^9, 3.98533587024597*^9}, {
+   3.985335900960224*^9, 3.9853359367857876`*^9}, {3.9853359674795837`*^9, 
+   3.9853359914177895`*^9}, {3.985336088117712*^9, 3.985336103381817*^9}, {
+   3.985337883772505*^9, 3.985337884541685*^9}, {3.9853379223558655`*^9, 
+   3.9853379234167747`*^9}, {3.985338035686184*^9, 3.985338045383316*^9}, {
+   3.98533818208177*^9, 
+   3.985338251141409*^9}},ExpressionUUID->"7719299b-d2c5-3c45-a8c8-\
+b9b58ee03f45"]
 },
 WindowSize->{1152, 579.6},
 WindowMargins->{{
@@ -117,8 +162,8 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 2016, 43, 230, "Input",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"],
-Cell[2573, 65, 2214, 32, 69, "Input",ExpressionUUID->"7719299b-d2c5-3c45-a8c8-b9b58ee03f45"]
+Cell[554, 20, 3606, 76, 419, "Input",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"],
+Cell[4163, 98, 3057, 44, 42, "Input",ExpressionUUID->"7719299b-d2c5-3c45-a8c8-b9b58ee03f45"]
 }
 ]
 *)

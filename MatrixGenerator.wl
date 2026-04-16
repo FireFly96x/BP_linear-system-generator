@@ -980,10 +980,6 @@ appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False,
   appendStepHeader[content, "Skúška správnosti"];
   AppendTo[content, "Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
   content = Join[content, verificationStepsNone[data]];
-
-  appendStepHeader[content, "Záver"];
-  AppendTo[content, "Sústava nemá riešenie."];
-
   Throw[<|"Content" -> content, "Solution" -> "NONE"|>, "StopMatrixSteps"]
 ];
 
@@ -1342,7 +1338,9 @@ generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{solved
   |>
 ];
 
-genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Gauss_ : True] := Module[{aug = aug0, n = Length[aug0], bnd, kSet, withinQ, protectedLastRowQ, chooseK, chooseS, i, r, k, s},
+genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Gauss_ : True] := Module[
+  {aug = aug0, n = Length[aug0], bnd, kSet, withinQ, protectedLastRowQ, chooseK, chooseS, i, r, k, s},
+
   bnd = $Bounds;
   kSet = If[TrueQ[Gauss], kSetGauss, kSetTri];
   withinQ[row_] := Max[Abs[row]] <= bnd;
@@ -1361,27 +1359,33 @@ genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Ga
     False
   ];
 
-  (* násobok - zvyšné koeficienty *)
   chooseK[target_, src_] := Module[{k0, cand, ks},
     k0 = RandomChoice[kSet];
     cand = target + k0*src; If[withinQ[cand], Return[k0]];
     cand = target - k0*src; If[withinQ[cand], Return[-k0]];
     ks = SortBy[kSet, Abs];
-    Do[ cand = target + kk*src; If[withinQ[cand], Return[kk]]; cand = target - kk*src; If[withinQ[cand], Return[-kk]];
-      , {kk, ks}
-    ]; 0
+    Do[
+      cand = target + kk*src; If[withinQ[cand], Return[kk]];
+      cand = target - kk*src; If[withinQ[cand], Return[-kk]];
+      ,
+      {kk, ks}
+    ];
+    1
   ];
 
-  (* scaling - koeficient pivotu *)
   chooseS[row_] := Module[{s0, cand, ss},
     If[!TrueQ[Gauss], Return[1]];
     s0 = RandomChoice[kSet];
     cand = s0*row; If[withinQ[cand], Return[s0]];
     cand = -s0*row; If[withinQ[cand], Return[-s0]];
     ss = SortBy[kSet, Abs];
-    Do[ cand = t*row; If[withinQ[cand], Return[t]]; cand = -t*row; If[withinQ[cand], Return[-t]];
-      , {t, ss}
-    ]; 1
+    Do[
+      cand = t*row; If[withinQ[cand], Return[t]];
+      cand = -t*row; If[withinQ[cand], Return[-t]];
+      ,
+      {t, ss}
+    ];
+    1
   ];
 
   If[triType === "L",
@@ -1390,25 +1394,35 @@ genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Ga
         For[r = i + 1, r <= n, r++,
           If[protectedRowQ[r], Continue[]];
           k = chooseK[aug[[r]], aug[[i]]];
-          If[k =!= 0, aug[[r]] = aug[[r]] + k*aug[[i]]];
+          If[k =!= 0,
+            aug[[r]] = aug[[r]] + k*aug[[i]];
+          ];
         ]
       ];
       s = chooseS[aug[[i]]];
-      If[s =!= 1, aug[[i]] = s*aug[[i]]];
+      If[s =!= 1,
+        aug[[i]] = s*aug[[i]];
+      ];
     ],
     For[i = 1, i <= n, i++,
       If[solType =!= "NONE" || !TrueQ@contradictionRowQ[aug[[i]]],
         For[r = i - 1, r >= 1, r--,
           k = chooseK[aug[[r]], aug[[i]]];
-          If[k =!= 0, aug[[r]] = aug[[r]] + k*aug[[i]]];
+          If[k =!= 0,
+            aug[[r]] = aug[[r]] + k*aug[[i]];
+          ];
         ]
       ];
       s = chooseS[aug[[i]]];
-      If[s =!= 1, aug[[i]] = s*aug[[i]]];
+      If[s =!= 1,
+        aug[[i]] = s*aug[[i]];
+      ];
     ]
   ];
+
   aug
 ];
+
 genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
   {n, x, L, U, A, b, valueLimit, diagLimit, lowerPool, upperPool, diagPool},
 
@@ -1759,7 +1773,6 @@ stepsTriangular[data_Association] := Module[
   addHeader[text_] := appendStepHeader[content, text];
   addText[text_] := AppendTo[content, text];
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
-  addConclusion[lines_List] := (addHeader["Záver"]; Scan[addText, lines]);
   addCheckHeader[extra_List : {}] := (addHeader["Skúška správnosti"]; Scan[addText, extra]);
 
   addHeader["Prepis sústavy do augmentovanej matice"];
@@ -2547,8 +2560,6 @@ stepsGauss[data_Association] := Catch[
         ];
         content = Join[content, verificationStepsInfinite[data, solLocal]];
 
-        addHeader["Záver"];
-        addText["Sústava má nekonečne veľa riešení."];
         Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
       ]
     ];
@@ -2808,10 +2819,6 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
             ]
           ];
           content = Join[content, verificationStepsInfinite[data, solExprs]];
-
-          addHeader["Záver"];
-          addText["Sústava má nekonečne veľa riešení."];
-
           Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
         ]
       ];
@@ -2979,9 +2986,6 @@ stepsInverseMatrix[data_Association] := Module[
   ];
 
   content = Join[content, verificationSteps[data, xResult]];
-
-  addHeader["Záver"];
-  addText["Najprv sme určili inverznú maticu A^(-1). Potom sme z nej vypočítali riešenie sústavy."];
 
   <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
 ];
@@ -4746,10 +4750,7 @@ stepsCramer[data_Association] := Module[
     addHeader["Záver"];
     addText["Keďže det(A) = 0, Cramerovo pravidlo nemožno použiť."];
     Return[<|
-      "Content" -> content,
-      "Solution" -> Missing["NotAvailable"],
-      "DetA" -> solveData["DetA"],
-      "AuxDeterminants" -> {}
+      "Content" -> content, "Solution" -> Missing["NotAvailable"], "DetA" -> solveData["DetA"], "AuxDeterminants" -> {}
     |>];
   ];
 
@@ -4786,10 +4787,6 @@ stepsCramer[data_Association] := Module[
   addHeader["Skúška správnosti"];
   addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
   content = Join[content, verificationSteps[data, solveData["Solution"]]];
-
-  addHeader["Záver"];
-  AppendTo[content, cramerSolutionGrid[vars, solveData["Solution"]]];
-
   <|
     "Content" -> content,
     "Solution" -> solveData["Solution"],
