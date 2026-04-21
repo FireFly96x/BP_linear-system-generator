@@ -35,7 +35,7 @@ diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (5x5)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> \"ONE\"";
 
-GenInverse::usage = "GenInverse[diff, mode, opts] vygeneruje didaktický príklad výpočtu inverznej matice pomocou Gauss-Jordanovej metódy v tvare (A|E) -> (E|A^(-1)).
+GenInverse::usage = "GenInverse[diff, mode, opts] vygeneruje didaktický príklad výpočtu inverznej matice pomocou Gauss-Jordanovej metódy v tvare (A|E) -> (E|A^-1).
 diff: \"EASY\" (3x3), \"MEDIUM\" (4x4), \"HARD\" (6x6)
 mode: \"TASK\" | \"TASK_RESULT\" | \"TASK_STEPS_RESULT\"
 opts: SolutionType -> \"ONE\"";
@@ -164,6 +164,7 @@ tft[val_] := tf[Together[val]];
 
 (* základné zvýraznenie ľavej strany rovnosti *)
 lhsStyle[expr_] := Style[expr, Bold];
+inverseASymbol[] := Superscript[Style["A", Italic], -1];
 
 SetAttributes[addGap, HoldFirst];
 addGap[content_, h_: 5] := AppendTo[content, Cell["", "Text", CellMargins -> {{Inherited, Inherited}, {0, 0}}, CellSize -> {Automatic, h}]];
@@ -176,7 +177,7 @@ appendStepHeader[content_, text_, gap_: 2] := (
 (* ~-~-~ STEP RENDERING ~-~-~ *)
 
 withStepCounter[renderFn_] := Block[{stepsCounter = 0}, renderFn[]];
-makeStepHeader[text_String] := (stepsCounter++; Style[ToString[stepsCounter] <> ". " <> text, Bold]);
+makeStepHeader[text_] := (stepsCounter++;Style[Row[{stepsCounter, ". ", text}], Bold]);
 renderStepItem[item_] := Which[
   StringQ[item], printTextCell[item],
   Head[item] === Spacer, printCellStyle["", "Text"],
@@ -273,16 +274,6 @@ namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] :=
   {{
     Style[Row[{label, " ="}], Bold, FontSize -> 16],
     alignedAugmentedMatrix[aug, notes, hi]
-  }},
-  Alignment -> Left,
-  Spacings -> {2, 1}
-];
-
-(* karta s elementárnou maticou *)
-elementaryMatrixCard[label_, eMat_, hi_Association : <||>] := Grid[
-  {{
-    Style[Row[{label, " ="}], Bold, FontSize -> 16],
-    styledPlainMatrix[eMat, hi]
   }},
   Alignment -> Left,
   Spacings -> {2, 1}
@@ -542,7 +533,7 @@ rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_In
   hi2 = Join[hiBase, <|"ActiveRow" -> r, "PivotPos" -> {i, i}, "ZeroCells" -> {{r, i}}|>];
   hi3 = hi2;
 
-  If[elimRes["DivG"] > 1,
+  If[elimRes["DivG"] =!= 1,
     mid = elimRes["AugRaw"];
     after2 = elimRes["Aug"];
 
@@ -848,11 +839,44 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
   ]
 ];
 
+inverseResultNotes[n_Integer, invMatrix_, b_, xResult_] := Module[
+  {notes, pos},
+
+  notes = ConstantArray["", n];
+
+  (* dáme to približne do stredu notes stĺpca *)
+  pos = Ceiling[n/2];
+
+  notes[[pos]] = Column[
+    {
+      Row[{
+        Style["x =", Bold, FontSize -> 16],
+        Spacer[8],
+        styledPlainMatrix[invMatrix]
+      }],
+      Row[{
+        Spacer[18],
+        Style["\[CenterDot]", Bold, FontSize -> 18],
+        Spacer[8],
+        styledPlainMatrix[List /@ b]
+      }],
+      Row[{
+        Spacer[18],
+        Style["=", Bold, FontSize -> 18],
+        Spacer[18],
+        styledPlainMatrix[List /@ xResult]
+      }]
+    },
+    Alignment -> Left,
+    Spacings -> {0.8}
+  ];
+
+  notes
+];
+
 (* renderovanie pre tvar (A|E)                                            *)
 alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[
-  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, ZeroCells,
-    bar, rowColor, sourceColor, boldIdentityQ, wrapBg, makeCell, makeBar,
-    leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, showPivotQ},
+  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, ZeroCells, bar, rowColor, sourceColor, wrapBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, showPivotQ, boldDiagQ},
 
   {nRows, nCols} = Dimensions[aug];
   nA = Quotient[nCols, 2];
@@ -862,7 +886,9 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
   activeRow = Lookup[hi, "ActiveRow", None];
   sourceRows = Lookup[hi, "SourceRows", {}];
   ZeroCells = Lookup[hi, "ZeroCells", {}];
-  boldIdentityQ = TrueQ @ Lookup[hi, "BoldIdentity", False];
+
+  (* diagonála sa zvýrazňuje vždy - naľavo aj napravo *)
+  boldDiagQ = True;
 
   bar = Style["|", GrayLevel[.35], FontSize -> 16];
   rowColor = RGBColor[0.90, 0.95, 1];
@@ -875,17 +901,22 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
     Item[expr, Background -> bg]
   ];
 
-  showPivotQ = ListQ[pivotPos] && ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
+  showPivotQ = ListQ[pivotPos] &&
+      ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
 
-  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isIdentity},
+  makeCell[i_, j_, val_] := Module[
+    {cell = TraditionalForm[val], isGreen, isDiagLeft, isDiagRight, isDiag},
+
     isGreen = MemberQ[ZeroCells, {i, j}];
-    isIdentity = boldIdentityQ && j > nA && i === j - nA && val === 1;
+    isDiagLeft = j <= nA && i === j;
+    isDiagRight = j > nA && i === (j - nA);
+    isDiag = boldDiagQ && (isDiagLeft || isDiagRight);
 
     If[isGreen,
       cell = Style[cell, Darker[Green], Bold],
       If[showPivotQ && pivotPos === {i, j},
         cell = Style[cell, Bold],
-        If[isIdentity, cell = Style[cell, Bold]]
+        If[isDiag, cell = Style[cell, Bold]]
       ]
     ];
 
@@ -910,16 +941,32 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
 
   matrixGrid = Grid[
     rows,
-    Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center}, ConstantArray[Right, nA], {Center}],
+    Alignment -> Join[
+      {Center},
+      ConstantArray[Right, nA],
+      {Center},
+      ConstantArray[Right, nA],
+      {Center}
+    ],
     Spacings -> {1, 1},
     BaseStyle -> {FontSize -> 14},
-    ItemSize -> {Join[{0.2}, ConstantArray[1.2, nA], {0.2}, ConstantArray[1.2, nA], {0.2}], Automatic}
+    ItemSize -> {
+      Join[{0.2}, ConstantArray[1.2, nA], {0.2}, ConstantArray[1.2, nA], {0.2}],
+      Automatic
+    }
   ];
 
   notesGrid = Grid[
     List /@ (
       Item[
-        Pane[Style[#, GrayLevel[.35], FontSize -> 13], {170, Automatic}, Alignment -> Left],
+        Pane[
+          If[StringQ[#],
+            Style[#, GrayLevel[.35], FontSize -> 13],
+            #
+          ],
+          {Automatic, Automatic},
+          Alignment -> Left
+        ],
         Background -> White
       ] & /@ notes2
     ),
@@ -928,9 +975,12 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
     BaseStyle -> {FontSize -> 14}
   ];
 
-  Grid[{{matrixGrid, Spacer[12], notesGrid}}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}]
+  Grid[
+    {{matrixGrid, Spacer[12], notesGrid}},
+    Alignment -> {Left, Center, Left},
+    Spacings -> {0, 0}
+  ]
 ];
-
 
 augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[{{
   alignedAugmentedMatrixInverse[before, notes, hiBefore], Spacer[18],
@@ -990,148 +1040,6 @@ appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False,
   AppendTo[content, "Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
   content = Join[content, verificationStepsNone[data]];
   Throw[<|"Content" -> content, "Solution" -> "NONE"|>, "StopMatrixSteps"]
-];
-
-luSolveData[A_, b_] := Module[
-  {n, L, U, y, x, i, j, terms, sumTerm, pivotValue},
-
-  n = Length[A];
-  L = IdentityMatrix[n];
-  U = ConstantArray[0, {n, n}];
-  y = ConstantArray[0, n];
-  x = ConstantArray[0, n];
-
-  Do[
-    Do[
-      terms = Table[L[[i, k]]*U[[k, j]], {k, 1, i - 1}];
-      sumTerm = Total[terms];
-      U[[i, j]] = Together[A[[i, j]] - sumTerm];
-      ,
-      {j, i, n}
-    ];
-
-    pivotValue = Together[U[[i, i]]];
-    If[pivotValue === 0, Return[$Failed]];
-
-    Do[
-      terms = Table[L[[j, k]]*U[[k, i]], {k, 1, i - 1}];
-      sumTerm = Total[terms];
-      L[[j, i]] = Together[(A[[j, i]] - sumTerm)/pivotValue];
-      ,
-      {j, i + 1, n}
-    ];
-    ,
-    {i, 1, n}
-  ];
-
-  Do[
-    terms = Table[L[[i, k]]*y[[k]], {k, 1, i - 1}];
-    sumTerm = Total[terms];
-    y[[i]] = Together[b[[i]] - sumTerm];
-    ,
-    {i, 1, n}
-  ];
-
-  Do[
-    pivotValue = Together[U[[i, i]]];
-    If[pivotValue === 0, Return[$Failed]];
-
-    terms = Table[U[[i, k]]*x[[k]], {k, i + 1, n}];
-    sumTerm = Total[terms];
-    x[[i]] = Together[(y[[i]] - sumTerm)/pivotValue];
-    ,
-    {i, n, 1, -1}
-  ];
-
-  <|"L" -> L, "U" -> U, "Y" -> y, "X" -> x|>
-];
-
-choleskySolveData[A_, b_] := Module[
-  {n, L, y, x, i, j, diagTerms, mixedTerms, diagRadicand, diagValue, sumTerm},
-
-  n = Length[A];
-
-  If[!SymmetricMatrixQ[A], Return[$Failed]];
-
-  L = ConstantArray[0, {n, n}];
-  y = ConstantArray[0, n];
-  x = ConstantArray[0, n];
-
-  Do[
-    diagTerms = Table[L[[i, k]]^2, {k, 1, i - 1}];
-    diagRadicand = Together[A[[i, i]] - Total[diagTerms]];
-
-    If[!IntegerQ[diagRadicand] || diagRadicand <= 0, Return[$Failed]];
-
-    diagValue = Sqrt[diagRadicand];
-    If[!IntegerQ[diagValue], Return[$Failed]];
-
-    L[[i, i]] = diagValue;
-
-    Do[
-      mixedTerms = Table[L[[j, k]]*L[[i, k]], {k, 1, i - 1}];
-      sumTerm = Total[mixedTerms];
-      L[[j, i]] = Together[(A[[j, i]] - sumTerm)/L[[i, i]]];
-
-      If[!IntegerQ[L[[j, i]]], Return[$Failed]];
-      ,
-      {j, i + 1, n}
-    ];
-    ,
-    {i, 1, n}
-  ];
-
-  Do[
-    mixedTerms = Table[L[[i, k]]*y[[k]], {k, 1, i - 1}];
-    sumTerm = Total[mixedTerms];
-    y[[i]] = Together[(b[[i]] - sumTerm)/L[[i, i]]];
-
-    If[!IntegerQ[y[[i]]], Return[$Failed]];
-    ,
-    {i, 1, n}
-  ];
-
-  Do[
-    mixedTerms = Table[L[[k, i]]*x[[k]], {k, i + 1, n}];
-    sumTerm = Total[mixedTerms];
-    x[[i]] = Together[(y[[i]] - sumTerm)/L[[i, i]]];
-
-    If[!IntegerQ[x[[i]]], Return[$Failed]];
-    ,
-    {i, n, 1, -1}
-  ];
-
-  <|"L" -> L, "Y" -> y, "X" -> x|>
-];
-
-luDecompositionWithinBoundsQ[data_Association] := Module[
-  {luData, limit},
-
-  limit = $MaxBounds;
-  luData = luSolveData[data["A"], data["b"]];
-
-  If[luData === $Failed,
-    Return[False]
-  ];
-
-  AllTrue[
-    {data["A"], data["b"], luData["L"], luData["U"], luData["Y"], luData["X"]},
-    matrixMaxAbs[#] <= limit &
-  ]
-];
-
-choleskyDecompositionWithinBoundsQ[data_Association] := Module[
-  {choleskyData, limit},
-
-  limit = $MaxBounds;
-  choleskyData = choleskySolveData[data["A"], data["b"]];
-
-  If[choleskyData === $Failed, Return[False]];
-
-  AllTrue[
-    {data["A"], data["b"], choleskyData["L"], Transpose[choleskyData["L"]], choleskyData["Y"], choleskyData["X"]},
-    matrixMaxAbs[#] <= limit &
-  ]
 ];
 
 generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, pivotMode_: "ZERO", boundAugFn_: Automatic, boundCheckFn_: Automatic] := Module[
@@ -1320,7 +1228,8 @@ makeDiagonalAug[diff_String, n_Integer, solType_String, triType_String] := Modul
   |>
 ];
 
-(* generovanie dát *)
+(* ~-~-~ DATA GENERATION ~-~-~ *)
+
 generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{solved, augSolved, augTask, A, b, vars},
   solved = makeDiagonalAug[diff, n, solType, triType];
   augSolved = solved["Aug"];
@@ -1545,439 +1454,10 @@ genScrambleCramer[diff_String, aug0_, triType_String, solType_String : "ONE"] :=
   $Failed
 ];
 
-(* pomocné helpery pre Cramera *)
 
-replaceColumn[matrix_, column_Integer, values_List] := Module[{updated = matrix},
-  Do[updated[[i, column]] = values[[i]], {i, 1, Length[values]}];
-  updated
-];
+(* ~-~-~ STEP GENERATION HELPERS ~-~-~ *)
 
-cramerRandomNonzeroValue[maxAbs_Integer : 4] := RandomChoice[
-  DeleteCases[Range[-maxAbs, maxAbs], 0]
-];
-
-cramerRandomInvertible3x3[maxAbs_Integer : 4, maxDet_Integer : 30] := Module[
-  {candidate, tries = 0, pool},
-  pool = Join[Range[-maxAbs, -1], Range[1, maxAbs], Range[-maxAbs, -1], Range[1, maxAbs]];
-
-  While[tries < $MaxRetryCount,
-    candidate = RandomChoice[pool, {3, 3}];
-    If[Det[candidate] =!= 0 && Abs[Det[candidate]] <= maxDet,
-      Return[candidate]
-    ];
-    tries++;
-  ];
-
-  $Failed
-];
-
-cramerOrthogonalTwoNonzeroRow[xCore_List] := Module[
-  {pairs, chosenPair, row, p, q, g},
-
-  pairs = Select[
-    Subsets[Range[Length[xCore]], {2}],
-    With[{u = xCore[[#[[1]]]], v = xCore[[#[[2]]]]},
-      (u === 0 && v === 0) || (u =!= 0 && v =!= 0)
-    ] &
-  ];
-
-  If[pairs === {},
-    chosenPair = {1, 2},
-    chosenPair = RandomChoice[pairs]
-  ];
-
-  {p, q} = chosenPair;
-  row = ConstantArray[0, Length[xCore]];
-
-  If[xCore[[p]] === 0 && xCore[[q]] === 0,
-    row[[p]] = 1;
-    row[[q]] = 1;
-    ,
-    g = GCD[Abs[xCore[[p]]], Abs[xCore[[q]]]];
-    If[g === 0, g = 1];
-
-    row[[p]] = Quotient[xCore[[q]], g];
-    row[[q]] = -Quotient[xCore[[p]], g];
-  ];
-
-  normalizeRow[row]
-];
-
-generateCramerEasyMatrix[solutionVector_List] := Module[
-  {candidate, rhsVector, tries = 0, pool},
-
-  pool = Join[Range[-4, -1], Range[1, 4], Range[-4, -1], Range[1, 4]];
-
-  While[tries < $MaxRetryCount,
-    candidate = RandomChoice[pool, {3, 3}];
-    rhsVector = candidate . solutionVector;
-
-    If[
-      Det[candidate] =!= 0 &&
-          Abs[Det[candidate]] <= Min[30, $MaxBounds] &&
-          matrixMaxAbs[rhsVector] <= $MaxBounds,
-      Return[candidate]
-    ];
-
-    tries++;
-  ];
-
-  $Failed
-];
-
-renderCramer4x4Reduction[matrix_, label_] := Module[
-  {content = {}, line1, signed1, minor3, minor3Label, det3Data, value},
-
-  minor3Label = Subscript[Style["M", Italic], 3];
-
-  AppendTo[content, cramerLabeledMatrixGrid[label, matrix]];
-
-  line1 = cramerSingletonLineData[matrix];
-  If[line1 === Missing["NotFound"],
-    value = Together[Det[matrix]];
-    AppendTo[content, "Matica nemá vhodný riedky riadok ani stĺpec, preto determinant dopočítame priamo."];
-    AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
-    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
-  ];
-
-  signed1 = Together[
-    (-1)^(line1["PivotRow"] + line1["PivotColumn"]) *
-        matrix[[line1["PivotRow"], line1["PivotColumn"]]]
-  ];
-  minor3 = cramerMinor[matrix, line1["PivotRow"], line1["PivotColumn"]];
-
-  AppendTo[content, cramerLaplaceExplanation[line1]];
-  AppendTo[content, cramerLaplaceReductionPanel[matrix, line1, minor3Label, minor3]];
-  AppendTo[content, Row[{
-    cramerDetLabel[label], " = ", cramerFactor[signed1],
-    " \[CenterDot] ", cramerDetLabel[minor3Label]
-  }]];
-
-  det3Data = renderCramer3x3Det[minor3, minor3Label];
-  content = Join[content, det3Data["Content"]];
-
-  value = Together[signed1 det3Data["Value"]];
-
-  AppendTo[content, Row[{
-    cramerDetLabel[minor3Label], " = ",
-    cramerFactor[det3Data["Value"]]
-  }]];
-  AppendTo[content, Row[{
-    cramerDetLabel[label], " = ",
-    cramerFactor[signed1], " \[CenterDot] ", cramerDetLabel[minor3Label],
-    " = ",
-    cramerFactor[signed1], " \[CenterDot] ", cramerFactor[det3Data["Value"]],
-    " = ",
-    cramerFactor[value]
-  }]];
-  AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
-
-  <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
-];
-
-(* vygeneruje 5x5 maticu, ktorá sa po dvoch laplaceových krokoch zvedie na 3x3 *)
-generateCramerMediumMatrix[solutionVector_List] := Module[
-  {core, candidate, rhsVector, s1, tries = 0},
-
-  While[tries < $MaxRetryCount,
-    core = cramerRandomInvertible3x3[3, 18];
-    If[core === $Failed,
-      Return[$Failed]
-    ];
-
-    s1 = cramerRandomNonzeroValue[3];
-
-    candidate = ConstantArray[0, {4, 4}];
-    candidate[[1, 1]] = s1;
-    candidate[[2 ;; 4, 2 ;; 4]] = core;
-
-    rhsVector = candidate . solutionVector;
-
-    If[
-      Det[candidate] =!= 0 &&
-          Abs[Det[candidate]] <= Min[60, $MaxBounds] &&
-          matrixMaxAbs[rhsVector] <= $MaxBounds,
-      Return[candidate]
-    ];
-
-    tries++;
-  ];
-
-  $Failed
-];
-
-generateCramerHardMatrix[solutionVector_List] := Module[
-  {core, candidate, rhsVector, s1, s2, tries = 0},
-
-  While[tries < $MaxRetryCount,
-    core = cramerRandomInvertible3x3[3, 18];
-    If[core === $Failed,
-      Return[$Failed]
-    ];
-
-    s1 = cramerRandomNonzeroValue[3];
-    s2 = cramerRandomNonzeroValue[3];
-
-    candidate = ConstantArray[0, {5, 5}];
-    candidate[[1, 1]] = s1;
-    candidate[[2, 2]] = s2;
-    candidate[[3 ;; 5, 3 ;; 5]] = core;
-
-    rhsVector = candidate . solutionVector;
-
-    If[
-      Det[candidate] =!= 0 &&
-          Abs[Det[candidate]] <= Min[80, $MaxBounds] &&
-          matrixMaxAbs[rhsVector] <= $MaxBounds,
-      Return[candidate]
-    ];
-
-    tries++;
-  ];
-
-  $Failed
-];
-
-cramerSolveData[A_, b_] := Module[
-  {detA, auxMatrices, auxDeterminants, solution},
-
-  detA = Together[Det[A]];
-  auxMatrices = Table[replaceColumn[A, i, b], {i, 1, Length[b]}];
-  auxDeterminants = Together /@ (Det /@ auxMatrices);
-
-  solution = If[
-    detA === 0,
-    ConstantArray[Indeterminate, Length[b]],
-    Together /@ (auxDeterminants/detA)
-  ];
-
-  <|
-    "DetA" -> detA,
-    "AuxMatrices" -> auxMatrices,
-    "AuxDeterminants" -> auxDeterminants,
-    "Solution" -> solution
-  |>
-];
-
-cramerDeterminantsWithinBoundsQ[A_, b_] := Module[
-  {solveData, allDeterminants},
-
-  solveData = cramerSolveData[A, b];
-  allDeterminants = Join[{solveData["DetA"]}, solveData["AuxDeterminants"]];
-
-  AllTrue[
-    allDeterminants,
-    IntegerQ[#] && Abs[#] <= $MaxBounds &
-  ]
-];
-
-(* ~-~-~ STEP GENERATION ~-~-~ *)
-
-stepsTriangular[data_Association] := Module[
-  {content = {}, n, aug, vars, tri, st, order, addHeader, addText, addMatrix, addConclusion, addCheckHeader, notes, result, sol},
-  n = data["n"]; aug = data["Aug"]; vars = data["Vars"];
-  tri = data["TriType"]; st = data["SolutionType"];
-  order = If[tri === "U", Range[n, 1, -1], Range[1, n]];
-
-  addHeader[text_] := appendStepHeader[content, text];
-  addText[text_] := AppendTo[content, text];
-  addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
-  addCheckHeader[extra_List : {}] := (addHeader["Skúška správnosti"]; Scan[addText, extra]);
-
-  addHeader["Prepis sústavy do augmentovanej matice"];
-  addText["Sústavu najprv zapíšeme do augmentovanej matice. Ďalej pracujeme už len s maticou."];
-  addMatrix[aug];
-
-  result = Switch[st,
-    "ONE",
-    Module[{terms, solLocal},
-      solLocal = ConstantArray[None, n];
-
-      addHeader["Riadkové úpravy"];
-      addText["V každom riadku vyjadríme jednu neznámu. Najprv odstránime známe členy a potom riadok podľa potreby vydelíme pivotom."];
-
-      Do[
-        terms = If[tri === "U",
-          Select[Table[{j, -aug[[i, j]]}, {j, i + 1, n}], #[[2]] =!= 0 &],
-          Select[Table[{j, -aug[[i, j]]}, {j, 1, i - 1}], #[[2]] =!= 0 &]
-        ];
-
-        Module[{before0, mid0, after0, notes1, notes2, hi1, hi2, hi3, p},
-
-          before0 = aug;
-
-          (* kombinácia (ak treba) *)
-          If[terms =!= {},
-            mid0 = rowApplyCombine[before0, i, terms];
-            notes1 = ConstantArray["", n];
-            notes1[[i]] = rowNoteCombine[i, terms];
-
-            hi1 = <|"ActiveRow" -> i, "SourceRows" -> terms[[All, 1]], "PivotPos" -> {i, i}|>;
-            hi2 = hi1;
-            ,
-            mid0 = before0;
-            notes1 = ConstantArray["", n];
-            hi1 = <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>;
-            hi2 = hi1;
-          ];
-
-          (* delenie (ak treba) *)
-          p = mid0[[i, i]];
-          If[p =!= 1,
-            after0 = rowApplyDivide[mid0, i, p];
-            notes2 = ConstantArray["", n];
-            notes2[[i]] = rowNoteDivide[i, p];
-
-            hi3 = <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>;
-
-            If[terms =!= {},
-              AppendTo[content, augRender3[before0, mid0, after0, notes1, notes2, hi1, hi2, hi3]],
-              AppendTo[content, augRender2[mid0, after0, notes2, hi2, hi3]]
-            ];
-
-            aug = after0;
-            ,
-            If[terms =!= {},
-              AppendTo[content, augRender2[before0, mid0, notes1, hi1, hi2]];
-              aug = mid0;
-            ];
-          ];
-        ];
-
-        solLocal[[i]] = aug[[i, n + 1]];
-        addGap[content, 6];
-        AppendTo[content, highlightGrid @ Grid[
-          {{tf[lhsStyle[vars[[i]]]], "=", tft[solLocal[[i]]]}} ,
-          Alignment -> {{Right, Center, Left}}, BaseStyle -> {FontSize -> 16}
-        ]];
-        addGap[content, 6];
-        ,
-        {i, order}
-      ];
-
-      addCheckHeader[{"Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."}];
-      content = Join[content, verificationSteps[data, solLocal]];
-
-      <|"Solution" -> solLocal|>
-    ],
-
-    "NONE",
-    Module[{badIdx},
-      badIdx = data["BadRow"];
-
-      addHeader["Analýza riadkov"];
-      addText["Hľadáme riadok tvaru 0 = k, kde k \[NotEqual] 0. Taký riadok znamená spor."];
-
-      notes = ReplacePart[ConstantArray["", n], badIdx -> "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]]];
-      addMatrix[aug, notes, <|"ActiveRow" -> badIdx|>];
-      addCheckHeader[{"Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."}];
-      content = Join[content, verificationStepsNone[data]];
-      addConclusion[{"Sústava nemá riešenie."}];
-
-      <|"Solution" -> "NONE"|>
-    ],
-
-    "INFINITE",
-    Module[{paramIdxs, paramSymbols, solExprs, pivot, row, knownTerm},
-      paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-      paramSymbols = Take[{\[FormalS], \[FormalT]}, Length[paramIdxs]];
-
-      addHeader["Analýza riadkov"];
-      addText[
-        If[Length[paramIdxs] === 1,
-          "Jeden nulový riadok znamená, že jedna premenná je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho.",
-          "Dva nulové riadky znamenajú, že dve premenné sú voľné. Označíme ich parametrami a ostatné premenné vyjadríme pomocou nich."
-        ]
-      ];
-      notes = ConstantArray["", n];
-      Scan[(notes[[#]] = "nulový riadok -> parameter") &, paramIdxs];
-      addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>];
-
-      Do[
-        addText[Row[{"Premennú ", vars[[paramIdxs[[k]]]], " zvolíme za parameter ", TraditionalForm[paramSymbols[[k]]], "."}]];
-        addGap[content, 6];
-        AppendTo[content,
-          highlightGrid @ Grid[
-            {{tf[vars[[paramIdxs[[k]]]]], "=", TraditionalForm[paramSymbols[[k]]]}},
-            Alignment -> {{Right, Center, Left}},
-            BaseStyle -> {FontSize -> 16}
-          ]
-        ];
-        addGap[content, 6];
-        ,
-        {k, 1, Length[paramIdxs]}
-      ];
-
-      addHeader["Vyjadrenie ostatných premenných pomocou parametrov"];
-
-      solExprs = ConstantArray[0, n];
-      Do[
-        solExprs[[paramIdxs[[k]]]] = paramSymbols[[k]];
-        ,
-        {k, 1, Length[paramIdxs]}
-      ];
-
-      Do[
-        If[MemberQ[paramIdxs, i], Continue[]];
-
-        row = aug[[i]];
-        pivot = row[[i]];
-        If[pivot === 0, Continue[]];
-
-        knownTerm = Total@Table[If[j === i, 0, row[[j]]*solExprs[[j]]], {j, 1, n}];
-        solExprs[[i]] = Expand[(row[[n + 1]] - knownTerm)/pivot];
-
-        notes = ConstantArray["", n];
-        notes[[i]] = Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[solExprs[[i]]]}];
-
-        addMatrix[
-          aug,
-          notes,
-          <|
-            "ActiveRow" -> i,
-            "PivotPos" -> {i, i},
-            "ZeroCells" -> {{i, i}, {i, n + 1}}
-          |>
-        ];
-
-        addGap[content, 6];
-        AppendTo[content,
-          highlightGrid @ Grid[
-            {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]]}},
-            Alignment -> {{Right, Center, Left}},
-            BaseStyle -> {FontSize -> 16}
-          ]
-        ];
-        addGap[content, 6];
-        ,
-        {i, order}
-      ];
-
-      addCheckHeader[{
-        If[Length[paramIdxs] === 1,
-          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
-          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
-        ]
-      }];
-      content = Join[content, verificationStepsInfinite[data, solExprs]];
-
-      addConclusion[{
-        "Sústava má nekonečne veľa riešení:",
-        If[Length[paramIdxs] === 1,
-          Row[{"[", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], kde ", \[FormalT], " \[Element] ", Integers}],
-          Row[{"[", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], kde ", \[FormalS], ", ", \[FormalT], " \[Element] ", Integers}]
-        ]
-      }];
-
-      <|"Solution" -> "INFINITE"|>
-    ]
-  ];
-
-  sol = result["Solution"];
-  <|"Content" -> content, "Solution" -> sol|>
-];
-
-(* ~-~-~ GAUSS / GAUSS-JORDAN HELPERS ~-~-~ *)
+(* --- Gauss / Gauss-Jordan / Elementar HELPERS --- *)
 
 (* riadky spätného dosadzovania pre Gaussa *)
 appendGaussBackSubstitutionSteps[aug_, vars_, sol0_, skipIdxs_, content_] := Module[
@@ -2053,6 +1533,7 @@ appendGaussBackSubstitutionSteps[aug_, vars_, sol0_, skipIdxs_, content_] := Mod
 
   {sol, out}
 ];
+
 (* výber riadku s najmenším pivotom v absolútnej hodnote *)
 gaussPivotRowByMinAbs[aug_, i_Integer] := Module[
   {n = Length[aug], candidates, currentPivot, betterCandidates},
@@ -2455,551 +1936,149 @@ genScrambleGaussJordanPivot[diff_String, aug0_, triType_String, solType_String :
   aug
 ];
 
-(* kroky riešenia Gaussovou metódou *)
-stepsGauss[data_Association] := Catch[
-  Module[
-    {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, solLocal, tmp},
-    n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
+(* --- LU / Cholesky HELPERS --- *)
 
-    addHeader[text_] := appendStepHeader[content, text];
-    addText[text_] := AppendTo[content, text];
-    addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
+luSolveData[A_, b_] := Module[
+  {n, L, U, y, x, i, j, terms, sumTerm, pivotValue},
 
-    addHeader["Prepis sústavy do augmentovanej matice"];
-    addText["Sústavu zapíšeme do augmentovanej matice. Potom vynulujeme prvky pod hlavnou diagonálou."];
-    addMatrix[aug];
-
-    addHeader["Dopredná eliminácia (na horný trojuholník)"];
-    addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme pivot, podľa potreby prehodíme riadky a potom vynulujeme prvky pod pivotom."];
-
-    Do[
-      kPivot = gaussPivotRowByNonzero[aug, i];
-      If[kPivot =!= i,
-        before = aug;
-        after = rowApplySwap[before, i, kPivot];
-        notes = ConstantArray["", n];
-        notes[[i]] = rowNoteSwap[i, kPivot];
-        AppendTo[content, augRender2[
-          before, after, notes,
-          <|"ActiveRow" -> i, "SourceRows" -> {kPivot}, "PivotPos" -> {i, i}|>,
-          <|"ActiveRow" -> kPivot, "SourceRows" -> {i}, "PivotPos" -> {i, i}|>
-        ]];
-        aug = after;
-        If[st === "NONE", appendNoneConclusionAndStop[content, aug, data]];
-      ];
-
-      pNow = aug[[i, i]];
-      If[pNow === 0, Continue[]];
-
-      Do[
-        If[aug[[r, i]] =!= 0,
-          before = aug;
-          elimRes = rowApplyElimStable[before, r, i];
-          aug = rowAppendElimStep[content, before, elimRes, r, i, n, <|"SourceRows" -> {i}|>];
-          If[st === "NONE", appendNoneConclusionAndStop[content, aug, data]];
-        ],
-        {r, i + 1, n}
-      ],
-      {i, 1, n - 1}
-    ];
-
-    addHeader["Tvar po Gaussovej eliminácii"];
-    addText["Po týchto úpravách dostaneme hornú trojuholníkovú sústavu. Neznáme určíme spätným dosadzovaním od posledného riadku."];
-    addMatrix[aug, {}, <|"BoldDiagonal" -> True|>];
-
-    If[st === "INFINITE" && AnyTrue[aug, AllTrue[#, # === 0 &] &],
-      addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však pokračujeme ďalej, aby sme riešenie vedeli pekne zapísať pomocou parametra."]
-    ];
-
-    If[st === "ONE",
-      addHeader["Spätné dosadzovanie v rovniciach"];
-      tmp = appendGaussBackSubstitutionSteps[aug, vars, ConstantArray[0, n], {}, content];
-      solLocal = tmp[[1]];
-      content = tmp[[2]];
-
-      addHeader["Skúška správnosti"];
-      addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
-      content = Join[content, verificationSteps[data, solLocal]];
-      Return[<|"Content" -> content, "Solution" -> solLocal|>];
-    ];
-
-    If[st === "INFINITE",
-      Module[{paramIdxs, paramSymbols},
-        paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-        paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
-
-        addHeader[
-          If[Length[paramIdxs] === 1,
-            "Spätné dosadzovanie s parametrom",
-            "Spätné dosadzovanie s parametrami"
-          ]
-        ];
-
-        addText[
-          If[Length[paramIdxs] === 1,
-            Row[{
-              "Voľnú premennú zvolíme ",
-              tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]], "."
-            }],
-            Row[{
-              "Voľné premenné zvolíme ",
-              tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]],
-              " a ",
-              tf[vars[[paramIdxs[[2]]]]], " = ", TraditionalForm[paramSymbols[[2]]], "."
-            }]
-          ]
-        ];
-
-        solLocal = ConstantArray[0, n];
-        Do[
-          solLocal[[paramIdxs[[k]]]] = paramSymbols[[k]],
-          {k, 1, Length[paramIdxs]}
-        ];
-
-        tmp = appendGaussBackSubstitutionSteps[aug, vars, solLocal, paramIdxs, content];
-        solLocal = tmp[[1]];
-        content = tmp[[2]];
-
-        addHeader["Skúška správnosti"];
-        addText[
-          If[Length[paramIdxs] === 1,
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
-          ]
-        ];
-        content = Join[content, verificationStepsInfinite[data, solLocal]];
-
-        Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
-      ]
-    ];
-
-    <|"Content" -> content, "Solution" -> aug[[All, n + 1]]|>
-  ],
-  "StopMatrixSteps"
-];
-
-(* spoločné kroky pre Gauss-Jordanove varianty *)
-stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] := Block[
-  {$ElemStepCounter = 0, $ElemMatrixCounter = 0},
-  Catch[
-    Module[
-      {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, pNow, solLocal, solExprs, row, pivot, knownTerm, pivotRowFn},
-
-      n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
-      pivotRowFn = If[pivotQ, gaussPivotRowByMinAbs, gaussPivotRowByNonzero];
-
-      addHeader[text_] := appendStepHeader[content, text];
-      addText[text_] := AppendTo[content, text];
-      addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
-
-      addHeader["Prepis sústavy do augmentovanej matice"];
-      If[showElemQ,
-        addText["Sústavu zapíšeme do augmentovanej matice a označíme ju M₀. Pri každej úprave uvedieme aj príslušnú elementárnu maticu Eᵢ, takže bude platiť Mᵢ = Eᵢ · Mᵢ₋₁."];
-        AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], 0], aug]],
-        addText["Sústavu zapíšeme do augmentovanej matice. Úpravami ju prevedieme na tvar (I | x)."];
-        addMatrix[aug]
-      ];
-
-      addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
-      addText[
-        If[showElemQ,
-          If[pivotQ,
-            "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom a každú úpravu zapíšeme aj pomocou elementárnej matice.",
-            "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky. Každú úpravu zapíšeme aj pomocou elementárnej matice."
-          ],
-          If[pivotQ,
-            "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom.",
-            "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky."
-          ]
-        ]
-      ];
-
-      Do[
-        Module[{kPivot},
-          kPivot = pivotRowFn[aug, i];
-
-          If[pivotQ && kPivot =!= i,
-            addGap[content, 1];
-            addText[gaussPivotSwapExplanation[aug, i, kPivot]];
-          ];
-
-          If[kPivot =!= i,
-            aug = applyJordanSwapStep[content, aug, i, kPivot, n, showElemQ];
-            If[st === "NONE",
-              appendNoneConclusionAndStop[content, aug, data, showElemQ, $ElemMatrixCounter]
-            ];
-          ];
-        ];
-
-        pNow = aug[[i, i]];
-        If[pNow === 0, Continue[]];
-
-        Do[
-          If[aug[[r, i]] =!= 0,
-            aug = applyJordanElimStep[content, aug, r, i, n, <|"SourceRows" -> {i}|>, showElemQ];
-            If[st === "NONE",
-              appendNoneConclusionAndStop[content, aug, data, showElemQ, $ElemMatrixCounter]
-            ];
-          ],
-          {r, i + 1, n}
-        ],
-        {i, 1, n - 1}
-      ];
-
-      If[st === "INFINITE" && AnyTrue[aug, AllTrue[#, # === 0 &] &],
-        addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však spravíme aj spätnú úpravu, aby sa neznáme dali ľahšie zapísať pomocou parametra."]
-      ];
-
-      addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
-      addText[
-        If[showElemQ,
-          "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
-          "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
-        ]
-      ];
-
-      Do[
-        pNow = aug[[i, i]];
-        If[pNow === 0, Continue[]];
-
-        Do[
-          If[aug[[r, i]] =!= 0,
-            aug = applyJordanElimStep[content, aug, r, i, n, <||>, showElemQ];
-          ],
-          {r, 1, i - 1}
-        ];
-
-        pNow = aug[[i, i]];
-        If[pNow =!= 0 && pNow =!= 1,
-          If[showElemQ,
-            aug = applyElemDivideStep[content, aug, i, pNow, n, {i, i}],
-            Module[{before, after},
-              before = aug;
-              after = rowApplyDivide[before, i, pNow];
-              notes = ConstantArray["", n];
-              notes[[i]] = rowNoteDivide[i, pNow];
-              AppendTo[content, augRender2[
-                before, after, notes,
-                <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
-                <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>
-              ]];
-              aug = after;
-            ]
-          ]
-        ];
-        ,
-        {i, n, 2, -1}
-      ];
-
-      pNow = aug[[1, 1]];
-      If[pNow =!= 0 && pNow =!= 1,
-        If[showElemQ,
-          aug = applyElemDivideStep[content, aug, 1, pNow, n, {1, 1}],
-          Module[{before, after},
-            before = aug;
-            after = rowApplyDivide[before, 1, pNow];
-            notes = ConstantArray["", n];
-            notes[[1]] = rowNoteDivide[1, pNow];
-            AppendTo[content, augRender2[
-              before, after, notes,
-              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}|>,
-              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}, "ZeroCells" -> {{1, 1}, {1, n + 1}}|>
-            ]];
-            aug = after;
-          ]
-        ]
-      ];
-
-      addHeader["Hotový tvar (I | x)"];
-      addText["Po úpravách dostaneme tvar (I | x). Riešenie prečítame z pravej strany."];
-
-      notes = If[
-        st === "ONE",
-        Table[
-          Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[aug[[i, n + 1]]]}],
-          {i, 1, n}
-        ],
-        ConstantArray["", n]
-      ];
-
-      If[showElemQ,
-        AppendTo[
-          content,
-          namedAugmentedStateCard[
-            Subscript[Style["M", Italic], $ElemMatrixCounter],
-            aug,
-            notes,
-            <|"BoldDiagonal" -> True|>
-          ]
-        ],
-        addMatrix[aug, notes]
-      ];
-
-      If[st === "INFINITE",
-        Module[{paramIdxs, paramSymbols},
-          paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-          paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
-
-          addHeader["Analýza riadkov"];
-          addText[
-            If[Length[paramIdxs] === 1,
-              "Jeden nulový riadok znamená, že jedna premenná je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho.",
-              "Dva nulové riadky znamenajú, že dve premenné sú voľné. Označíme ich parametrami a ostatné premenné vyjadríme pomocou nich."
-            ]
-          ];
-
-          notes = ConstantArray["", n];
-          Scan[(notes[[#]] = "nulový riadok -> parameter") &, paramIdxs];
-
-          If[showElemQ,
-            AppendTo[content,
-              namedAugmentedStateCard[
-                Subscript[Style["M", Italic], $ElemMatrixCounter],
-                aug,
-                notes,
-                <|"ActiveRows" -> paramIdxs|>
-              ]
-            ],
-            addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>]
-          ];
-
-          Do[
-            addText[Row[{"Premennú ", vars[[paramIdxs[[k]]]], " označíme parametrom ", TraditionalForm[paramSymbols[[k]]], "."}]];
-            addGap[content, 6];
-            AppendTo[content, highlightGrid @ Grid[
-              {{tf[vars[[paramIdxs[[k]]]]], "=", TraditionalForm[paramSymbols[[k]]] }},
-              Alignment -> {{Right, Center, Left}},
-              BaseStyle -> {FontSize -> 16}
-            ]];
-            addGap[content, 6];
-            ,
-            {k, 1, Length[paramIdxs]}
-          ];
-
-          If[!showElemQ, addHeader["Vyjadrenie ostatných premenných pomocou parametrov"]];
-
-          solExprs = ConstantArray[0, n];
-          Do[
-            solExprs[[paramIdxs[[k]]]] = paramSymbols[[k]],
-            {k, 1, Length[paramIdxs]}
-          ];
-
-          Do[
-            If[MemberQ[paramIdxs, i], Continue[]];
-
-            row = aug[[i]];
-            pivot = row[[i]];
-            If[pivot === 0, Continue[]];
-
-            knownTerm = Total@Table[If[j === i, 0, row[[j]]*solExprs[[j]]], {j, 1, n}];
-            solExprs[[i]] = Expand[(row[[n + 1]] - knownTerm)/pivot];
-
-            If[!showElemQ,
-              notes = ConstantArray["", n];
-              notes[[i]] = Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[solExprs[[i]]]}];
-
-              addMatrix[
-                aug,
-                notes,
-                <|
-                  "ActiveRow" -> i,
-                  "PivotPos" -> {i, i},
-                  "ZeroCells" -> {{i, i}, {i, n + 1}}
-                |>
-              ];
-
-              addGap[content, 6];
-              AppendTo[content, highlightGrid @ Grid[
-                {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]] }},
-                Alignment -> {{Right, Center, Left}},
-                BaseStyle -> {FontSize -> 16}
-              ]];
-              addGap[content, 6];
-            ];
-            ,
-            {i, n, 1, -1}
-          ];
-
-          addHeader["Skúška správnosti"];
-          addText[
-            If[Length[paramIdxs] === 1,
-              "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
-              "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
-            ]
-          ];
-          content = Join[content, verificationStepsInfinite[data, solExprs]];
-          Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
-        ]
-      ];
-
-      solLocal = aug[[All, n + 1]];
-
-      addHeader["Skúška správnosti"];
-      addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
-      content = Join[content, verificationSteps[data, solLocal]];
-
-      <|"Content" -> content, "Solution" -> solLocal|>
-    ],
-    "StopMatrixSteps"
-  ]
-];
-
-(* kroky výpočtu inverznej matice pomocou Gauss-Jordana *)
-stepsInverseMatrix[data_Association] := Module[
-  {content = {}, n, A, b, vars, augInv, invMatrix, xResult,
-    addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow},
-
-  n = data["n"];
-  A = data["A"];
-  b = data["b"];
-  vars = data["Vars"];
-
-  addHeader[text_] := appendStepHeader[content, text];
-  addText[text_] := AppendTo[content, text];
-  addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrixInverse[m, rowNotes, hi]];
-
-  addHeader["Prepis matice do tvaru (A | E)"];
-  addText["Na ľavú stranu zapíšeme maticu A a na pravú jednotkovú maticu E. Rovnakými úpravami dostaneme z ľavej časti E a z pravej A^(-1)."];
-
-  augInv = Join[A, IdentityMatrix[n], 2];
-  addMatrix[augInv];
-
-  addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
-  addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme vhodný pivot a vynulujeme prvky pod ním."];
+  n = Length[A];
+  L = IdentityMatrix[n];
+  U = ConstantArray[0, {n, n}];
+  y = ConstantArray[0, n];
+  x = ConstantArray[0, n];
 
   Do[
-    kPivot = gaussPivotRowByMinAbs[augInv, i];
-
-    If[kPivot =!= i,
-      before = augInv;
-      after = rowApplySwap[before, i, kPivot];
-      notes = ConstantArray["", n];
-      notes[[i]] = rowNoteSwap[i, kPivot];
-      AppendTo[content, augRender2Inverse[
-        before, after, notes,
-        <|"ActiveRow" -> i, "SourceRows" -> {kPivot}, "PivotPos" -> {i, i}|>,
-        <|"ActiveRow" -> kPivot, "SourceRows" -> {i}, "PivotPos" -> {i, i}|>
-      ]];
-      augInv = after;
+    Do[
+      terms = Table[L[[i, k]]*U[[k, j]], {k, 1, i - 1}];
+      sumTerm = Total[terms];
+      U[[i, j]] = Together[A[[i, j]] - sumTerm];
+      ,
+      {j, i, n}
     ];
 
-    pNow = augInv[[i, i]];
-    If[pNow === 0, Continue[]];
+    pivotValue = Together[U[[i, i]]];
+    If[pivotValue === 0, Return[$Failed]];
 
     Do[
-      If[augInv[[r, i]] =!= 0,
-        before = augInv;
-        elimRes = rowApplyElimStable[before, r, i];
-        augInv = rowAppendElimStepInverse[content, before, elimRes, r, i, n, <|"SourceRows" -> {i}|>];
-      ],
-      {r, i + 1, n}
-    ];
-    ,
-    {i, 1, n - 1}
-  ];
-
-  addHeader["Spätná eliminácia"];
-  addText["Rovnakým spôsobom vynulujeme aj prvky nad diagonálou."];
-
-  Do[
-    pNow = augInv[[i, i]];
-    If[pNow === 0, Continue[]];
-
-    Do[
-      If[augInv[[r, i]] =!= 0,
-        before = augInv;
-        elimRes = rowApplyElimStable[before, r, i];
-        augInv = rowAppendElimStepInverse[content, before, elimRes, r, i, n, <||>];
-      ],
-      {r, 1, i - 1}
-    ];
-    ,
-    {i, n, 2, -1}
-  ];
-
-  addHeader["Normalizácia pivotov na 1"];
-  addText["Vydelíme každý riadok jeho pivotom. Na ľavej strane dostaneme E a na pravej A^(-1)."];
-
-  Do[
-    pNow = augInv[[i, i]];
-    If[pNow === 0, Continue[]];
-
-    If[pNow =!= 1,
-      before = augInv;
-      after = rowApplyDivide[before, i, pNow];
-      notes = ConstantArray["", n];
-      notes[[i]] = rowNoteDivide[i, pNow];
-      AppendTo[content, augRender2Inverse[
-        before, after, notes,
-        <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
-        <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> Table[{i, j}, {j, 1, 2 n}]|>
-      ]];
-      augInv = after
+      terms = Table[L[[j, k]]*U[[k, i]], {k, 1, i - 1}];
+      sumTerm = Total[terms];
+      L[[j, i]] = Together[(A[[j, i]] - sumTerm)/pivotValue];
+      ,
+      {j, i + 1, n}
     ];
     ,
     {i, 1, n}
   ];
 
-  addHeader["Hotový tvar (E | A^(-1))"];
-  addText["Ľavá časť je jednotková matica. Pravá časť je teda inverzná matica A^(-1)."];
-  addMatrix[augInv, {}, <|"BoldIdentity" -> True|>];
-
-  invMatrix = augInv[[All, n + 1 ;; 2 n]];
-
-  addGap[content, 6];
-  AppendTo[content, highlightGrid @ Grid[
-    {{Style["A^(-1) =", Bold, FontSize -> 16], TraditionalForm[MatrixForm[invMatrix]]}},
-    Alignment -> {{Right, Left}},
-    Spacings -> {2, 1}
-  ]
+  Do[
+    terms = Table[L[[i, k]]*y[[k]], {k, 1, i - 1}];
+    sumTerm = Total[terms];
+    y[[i]] = Together[b[[i]] - sumTerm];
+    ,
+    {i, 1, n}
   ];
 
-  addHeader["Výpočet riešenia x = A^(-1) · b"];
-  addText["Riešenie teraz vypočítame zo vzťahu x = A^(-1) · b."];
+  Do[
+    pivotValue = Together[U[[i, i]]];
+    If[pivotValue === 0, Return[$Failed]];
 
-  xResult = invMatrix . b;
-
-  AppendTo[content, Grid[
-    {{Style["x =", Bold], TraditionalForm[MatrixForm[invMatrix]],
-      Style["·", Bold], TraditionalForm[MatrixForm[b]],
-      Style["=", Bold], TraditionalForm[MatrixForm[xResult]]
-    }},
-    Alignment -> Center,
-    Spacings -> {1, 1}
-  ]];
-
-  addGap[content, 2];
-  AppendTo[content, highlightGrid @ Grid[
-    Table[{tf[lhsStyle[vars[[i]]]], "=", tft[xResult[[i]]]}, {i, 1, n}],
-    Alignment -> {{Right, Center, Left}},
-    BaseStyle -> {FontSize -> 16}
-  ]];
-
-  addHeader["Skúška správnosti"];
-  addText["Najprv skontrolujeme, že A · A^(-1) = E. Potom overíme, že platí aj A · x = b."];
-
-  Module[{product, isIdentity},
-    product = Together[A . invMatrix];
-    isIdentity = product === IdentityMatrix[n];
-
-    AppendTo[content, Grid[
-      {{
-        Style["A · A^(-1) =", FontSize -> 13],
-        TraditionalForm[MatrixForm[product]],
-        If[isIdentity, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]];
+    terms = Table[U[[i, k]]*x[[k]], {k, i + 1, n}];
+    sumTerm = Total[terms];
+    x[[i]] = Together[(y[[i]] - sumTerm)/pivotValue];
+    ,
+    {i, n, 1, -1}
   ];
 
-  content = Join[content, verificationSteps[data, xResult]];
-
-  <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
+  <|"L" -> L, "U" -> U, "Y" -> y, "X" -> x|>
 ];
 
-(* ~-~-~ LU / CHOLESKY DISPLAY HELPERS ~-~-~ *)
+choleskySolveData[A_, b_] := Module[
+  {n, L, y, x, i, j, diagTerms, mixedTerms, diagRadicand, diagValue, sumTerm},
+
+  n = Length[A];
+
+  If[!SymmetricMatrixQ[A], Return[$Failed]];
+
+  L = ConstantArray[0, {n, n}];
+  y = ConstantArray[0, n];
+  x = ConstantArray[0, n];
+
+  Do[
+    diagTerms = Table[L[[i, k]]^2, {k, 1, i - 1}];
+    diagRadicand = Together[A[[i, i]] - Total[diagTerms]];
+
+    If[!IntegerQ[diagRadicand] || diagRadicand <= 0, Return[$Failed]];
+
+    diagValue = Sqrt[diagRadicand];
+    If[!IntegerQ[diagValue], Return[$Failed]];
+
+    L[[i, i]] = diagValue;
+
+    Do[
+      mixedTerms = Table[L[[j, k]]*L[[i, k]], {k, 1, i - 1}];
+      sumTerm = Total[mixedTerms];
+      L[[j, i]] = Together[(A[[j, i]] - sumTerm)/L[[i, i]]];
+
+      If[!IntegerQ[L[[j, i]]], Return[$Failed]];
+      ,
+      {j, i + 1, n}
+    ];
+    ,
+    {i, 1, n}
+  ];
+
+  Do[
+    mixedTerms = Table[L[[i, k]]*y[[k]], {k, 1, i - 1}];
+    sumTerm = Total[mixedTerms];
+    y[[i]] = Together[(b[[i]] - sumTerm)/L[[i, i]]];
+
+    If[!IntegerQ[y[[i]]], Return[$Failed]];
+    ,
+    {i, 1, n}
+  ];
+
+  Do[
+    mixedTerms = Table[L[[k, i]]*x[[k]], {k, i + 1, n}];
+    sumTerm = Total[mixedTerms];
+    x[[i]] = Together[(y[[i]] - sumTerm)/L[[i, i]]];
+
+    If[!IntegerQ[x[[i]]], Return[$Failed]];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  <|"L" -> L, "Y" -> y, "X" -> x|>
+];
+
+luDecompositionWithinBoundsQ[data_Association] := Module[
+  {luData, limit},
+
+  limit = $MaxBounds;
+  luData = luSolveData[data["A"], data["b"]];
+
+  If[luData === $Failed,
+    Return[False]
+  ];
+
+  AllTrue[
+    {data["A"], data["b"], luData["L"], luData["U"], luData["Y"], luData["X"]},
+    matrixMaxAbs[#] <= limit &
+  ]
+];
+
+choleskyDecompositionWithinBoundsQ[data_Association] := Module[
+  {choleskyData, limit},
+
+  limit = $MaxBounds;
+  choleskyData = choleskySolveData[data["A"], data["b"]];
+
+  If[choleskyData === $Failed, Return[False]];
+
+  AllTrue[
+    {data["A"], data["b"], choleskyData["L"], Transpose[choleskyData["L"]], choleskyData["Y"], choleskyData["X"]},
+    matrixMaxAbs[#] <= limit &
+  ]
+];
 
 luEntrySymbol[sym_String, i_, j_] := Subscript[Style[sym, Italic], Row[{i, ",", j}]];
 luScalarSymbol[sym_String, i_] := Subscript[Style[sym, Italic], i];
@@ -3219,483 +2298,6 @@ matrixProductDisplay[left_, right_] := Module[
   ]
 ];
 
-stepsLU[data_Association] := Module[
-  {
-    content = {}, n, A, b, vars, luData, L, U, y, x,
-    addHeader, addText, addMatrixPair, addVector, addFormula, addSubHeader, resultStyle,
-    i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck,
-    xSymbols, formatLinearEquation, formatForwardEquation, formatBackwardEquation,
-    symbolicProductSum, numericProductSum, sigmaUDisplay, sigmaLDisplay,
-    buildUFormulaLines, buildLFormulaLines, buildYFormulaLines, currentLBoldPositions, currentUBoldPositions
-  },
-
-  n = data["n"];
-  A = data["A"];
-  b = data["b"];
-  vars = data["Vars"];
-  xSymbols = vars;
-
-  addHeader[text_] := appendStepHeader[content, text];
-  addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
-  addText[text_] := AppendTo[content, text];
-  addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}] := AppendTo[
-    content, luMatrixPairGrid[l, u, lBold, uBold]
-  ];
-  addVector[label_, vec_] := AppendTo[content, namedVectorGrid[label, vec]];
-  addFormula[expr_] := AppendTo[content, expr];
-  resultStyle[expr_] := Style[expr, Bold, Blue];
-
-  currentLBoldPositions[step_] := Join[
-    Table[{r, r}, {r, 1, n}], Flatten[Table[{r, c}, {c, 1, Min[step, n - 1]}, {r, c + 1, n}], 1]
-  ];
-
-  currentUBoldPositions[step_] := Flatten[
-    Table[{r, c}, {r, 1, step}, {c, r, n}], 1
-  ];
-
-  (* pomocný formát lineárnej rovnice so znamienkami *)
-  formatLinearEquation[coeffList_, symbolList_, rhs_] := Module[
-    {pairs, nz, firstPair, pieces = {}, c, s, absC},
-    pairs = Transpose[{coeffList, symbolList}];
-    nz = Select[pairs, #[[1]] =!= 0 &];
-
-    If[nz === {},
-      Return[Row[{0, " = ", tft[rhs]}]]
-    ];
-
-    firstPair = First[nz];
-    c = firstPair[[1]];
-    s = firstPair[[2]];
-    absC = Abs[c];
-
-    AppendTo[
-      pieces,
-      Which[
-        c === 1, s,
-        c === -1, Row[{"-", s}],
-        c < 0, Row[{"-", tft[absC], "\[CenterDot]", s}],
-        True, Row[{tft[c], "\[CenterDot]", s}]
-      ]
-    ];
-
-    Do[
-      c = pair[[1]];
-      s = pair[[2]];
-      absC = Abs[c];
-
-      AppendTo[
-        pieces,
-        Which[
-          c === 1, Row[{" + ", s}],
-          c === -1, Row[{" - ", s}],
-          c > 0, Row[{" + ", tft[absC], "\[CenterDot]", s}],
-          True, Row[{" - ", tft[absC], "\[CenterDot]", s}]
-        ]
-      ];
-      ,
-      {pair, Rest[nz]}
-    ];
-
-    Row[{Row[pieces], " = ", tft[rhs]}]
-  ];
-
-  (* rovnica pre L.y = b *)
-  formatForwardEquation[row_, rhs_, i_] := Module[
-    {coeffList, symbolList},
-    coeffList = row[[1 ;; i]];
-    symbolList = Table[luScalarSymbol["y", k], {k, 1, i}];
-    formatLinearEquation[coeffList, symbolList, rhs]
-  ];
-
-  (* rovnica pre U.x = y *)
-  formatBackwardEquation[row_, rhs_, i_] := Module[
-    {coeffList, symbolList},
-    coeffList = row[[i ;; n]];
-    symbolList = vars[[i ;; n]];
-    formatLinearEquation[coeffList, symbolList, rhs]
-  ];
-
-  (* symbolický rozpis sumy bez sigma *)
-  symbolicProductSum[factors_List] := If[
-    factors === {},
-    tft[0],
-    Row @ Riffle[(Row[#[[1 ;; 2]]] & /@ factors), " + "]
-  ];
-
-  (* číselný rozpis súčinu bez sčítania *)
-  numericProductSum[terms_List] := If[
-    terms === {},
-    tft[0],
-    Row @ Riffle[
-      (Row[{luFactorDisplay[#[[1]]], "\[CenterDot]", luFactorDisplay[#[[2]]]}] & /@ terms),
-      " + "
-    ]
-  ];
-
-  (* telo sumy so symbolickým k bez interného k$123 *)
-  sigmaUDisplay[rowIdx_, colIdx_] := Row[{
-    Subscript[Style["l", Italic], Row[{rowIdx, ",", Style["k", Italic]}]],
-    Subscript[Style["u", Italic], Row[{Style["k", Italic], ",", colIdx}]]
-  }];
-
-  sigmaLDisplay[rowIdx_, colIdx_] := Row[{
-    Subscript[Style["l", Italic], Row[{rowIdx, ",", Style["k", Italic]}]],
-    Subscript[Style["u", Italic], Row[{Style["k", Italic], ",", colIdx}]]
-  }];
-
-  (* riadky výpočtu pre prvok U *)
-  buildUFormulaLines[i_, j_, terms_, value_] := Module[
-    {symbolicTerms},
-    If[terms === {},
-      {
-        Row[{
-          lhsStyle[luEntrySymbol["u", i, j]], " = ",
-          luEntrySymbol["a", i, j], " = ",
-          resultStyle[tft[value]]
-        }]
-      },
-      symbolicTerms = Table[
-        {luEntrySymbol["l", i, kk], luEntrySymbol["u", kk, j]},
-        {kk, 1, i - 1}
-      ];
-      {
-        Row[{
-          lhsStyle[luEntrySymbol["u", i, j]], " = ",
-          luEntrySymbol["a", i, j], " - ",
-          Underoverscript["\[Sum]", Row[{Style["k", Italic], " = 1"}], i - 1],
-          sigmaUDisplay[i, j],
-          " = ",
-          luEntrySymbol["a", i, j], " - (", symbolicProductSum[symbolicTerms], ")"
-        }],
-        Row[{
-          lhsStyle[luEntrySymbol["u", i, j]], " = ",
-          tft[A[[i, j]]], " - (", numericProductSum[terms], ")"
-        }],
-        Row[{
-          lhsStyle[luEntrySymbol["u", i, j]], " = ",
-          tft[A[[i, j]]], " - ", luWrappedSumDisplay[terms], " = ",
-          resultStyle[tft[value]]
-        }]
-      }
-    ]
-  ];
-  (* riadky výpočtu pre prvok L *)
-  buildLFormulaLines[j_, i_, terms_, pivot_, value_] := Module[
-    {symbolicTerms},
-    If[terms === {},
-      {
-        Row[{
-          lhsStyle[luEntrySymbol["l", j, i]], " = ",
-          luEntrySymbol["a", j, i], " / ", luEntrySymbol["u", i, i],
-          " = ", tft[A[[j, i]]], " / ", tft[pivot],
-          " = ", resultStyle[tft[value]]
-        }]
-      },
-      symbolicTerms = Table[
-        {luEntrySymbol["l", j, kk], luEntrySymbol["u", kk, i]},
-        {kk, 1, i - 1}
-      ];
-      {
-        Row[{
-          lhsStyle[luEntrySymbol["l", j, i]], " = (",
-          luEntrySymbol["a", j, i], " - ",
-          Underoverscript["\[Sum]", Row[{Style["k", Italic], " = 1"}], i - 1],
-          sigmaLDisplay[j, i],
-          ") / ", luEntrySymbol["u", i, i],
-          " = (",
-          luEntrySymbol["a", j, i], " - (", symbolicProductSum[symbolicTerms], ")) / ",
-          luEntrySymbol["u", i, i]
-        }],
-        Row[{
-          lhsStyle[luEntrySymbol["l", j, i]], " = (",
-          tft[A[[j, i]]], " - (", numericProductSum[terms], ")) / ", tft[pivot]
-        }],
-        Row[{
-          lhsStyle[luEntrySymbol["l", j, i]], " = (",
-          tft[A[[j, i]]], " - ", luWrappedSumDisplay[terms], ") / ", tft[pivot],
-          " = ", resultStyle[tft[value]]
-        }]
-      }
-    ]
-  ];
-  buildYFormulaLines[i_, terms_, value_] := Module[{},
-    If[terms === {},
-      {
-        Row[{
-          lhsStyle[luScalarSymbol["y", i]], " = ",
-          resultStyle[tft[value]]
-        }]
-      },
-      {
-        formatForwardEquation[L[[i]], b[[i]], i],
-        Row[{
-          lhsStyle[luScalarSymbol["y", i]], " = ",
-          tft[b[[i]]], " - (", numericProductSum[terms], ")"
-        }],
-        Row[{
-          lhsStyle[luScalarSymbol["y", i]], " = ",
-          tft[b[[i]]], " - ", luWrappedSumDisplay[terms], " = ",
-          resultStyle[tft[value]]
-        }]
-      }
-    ]
-  ];
-  addHeader["Prepis sústavy do maticového tvaru"];
-  addText["Sústavu zapíšeme v maticovom tvare A \[CenterDot] x = b."];
-
-  AppendTo[
-    content,
-    highlightGrid @ Grid[
-      {{
-        Style["A =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[A]],
-        Spacer[18],
-        Style["x =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[xSymbols]],
-        Spacer[18],
-        Style["b =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[b]]
-      }},
-      Alignment -> Left,
-      Spacings -> {2, 1}
-    ]
-  ];
-
-  addText["Maticu A rozložíme na súčin A = L \[CenterDot] U."];
-
-  AppendTo[
-    content,
-    highlightGrid @ Grid[
-      {
-        {Style["A \[CenterDot] x = b", Bold]},
-        {Style["A = L \[CenterDot] U", Bold]},
-        {Style["Označíme", Plain]},
-        {Style["U \[CenterDot] x = y", Bold]},
-        {Style["Ďalej riešime v dvoch krokoch:", Plain]},
-        {Style["1. vyriešime L \[CenterDot] y = b", Plain]},
-        {Style["2. potom vyriešime U \[CenterDot] x = y", Plain]}
-      },
-      Alignment -> Left,
-      Spacings -> {1, 0.6}
-    ]
-  ];
-
-  luData = luSolveData[A, b];
-
-  If[luData === $Failed,
-    addHeader["Výsledok"];
-    addText["Počas rozkladu sa objavil nulový pivot, preto LU rozklad bez pivotovania nemožno použiť."];
-    Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
-  ];
-
-  L = IdentityMatrix[n];
-  U = ConstantArray[0, {n, n}];
-
-  addHeader["Inicializácia matíc"];
-  addText["Na začiatku poznáme len jednotkovú diagonálu matice L. Ostatné prvky matíc L a U dopočítame postupne."];
-  addMatrixPair[L, U, Table[{r, r}, {r, 1, n}], {}];
-
-  Do[
-    If[
-      i < n,
-      addHeader[
-        "Krok " <> ToString[i] <> " – výpočet " <> ToString[i] <>
-            ". riadku matice U a " <> ToString[i] <> ". stĺpca matice L"
-      ],
-      addHeader["Krok " <> ToString[i] <> " – výpočet posledného prvku matice U"]
-    ];
-
-    If[i < n,
-      addText["Najprv vypočítame prvky matice U."];
-      addSubHeader["Prvky matice U:"];
-      Do[
-        terms = Table[{L[[i, kk]], U[[kk, j]]}, {kk, 1, i - 1}];
-        sumTerm = Total[Times @@@ terms];
-        U[[i, j]] = Together[A[[i, j]] - sumTerm];
-        Scan[addFormula, buildUFormulaLines[i, j, terms, U[[i, j]]]];
-
-        If[j < n && i > 1,
-          addGap[content, 3]
-        ];
-        ,
-        {j, i, n}
-      ];
-      ,
-      addSubHeader["Prvok matice U:"];
-      terms = Table[{L[[i, kk]], U[[kk, i]]}, {kk, 1, i - 1}];
-      sumTerm = Total[Times @@@ terms];
-      U[[i, i]] = Together[A[[i, i]] - sumTerm];
-      Scan[addFormula, buildUFormulaLines[i, i, terms, U[[i, i]]]];
-    ];
-
-    pivotValue = Together[U[[i, i]]];
-    addText[Row[{"Pivot v tomto kroku je ", luEntrySymbol["u", i, i], " = ", tft[pivotValue], "."}]];
-
-    If[i < n,
-      addSubHeader["Prvky matice L:"];
-      Do[
-        terms = Table[{L[[j, kk]], U[[kk, i]]}, {kk, 1, i - 1}];
-        sumTerm = Total[Times @@@ terms];
-        L[[j, i]] = Together[(A[[j, i]] - sumTerm)/pivotValue];
-        Scan[addFormula, buildLFormulaLines[j, i, terms, pivotValue, L[[j, i]]]];
-
-        If[j < n && i > 1,
-          addGap[content, 5]
-        ];
-        ,
-        {j, i + 1, n}
-      ];
-    ];
-
-    If[i < n,
-      addText["Po tomto kroku dostaneme:"];
-      addMatrixPair[L, U, currentLBoldPositions[i], currentUBoldPositions[i]];
-    ];
-    ,
-    {i, 1, n}
-  ];
-
-  addHeader["Hotový rozklad A = L \[CenterDot] U"];
-  addText["Po výpočte dostaneme maticu L s jednotkami na diagonále a hornú trojuholníkovú maticu U."];
-  addMatrixPair[
-    L, U,
-    Join[Table[{r, r}, {r, 1, n}], Flatten[Table[{r, c}, {c, 1, n - 1}, {r, c + 1, n}], 1]],
-    Flatten[Table[{r, c}, {r, 1, n}, {c, r, n}], 1]
-  ];
-  addHeader["Overenie rozkladu L \[CenterDot] U = A"];
-  luProduct = Together[L . U];
-  addText["Skontrolujeme, že súčin L \[CenterDot] U sa rovná matici A."];
-  AppendTo[content, matrixProductDisplay[L, U]];
-
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["L \[CenterDot] U =", FontSize -> 13],
-        TraditionalForm[MatrixForm[luProduct]],
-        If[luProduct === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-
-  addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
-  addText["Keďže L je dolná trojuholníková matica s jednotkami na diagonále, vektor y určíme dopredným dosadzovaním."];
-  AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
-
-  y = ConstantArray[0, n];
-  Do[
-    terms = Table[{L[[i, k]], y[[k]]}, {k, 1, i - 1}];
-    sumTerm = Total[Times @@@ terms];
-    y[[i]] = Together[b[[i]] - sumTerm];
-
-    Scan[addFormula, buildYFormulaLines[i, terms, y[[i]]]];
-
-    If[i < n,
-      addGap[content, 5]
-    ];
-    ,
-    {i, 1, n}
-  ];
-
-  addVector["y", y];
-  addHeader["Riešenie sústavy U \[CenterDot] x = y"];
-  addText["Keď poznáme vektor y, vyriešime sústavu U \[CenterDot] x = y spätným dosadzovaním."];
-  AppendTo[content, alignedAugmentedMatrix[augFromAb[U, y], {}, <|"BoldDiagonal" -> True|>]];
-
-  x = ConstantArray[0, n];
-  Do[
-    terms = Table[{U[[i, k]], x[[k]]}, {k, i + 1, n}];
-    sumTerm = Total[Times @@@ terms];
-    x[[i]] = Together[(y[[i]] - sumTerm)/U[[i, i]]];
-
-    addFormula[formatBackwardEquation[U[[i]], y[[i]], i]];
-
-    addFormula[
-      If[
-        terms === {},
-        Row[{lhsStyle[vars[[i]]], " = ", tft[y[[i]]], " / ", tft[U[[i, i]]], " = ", resultStyle[tft[x[[i]]]]}],
-        Row[{
-          lhsStyle[vars[[i]]], " = (", tft[y[[i]]], " - ", luWrappedSumDisplay[terms], ") / ", tft[U[[i, i]]],
-          " = ", resultStyle[tft[x[[i]]]]
-        }]
-      ]
-    ];
-    ,
-    {i, n, 1, -1}
-  ];
-
-  addHeader["Skúška správnosti"];
-  addText["Skontrolujeme rozklad A = L \[CenterDot] U, pomocnú sústavu L \[CenterDot] y = b, sústavu U \[CenterDot] x = y aj pôvodnú sústavu A \[CenterDot] x = b."];
-
-  lowerCheck = Together[L . y];
-  upperCheck = Together[U . x];
-
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["L \[CenterDot] U =", FontSize -> 13],
-        TraditionalForm[MatrixForm[luProduct]],
-        Style["A =", FontSize -> 13],
-        TraditionalForm[MatrixForm[A]],
-        If[luProduct === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-
-  addGap[content, 6];
-
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["L \[CenterDot] y =", FontSize -> 13],
-        TraditionalForm[MatrixForm[lowerCheck]],
-        Style["b =", FontSize -> 13],
-        TraditionalForm[MatrixForm[b]],
-        If[lowerCheck === b, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-
-  addGap[content, 6];
-
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["U \[CenterDot] x =", FontSize -> 13],
-        TraditionalForm[MatrixForm[upperCheck]],
-        Style["y =", FontSize -> 13],
-        TraditionalForm[MatrixForm[y]],
-        If[upperCheck === y, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-
-  <|
-    "Content" -> content,
-    "Solution" -> x,
-    "L" -> L,
-    "U" -> U,
-    "Y" -> y
-  |>
-];
-
-(* ~-~-~ CHOLESKY DISPLAY HELPERS ~-~-~ *)
-
 choleskySqrtDisplay[arg_] := Row[{"\[Sqrt]", "(", arg, ")"}];
 
 choleskySymbolicSquareSum[indices_List, row_Integer] := If[
@@ -3796,282 +2398,228 @@ buildCholeskyOffDiagonalLines[j_Integer, i_Integer, A_, L_, diagValue_, value_] 
   ]
 ];
 
-stepsCholesky[data_Association] := Module[
-  {
-    content = {}, n, A, b, vars, choleskyData, L, LT, y, x,
-    addHeader, addText, addSubHeader, addFormula, addMatrixPair, addVector,
-    i, j, productCheck, lowerCheck, upperCheck, ySymbols,
-    currentLBoldPositions, currentLTBoldPositions
-  },
+(* --- Cramer HELPERS --- *)
 
-  n = data["n"];
-  A = data["A"];
-  b = data["b"];
-  vars = data["Vars"];
-  ySymbols = Table[luScalarSymbol["y", k], {k, 1, n}];
+replaceColumn[matrix_, column_Integer, values_List] := Module[{updated = matrix},
+  Do[updated[[i, column]] = values[[i]], {i, 1, Length[values]}];
+  updated
+];
 
-  addHeader[text_] := appendStepHeader[content, text];
-  addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
-  addText[text_] := AppendTo[content, text];
-  addFormula[expr_] := AppendTo[content, expr];
-  addMatrixPair[l_, lt_, lBold_List : {}, ltBold_List : {}] := AppendTo[
-    content,
-    choleskyMatrixPairGrid[l, lt, lBold, ltBold]
-  ];
-  addVector[label_, vec_] := AppendTo[content, namedVectorGrid[label, vec]];
+cramerRandomNonzeroValue[maxAbs_Integer : 4] := RandomChoice[DeleteCases[Range[-maxAbs, maxAbs], 0]];
 
-  currentLBoldPositions[step_] := Flatten[
-    Table[{r, c}, {c, 1, step}, {r, c, n}],
-    1
-  ];
+cramerRandomInvertible3x3[maxAbs_Integer : 4, maxDet_Integer : 30] := Module[
+  {candidate, tries = 0, pool},
+  pool = Join[Range[-maxAbs, -1], Range[1, maxAbs], Range[-maxAbs, -1], Range[1, maxAbs]];
 
-  currentLTBoldPositions[step_] := Reverse /@ currentLBoldPositions[step];
-
-  addHeader["Prepis sústavy do maticového tvaru"];
-  addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Maticu A rozložíme na tvar A = L \[CenterDot] L^T."];
-
-  AppendTo[
-    content,
-    highlightGrid @ Grid[
-      {{
-        Style["A =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[A]],
-        Spacer[18],
-        Style["x =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[vars]],
-        Spacer[18],
-        Style["b =", Bold, FontSize -> 16],
-        TraditionalForm[MatrixForm[b]]
-      }},
-      Alignment -> Left,
-      Spacings -> {2, 1}
-    ]
-  ];
-
-  AppendTo[
-    content,
-    highlightGrid @ Grid[
-      {
-        {Style["A \[CenterDot] x = b", Bold]},
-        {Style["A = L \[CenterDot] L^T", Bold]},
-        {Style["Označíme", Plain]},
-        {Style["L^T \[CenterDot] x = y", Bold]},
-        {Style["Ďalej riešime v dvoch krokoch:", Plain]},
-        {Style["1. vyriešime L \[CenterDot] y = b", Plain]},
-        {Style["2. potom vyriešime L^T \[CenterDot] x = y", Plain]}
-      },
-      Alignment -> Left,
-      Spacings -> {1, 0.6}
-    ]
-  ];
-
-  choleskyData = choleskySolveData[A, b];
-
-  If[choleskyData === $Failed,
-    addHeader["Výsledok"];
-    addText["Pre túto maticu sa nepodarilo zostrojiť Choleského rozklad A = L \[CenterDot] L^T."];
-    Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
-  ];
-
-  L = ConstantArray[0, {n, n}];
-  LT = ConstantArray[0, {n, n}];
-
-  addHeader["Inicializácia matice L"];
-  addText["Prvky matice L vypočítame postupne po stĺpcoch. Po každom kroku si ukážeme tvar matíc L a L^T."];
-  addMatrixPair[L, LT];
-
-  Do[
-    addHeader["Krok " <> ToString[i] <> " – výpočet " <> ToString[i] <> ". stĺpca matice L"];
-
-    addSubHeader["Diagonálny prvok"];
-    Scan[
-      addFormula,
-      buildCholeskyDiagonalLines[i, A, L, choleskyData["L"][[i, i]]]
+  While[tries < $MaxRetryCount,
+    candidate = RandomChoice[pool, {3, 3}];
+    If[Det[candidate] =!= 0 && Abs[Det[candidate]] <= maxDet,
+      Return[candidate]
     ];
+    tries++;
+  ];
 
-    L[[i, i]] = choleskyData["L"][[i, i]];
+  $Failed
+];
 
-    If[i < n,
-      addSubHeader["Prvky pod diagonálou"];
-      Do[
-        Scan[
-          addFormula,
-          buildCholeskyOffDiagonalLines[j, i, A, L, L[[i, i]], choleskyData["L"][[j, i]]]
-        ];
+cramerOrthogonalTwoNonzeroRow[xCore_List] := Module[
+  {pairs, chosenPair, row, p, q, g},
 
-        L[[j, i]] = choleskyData["L"][[j, i]];
+  pairs = Select[
+    Subsets[Range[Length[xCore]], {2}],
+    With[{u = xCore[[#[[1]]]], v = xCore[[#[[2]]]]},
+      (u === 0 && v === 0) || (u =!= 0 && v =!= 0)
+    ] &
+  ];
 
-        If[j < n, addGap[content, 4]];
-        ,
-        {j, i + 1, n}
-      ];
-    ];
+  If[pairs === {},
+    chosenPair = {1, 2},
+    chosenPair = RandomChoice[pairs]
+  ];
 
-    LT = Transpose[L];
-    addText["Po tomto kroku dostaneme:"];
-    addMatrixPair[L, LT, currentLBoldPositions[i], currentLTBoldPositions[i]];
+  {p, q} = chosenPair;
+  row = ConstantArray[0, Length[xCore]];
+
+  If[xCore[[p]] === 0 && xCore[[q]] === 0,
+    row[[p]] = 1;
+    row[[q]] = 1;
     ,
-    {i, 1, n}
+    g = GCD[Abs[xCore[[p]]], Abs[xCore[[q]]]];
+    If[g === 0, g = 1];
+
+    row[[p]] = Quotient[xCore[[q]], g];
+    row[[q]] = -Quotient[xCore[[p]], g];
   ];
 
-  LT = Transpose[L];
-  y = choleskyData["Y"];
-  x = choleskyData["X"];
+  normalizeRow[row]
+];
 
-  addHeader["Hotový rozklad A = L \[CenterDot] L^T"];
-  addText["Po výpočte dostaneme dolnú trojuholníkovú maticu L a jej transpozíciu L^T."];
-  addMatrixPair[L, LT, currentLBoldPositions[n], currentLTBoldPositions[n]];
+generateCramerEasyMatrix[solutionVector_List] := Module[
+  {candidate, rhsVector, tries = 0, pool},
 
-  addHeader["Overenie rozkladu L \[CenterDot] L^T = A"];
-  addText["Skontrolujeme, že súčin L \[CenterDot] L^T sa rovná matici A."];
-  productCheck = Together[L . LT];
+  pool = Join[Range[-4, -1], Range[1, 4], Range[-4, -1], Range[1, 4]];
 
-  AppendTo[content, matrixProductDisplay[L, LT]];
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["L \[CenterDot] L^T =", FontSize -> 13],
-        TraditionalForm[MatrixForm[productCheck]],
-        Style["A =", FontSize -> 13],
-        TraditionalForm[MatrixForm[A]],
-        If[productCheck === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
+  While[tries < $MaxRetryCount,
+    candidate = RandomChoice[pool, {3, 3}];
+    rhsVector = candidate . solutionVector;
 
-  addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
-  addText["Keďže L je dolná trojuholníková matica, vektor y určíme dopredným dosadzovaním."];
-  AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
-
-  Do[
-    addFormula[forwardEquationDisplay[L[[i]], b[[i]], ySymbols, i]];
-    addFormula[
-      If[
-        i === 1,
-        Row[{
-          lhsStyle[luScalarSymbol["y", i]], " = ",
-          tft[b[[i]]], " / ", tft[L[[i, i]]], " = ",
-          Style[tft[y[[i]]], Bold, Blue]
-        }],
-        Row[{
-          lhsStyle[luScalarSymbol["y", i]], " = (",
-          tft[b[[i]]], " - ",
-          luWrappedSumDisplay[Table[{L[[i, k]], y[[k]]}, {k, 1, i - 1}]],
-          ") / ", tft[L[[i, i]]],
-          " = ", Style[tft[y[[i]]], Bold, Blue]
-        }]
-      ]
+    If[
+      Det[candidate] =!= 0 &&
+          Abs[Det[candidate]] <= Min[30, $MaxBounds] &&
+          matrixMaxAbs[rhsVector] <= $MaxBounds,
+      Return[candidate]
     ];
 
-    If[i < n, addGap[content, 5]];
-    ,
-    {i, 1, n}
+    tries++;
   ];
 
-  addVector["y", y];
+  $Failed
+];
 
-  addHeader["Riešenie sústavy L^T \[CenterDot] x = y"];
-  addText["Keď poznáme vektor y, vyriešime sústavu L^T \[CenterDot] x = y spätným dosadzovaním."];
-  AppendTo[content, alignedAugmentedMatrix[augFromAb[LT, y], {}, <|"BoldDiagonal" -> True|>]];
+renderCramer4x4Reduction[matrix_, label_] := Module[
+  {content = {}, line1, signed1, minor3, minor3Label, det3Data, value},
 
-  Do[
-    addFormula[backwardEquationDisplay[LT[[i]], y[[i]], vars, i, n]];
-    addFormula[
-      If[
-        i === n,
-        Row[{
-          lhsStyle[vars[[i]]], " = ",
-          tft[y[[i]]], " / ", tft[LT[[i, i]]], " = ",
-          Style[tft[x[[i]]], Bold, Blue]
-        }],
-        Row[{
-          lhsStyle[vars[[i]]], " = (",
-          tft[y[[i]]], " - ",
-          luWrappedSumDisplay[Table[{LT[[i, k]], x[[k]]}, {k, i + 1, n}]],
-          ") / ", tft[LT[[i, i]]],
-          " = ", Style[tft[x[[i]]], Bold, Blue]
-        }]
-      ]
+  minor3Label = Subscript[Style["M", Italic], 3];
+
+  AppendTo[content, cramerLabeledMatrixGrid[label, matrix]];
+
+  line1 = cramerSingletonLineData[matrix];
+  If[line1 === Missing["NotFound"],
+    value = Together[Det[matrix]];
+    AppendTo[content, "Matica nemá vhodný riedky riadok ani stĺpec, preto determinant dopočítame priamo."];
+    AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+    Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
+  ];
+
+  signed1 = Together[
+    (-1)^(line1["PivotRow"] + line1["PivotColumn"]) *
+        matrix[[line1["PivotRow"], line1["PivotColumn"]]]
+  ];
+  minor3 = cramerMinor[matrix, line1["PivotRow"], line1["PivotColumn"]];
+
+  AppendTo[content, cramerLaplaceExplanation[line1]];
+  AppendTo[content, cramerLaplaceReductionPanel[matrix, line1, minor3Label, minor3]];
+  AppendTo[content, Row[{
+    cramerDetLabel[label], " = ", cramerFactor[signed1],
+    " \[CenterDot] ", cramerDetLabel[minor3Label]
+  }]];
+
+  det3Data = renderCramer3x3Det[minor3, minor3Label];
+  content = Join[content, det3Data["Content"]];
+
+  value = Together[signed1 det3Data["Value"]];
+
+  AppendTo[content, Row[{
+    cramerDetLabel[minor3Label], " = ",
+    cramerFactor[det3Data["Value"]]
+  }]];
+  AppendTo[content, Row[{
+    cramerDetLabel[label], " = ",
+    cramerFactor[signed1], " \[CenterDot] ", cramerDetLabel[minor3Label],
+    " = ",
+    cramerFactor[signed1], " \[CenterDot] ", cramerFactor[det3Data["Value"]],
+    " = ",
+    cramerFactor[value]
+  }]];
+  AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+
+  <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
+];
+
+generateCramerMediumMatrix[solutionVector_List] := Module[
+  {core, candidate, rhsVector, s1, tries = 0},
+
+  While[tries < $MaxRetryCount,
+    core = cramerRandomInvertible3x3[3, 18];
+    If[core === $Failed,
+      Return[$Failed]
     ];
-    ,
-    {i, n, 1, -1}
+
+    s1 = cramerRandomNonzeroValue[3];
+
+    candidate = ConstantArray[0, {4, 4}];
+    candidate[[1, 1]] = s1;
+    candidate[[2 ;; 4, 2 ;; 4]] = core;
+
+    rhsVector = candidate . solutionVector;
+
+    If[
+      Det[candidate] =!= 0 &&
+          Abs[Det[candidate]] <= Min[60, $MaxBounds] &&
+          matrixMaxAbs[rhsVector] <= $MaxBounds,
+      Return[candidate]
+    ];
+
+    tries++;
   ];
 
-  addHeader["Skúška správnosti"];
-  addText["Skontrolujeme rozklad A = L \[CenterDot] L^T, pomocnú sústavu L \[CenterDot] y = b, sústavu L^T \[CenterDot] x = y aj pôvodnú sústavu A \[CenterDot] x = b."];
+  $Failed
+];
 
-  lowerCheck = Together[L . y];
-  upperCheck = Together[LT . x];
+generateCramerHardMatrix[solutionVector_List] := Module[
+  {core, candidate, rhsVector, s1, s2, tries = 0},
 
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["L \[CenterDot] L^T =", FontSize -> 13],
-        TraditionalForm[MatrixForm[productCheck]],
-        Style["A =", FontSize -> 13],
-        TraditionalForm[MatrixForm[A]],
-        If[productCheck === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
+  While[tries < $MaxRetryCount,
+    core = cramerRandomInvertible3x3[3, 18];
+    If[core === $Failed,
+      Return[$Failed]
+    ];
+
+    s1 = cramerRandomNonzeroValue[3];
+    s2 = cramerRandomNonzeroValue[3];
+
+    candidate = ConstantArray[0, {5, 5}];
+    candidate[[1, 1]] = s1;
+    candidate[[2, 2]] = s2;
+    candidate[[3 ;; 5, 3 ;; 5]] = core;
+
+    rhsVector = candidate . solutionVector;
+
+    If[
+      Det[candidate] =!= 0 &&
+          Abs[Det[candidate]] <= Min[80, $MaxBounds] &&
+          matrixMaxAbs[rhsVector] <= $MaxBounds,
+      Return[candidate]
+    ];
+
+    tries++;
   ];
 
-  addGap[content, 6];
+  $Failed
+];
 
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["L \[CenterDot] y =", FontSize -> 13],
-        TraditionalForm[MatrixForm[lowerCheck]],
-        Style["b =", FontSize -> 13],
-        TraditionalForm[MatrixForm[b]],
-        If[lowerCheck === b, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
+cramerSolveData[A_, b_] := Module[
+  {detA, auxMatrices, auxDeterminants, solution},
+
+  detA = Together[Det[A]];
+  auxMatrices = Table[replaceColumn[A, i, b], {i, 1, Length[b]}];
+  auxDeterminants = Together /@ (Det /@ auxMatrices);
+
+  solution = If[
+    detA === 0,
+    ConstantArray[Indeterminate, Length[b]],
+    Together /@ (auxDeterminants/detA)
   ];
-
-  addGap[content, 6];
-
-  AppendTo[
-    content,
-    Grid[
-      {{
-        Style["L^T \[CenterDot] x =", FontSize -> 13],
-        TraditionalForm[MatrixForm[upperCheck]],
-        Style["y =", FontSize -> 13],
-        TraditionalForm[MatrixForm[y]],
-        If[upperCheck === y, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> Left,
-      Spacings -> {1, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-
-  addGap[content, 6];
-  content = Join[content, verificationSteps[data, x]];
 
   <|
-    "Content" -> content,
-    "Solution" -> x,
-    "L" -> L,
-    "LT" -> LT,
-    "Y" -> y
+    "DetA" -> detA,
+    "AuxMatrices" -> auxMatrices,
+    "AuxDeterminants" -> auxDeterminants,
+    "Solution" -> solution
   |>
 ];
 
-(* ~-~-~ CRAMER DISPLAY HELPERS ~-~-~ *)
+cramerDeterminantsWithinBoundsQ[A_, b_] := Module[
+  {solveData, allDeterminants},
+
+  solveData = cramerSolveData[A, b];
+  allDeterminants = Join[{solveData["DetA"]}, solveData["AuxDeterminants"]];
+
+  AllTrue[
+    allDeterminants,
+    IntegerQ[#] && Abs[#] <= $MaxBounds &
+  ]
+];
 
 cramerSignedTermDisplay[coeff_, body_, firstQ_] := Module[{absCoeff = Abs[coeff]},
   If[firstQ,
@@ -4205,27 +2753,15 @@ cramerSparseLineData[matrix_] := Module[
 (* text pre laplaceov rozvoj *)
 cramerLaplaceExplanation[lineData_Association] := If[
   lineData["Type"] === "Row",
-  Row[{
-    "Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"],
-    ". riadku, lebo obsahuje jeden nenulový prvok."
-  }],
-  Row[{
-    "Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"],
-    ". stĺpca, lebo obsahuje jeden nenulový prvok."
-  }]
+  Row[{"Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"], ". riadku, lebo obsahuje jeden nenulový prvok."}],
+  Row[{"Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"], ". stĺpca, lebo obsahuje jeden nenulový prvok."}]
 ];
 
 (* text pre výber najriedšej línie *)
 cramerSparseExplanation[lineData_Association] := If[
   lineData["Type"] === "Row",
-  Row[{
-    "Teraz rozvinieme determinant podľa ", lineData["LineIndex"],
-    ". riadku, lebo obsahuje najviac núl."
-  }],
-  Row[{
-    "Teraz rozvinieme determinant podľa ", lineData["LineIndex"],
-    ". stĺpca, lebo obsahuje najviac núl."
-  }]
+  Row[{"Teraz rozvinieme determinant podľa ", lineData["LineIndex"], ". riadku, lebo obsahuje najviac núl."}],
+  Row[{"Teraz rozvinieme determinant podľa ", lineData["LineIndex"], ". stĺpca, lebo obsahuje najviac núl."}]
 ];
 
 cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
@@ -4705,7 +3241,6 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
   <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
 
-
 renderCramerDeterminant[matrix_, label_] := Switch[
   Length[matrix],
   3, renderCramer3x3Det[matrix, label],
@@ -4718,6 +3253,1488 @@ renderCramerDeterminant[matrix_, label_] := Switch[
     },
     "Value" -> Together[Det[matrix]],
     "Matrix" -> matrix
+  |>
+];
+
+(* ~-~-~ STEP GENERATION ~-~-~ *)
+
+(* triangular sa nepočíta do BP, iba pre učiteľku na jednoduchý generátor *)
+stepsTriangular[data_Association] := Module[
+  {content = {}, n, aug, vars, tri, st, order, addHeader, addText, addMatrix, addConclusion, addCheckHeader, notes, result, sol},
+  n = data["n"]; aug = data["Aug"]; vars = data["Vars"];
+  tri = data["TriType"]; st = data["SolutionType"];
+  order = If[tri === "U", Range[n, 1, -1], Range[1, n]];
+
+  addHeader[text_] := appendStepHeader[content, text];
+  addText[text_] := AppendTo[content, text];
+  addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
+  addCheckHeader[extra_List : {}] := (addHeader["Skúška správnosti"]; Scan[addText, extra]);
+
+  addHeader["Prepis sústavy do augmentovanej matice"];
+  addText["Sústavu najprv zapíšeme do augmentovanej matice. Ďalej pracujeme už len s maticou."];
+  addMatrix[aug];
+
+  result = Switch[st,
+    "ONE",
+    Module[{terms, solLocal},
+      solLocal = ConstantArray[None, n];
+
+      addHeader["Riadkové úpravy"];
+      addText["V každom riadku vyjadríme jednu neznámu. Najprv odstránime známe členy a potom riadok podľa potreby vydelíme pivotom."];
+
+      Do[
+        terms = If[tri === "U",
+          Select[Table[{j, -aug[[i, j]]}, {j, i + 1, n}], #[[2]] =!= 0 &],
+          Select[Table[{j, -aug[[i, j]]}, {j, 1, i - 1}], #[[2]] =!= 0 &]
+        ];
+
+        Module[{before0, mid0, after0, notes1, notes2, hi1, hi2, hi3, p},
+
+          before0 = aug;
+
+          (* kombinácia (ak treba) *)
+          If[terms =!= {},
+            mid0 = rowApplyCombine[before0, i, terms];
+            notes1 = ConstantArray["", n];
+            notes1[[i]] = rowNoteCombine[i, terms];
+
+            hi1 = <|"ActiveRow" -> i, "SourceRows" -> terms[[All, 1]], "PivotPos" -> {i, i}|>;
+            hi2 = hi1;
+            ,
+            mid0 = before0;
+            notes1 = ConstantArray["", n];
+            hi1 = <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>;
+            hi2 = hi1;
+          ];
+
+          (* delenie (ak treba) *)
+          p = mid0[[i, i]];
+          If[p =!= 1,
+            after0 = rowApplyDivide[mid0, i, p];
+            notes2 = ConstantArray["", n];
+            notes2[[i]] = rowNoteDivide[i, p];
+
+            hi3 = <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>;
+
+            If[terms =!= {},
+              AppendTo[content, augRender3[before0, mid0, after0, notes1, notes2, hi1, hi2, hi3]],
+              AppendTo[content, augRender2[mid0, after0, notes2, hi2, hi3]]
+            ];
+
+            aug = after0;
+            ,
+            If[terms =!= {},
+              AppendTo[content, augRender2[before0, mid0, notes1, hi1, hi2]];
+              aug = mid0;
+            ];
+          ];
+        ];
+
+        solLocal[[i]] = aug[[i, n + 1]];
+        addGap[content, 6];
+        AppendTo[content, highlightGrid @ Grid[
+          {{tf[lhsStyle[vars[[i]]]], "=", tft[solLocal[[i]]]}} ,
+          Alignment -> {{Right, Center, Left}}, BaseStyle -> {FontSize -> 16}
+        ]];
+        addGap[content, 6];
+        ,
+        {i, order}
+      ];
+
+      addCheckHeader[{"Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."}];
+      content = Join[content, verificationSteps[data, solLocal]];
+
+      <|"Solution" -> solLocal|>
+    ],
+
+    "NONE",
+    Module[{badIdx},
+      badIdx = data["BadRow"];
+
+      addHeader["Analýza riadkov"];
+      addText["Hľadáme riadok tvaru 0 = k, kde k \[NotEqual] 0. Taký riadok znamená spor."];
+
+      notes = ReplacePart[ConstantArray["", n], badIdx -> "SPOR: 0 = " <> ToString[aug[[badIdx, n + 1]]]];
+      addMatrix[aug, notes, <|"ActiveRow" -> badIdx|>];
+      addCheckHeader[{"Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."}];
+      content = Join[content, verificationStepsNone[data]];
+      addConclusion[{"Sústava nemá riešenie."}];
+
+      <|"Solution" -> "NONE"|>
+    ],
+
+    "INFINITE",
+    Module[{paramIdxs, paramSymbols, solExprs, pivot, row, knownTerm},
+      paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
+      paramSymbols = Take[{\[FormalS], \[FormalT]}, Length[paramIdxs]];
+
+      addHeader["Analýza riadkov"];
+      addText[
+        If[Length[paramIdxs] === 1,
+          "Jeden nulový riadok znamená, že jedna premenná je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho.",
+          "Dva nulové riadky znamenajú, že dve premenné sú voľné. Označíme ich parametrami a ostatné premenné vyjadríme pomocou nich."
+        ]
+      ];
+      notes = ConstantArray["", n];
+      Scan[(notes[[#]] = "nulový riadok -> parameter") &, paramIdxs];
+      addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>];
+
+      Do[
+        addText[Row[{"Premennú ", vars[[paramIdxs[[k]]]], " zvolíme za parameter ", TraditionalForm[paramSymbols[[k]]], "."}]];
+        addGap[content, 6];
+        AppendTo[content,
+          highlightGrid @ Grid[
+            {{tf[vars[[paramIdxs[[k]]]]], "=", TraditionalForm[paramSymbols[[k]]]}},
+            Alignment -> {{Right, Center, Left}},
+            BaseStyle -> {FontSize -> 16}
+          ]
+        ];
+        addGap[content, 6];
+        ,
+        {k, 1, Length[paramIdxs]}
+      ];
+
+      addHeader["Vyjadrenie ostatných premenných pomocou parametrov"];
+
+      solExprs = ConstantArray[0, n];
+      Do[
+        solExprs[[paramIdxs[[k]]]] = paramSymbols[[k]];
+        ,
+        {k, 1, Length[paramIdxs]}
+      ];
+
+      Do[
+        If[MemberQ[paramIdxs, i], Continue[]];
+
+        row = aug[[i]];
+        pivot = row[[i]];
+        If[pivot === 0, Continue[]];
+
+        knownTerm = Total@Table[If[j === i, 0, row[[j]]*solExprs[[j]]], {j, 1, n}];
+        solExprs[[i]] = Expand[(row[[n + 1]] - knownTerm)/pivot];
+
+        notes = ConstantArray["", n];
+        notes[[i]] = Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[solExprs[[i]]]}];
+
+        addMatrix[
+          aug,
+          notes,
+          <|
+            "ActiveRow" -> i,
+            "PivotPos" -> {i, i},
+            "ZeroCells" -> {{i, i}, {i, n + 1}}
+          |>
+        ];
+
+        addGap[content, 6];
+        AppendTo[content,
+          highlightGrid @ Grid[
+            {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]]}},
+            Alignment -> {{Right, Center, Left}},
+            BaseStyle -> {FontSize -> 16}
+          ]
+        ];
+        addGap[content, 6];
+        ,
+        {i, order}
+      ];
+
+      addCheckHeader[{
+        If[Length[paramIdxs] === 1,
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
+        ]
+      }];
+      content = Join[content, verificationStepsInfinite[data, solExprs]];
+
+      addConclusion[{
+        "Sústava má nekonečne veľa riešení:",
+        If[Length[paramIdxs] === 1,
+          Row[{"[", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], kde ", \[FormalT], " \[Element] ", Integers}],
+          Row[{"[", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], kde ", \[FormalS], ", ", \[FormalT], " \[Element] ", Integers}]
+        ]
+      }];
+
+      <|"Solution" -> "INFINITE"|>
+    ]
+  ];
+
+  sol = result["Solution"];
+  <|"Content" -> content, "Solution" -> sol|>
+];
+
+stepsGauss[data_Association] := Catch[Module[ {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow, solLocal, tmp},
+  n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
+
+  addHeader[text_] := appendStepHeader[content, text];
+  addText[text_] := AppendTo[content, text];
+  addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
+
+  addHeader["Prepis sústavy do augmentovanej matice"];
+  addText["Sústavu zapíšeme do augmentovanej matice. Potom vynulujeme prvky pod hlavnou diagonálou."];
+  addMatrix[aug];
+
+  addHeader["Dopredná eliminácia (na horný trojuholník)"];
+  addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme pivot, podľa potreby prehodíme riadky a potom vynulujeme prvky pod pivotom."];
+
+  Do[
+    kPivot = gaussPivotRowByNonzero[aug, i];
+    If[kPivot =!= i,
+      before = aug;
+      after = rowApplySwap[before, i, kPivot];
+      notes = ConstantArray["", n];
+      notes[[i]] = rowNoteSwap[i, kPivot];
+      AppendTo[content, augRender2[
+        before, after, notes,
+        <|"ActiveRow" -> i, "SourceRows" -> {kPivot}, "PivotPos" -> {i, i}|>,
+        <|"ActiveRow" -> kPivot, "SourceRows" -> {i}, "PivotPos" -> {i, i}|>
+      ]];
+      aug = after;
+      If[st === "NONE", appendNoneConclusionAndStop[content, aug, data]];
+    ];
+
+    pNow = aug[[i, i]];
+    If[pNow === 0, Continue[]];
+
+    Do[
+      If[aug[[r, i]] =!= 0,
+        before = aug;
+        elimRes = rowApplyElimStable[before, r, i];
+        aug = rowAppendElimStep[content, before, elimRes, r, i, n, <|"SourceRows" -> {i}|>];
+        If[st === "NONE", appendNoneConclusionAndStop[content, aug, data]];
+      ],
+      {r, i + 1, n}
+    ],
+    {i, 1, n - 1}
+  ];
+
+  addHeader["Tvar po Gaussovej eliminácii"];
+  addText["Po týchto úpravách dostaneme hornú trojuholníkovú sústavu. Neznáme určíme spätným dosadzovaním od posledného riadku."];
+  addMatrix[aug, {}, <|"BoldDiagonal" -> True|>];
+
+  If[st === "INFINITE" && AnyTrue[aug, AllTrue[#, # === 0 &] &],
+    addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však pokračujeme ďalej, aby sme riešenie vedeli pekne zapísať pomocou parametra."]
+  ];
+
+  If[st === "ONE",
+    addHeader["Spätné dosadzovanie v rovniciach"];
+    tmp = appendGaussBackSubstitutionSteps[aug, vars, ConstantArray[0, n], {}, content];
+    solLocal = tmp[[1]];
+    content = tmp[[2]];
+
+    addHeader["Skúška správnosti"];
+    addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
+    content = Join[content, verificationSteps[data, solLocal]];
+    Return[<|"Content" -> content, "Solution" -> solLocal|>];
+  ];
+
+  If[st === "INFINITE",
+    Module[{paramIdxs, paramSymbols},
+      paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
+      paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+
+      addHeader[
+        If[Length[paramIdxs] === 1,
+          "Spätné dosadzovanie s parametrom",
+          "Spätné dosadzovanie s parametrami"
+        ]
+      ];
+
+      addText[
+        If[Length[paramIdxs] === 1,
+          Row[{
+            "Voľnú premennú zvolíme ",
+            tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]], "."
+          }],
+          Row[{
+            "Voľné premenné zvolíme ",
+            tf[vars[[paramIdxs[[1]]]]], " = ", TraditionalForm[paramSymbols[[1]]],
+            " a ",
+            tf[vars[[paramIdxs[[2]]]]], " = ", TraditionalForm[paramSymbols[[2]]], "."
+          }]
+        ]
+      ];
+
+      solLocal = ConstantArray[0, n];
+      Do[
+        solLocal[[paramIdxs[[k]]]] = paramSymbols[[k]],
+        {k, 1, Length[paramIdxs]}
+      ];
+
+      tmp = appendGaussBackSubstitutionSteps[aug, vars, solLocal, paramIdxs, content];
+      solLocal = tmp[[1]];
+      content = tmp[[2]];
+
+      addHeader["Skúška správnosti"];
+      addText[
+        If[Length[paramIdxs] === 1,
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
+        ]
+      ];
+      content = Join[content, verificationStepsInfinite[data, solLocal]];
+
+      Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
+    ]
+  ];
+
+  <|"Content" -> content, "Solution" -> aug[[All, n + 1]]|>
+], "StopMatrixSteps"];
+
+stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] := Block[
+  {$ElemStepCounter = 0, $ElemMatrixCounter = 0},
+  Catch[
+    Module[
+      {content = {}, n, aug, vars, st, addHeader, addText, addMatrix, notes, pNow, solLocal, solExprs, row, pivot, knownTerm, pivotRowFn},
+
+      n = data["n"]; aug = data["Aug"]; vars = data["Vars"]; st = data["SolutionType"];
+      pivotRowFn = If[pivotQ, gaussPivotRowByMinAbs, gaussPivotRowByNonzero];
+
+      addHeader[text_] := appendStepHeader[content, text];
+      addText[text_] := AppendTo[content, text];
+      addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrix[m, rowNotes, hi]];
+
+      addHeader["Prepis sústavy do augmentovanej matice"];
+      If[showElemQ,
+        addText["Sústavu zapíšeme do augmentovanej matice a označíme ju M₀. Pri každej úprave uvedieme aj príslušnú elementárnu maticu Eᵢ, takže bude platiť Mᵢ = Eᵢ · Mᵢ₋₁."];
+        AppendTo[content, namedAugmentedStateCard[Subscript[Style["M", Italic], 0], aug]],
+        addText["Sústavu zapíšeme do augmentovanej matice. Úpravami ju prevedieme na tvar (I | x)."];
+        addMatrix[aug]
+      ];
+
+      addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
+      addText[
+        If[showElemQ,
+          If[pivotQ,
+            "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom a každú úpravu zapíšeme aj pomocou elementárnej matice.",
+            "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky. Každú úpravu zapíšeme aj pomocou elementárnej matice."
+          ],
+          If[pivotQ,
+            "Na začiatku každého stĺpca vyberieme najmenší pivot. Ak treba, prehodíme riadky a potom vynulujeme prvky pod pivotom.",
+            "Pomocou riadkových úprav vynulujeme prvky pod pivotmi. Ak je pivot nulový, najprv prehodíme riadky."
+          ]
+        ]
+      ];
+
+      Do[
+        Module[{kPivot},
+          kPivot = pivotRowFn[aug, i];
+
+          If[pivotQ && kPivot =!= i,
+            addGap[content, 1];
+            addText[gaussPivotSwapExplanation[aug, i, kPivot]];
+          ];
+
+          If[kPivot =!= i,
+            aug = applyJordanSwapStep[content, aug, i, kPivot, n, showElemQ];
+            If[st === "NONE",
+              appendNoneConclusionAndStop[content, aug, data, showElemQ, $ElemMatrixCounter]
+            ];
+          ];
+        ];
+
+        pNow = aug[[i, i]];
+        If[pNow === 0, Continue[]];
+
+        Do[
+          If[aug[[r, i]] =!= 0,
+            aug = applyJordanElimStep[content, aug, r, i, n, <|"SourceRows" -> {i}|>, showElemQ];
+            If[st === "NONE",
+              appendNoneConclusionAndStop[content, aug, data, showElemQ, $ElemMatrixCounter]
+            ];
+          ],
+          {r, i + 1, n}
+        ],
+        {i, 1, n - 1}
+      ];
+
+      If[st === "INFINITE" && AnyTrue[aug, AllTrue[#, # === 0 &] &],
+        addText["Tu už vidíme, že vyšiel riadok 0 = 0, takže sústava má nekonečne veľa riešení. Ešte však spravíme aj spätnú úpravu, aby sa neznáme dali ľahšie zapísať pomocou parametra."]
+      ];
+
+      addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
+      addText[
+        If[showElemQ,
+          "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
+          "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
+        ]
+      ];
+
+      Do[
+        pNow = aug[[i, i]];
+        If[pNow === 0, Continue[]];
+
+        Do[
+          If[aug[[r, i]] =!= 0,
+            aug = applyJordanElimStep[content, aug, r, i, n, <||>, showElemQ];
+          ],
+          {r, 1, i - 1}
+        ];
+
+        pNow = aug[[i, i]];
+        If[pNow =!= 0 && pNow =!= 1,
+          If[showElemQ,
+            aug = applyElemDivideStep[content, aug, i, pNow, n, {i, i}],
+            Module[{before, after},
+              before = aug;
+              after = rowApplyDivide[before, i, pNow];
+              notes = ConstantArray["", n];
+              notes[[i]] = rowNoteDivide[i, pNow];
+              AppendTo[content, augRender2[
+                before, after, notes,
+                <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
+                <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>
+              ]];
+              aug = after;
+            ]
+          ]
+        ];
+        ,
+        {i, n, 2, -1}
+      ];
+
+      pNow = aug[[1, 1]];
+      If[pNow =!= 0 && pNow =!= 1,
+        If[showElemQ,
+          aug = applyElemDivideStep[content, aug, 1, pNow, n, {1, 1}],
+          Module[{before, after},
+            before = aug;
+            after = rowApplyDivide[before, 1, pNow];
+            notes = ConstantArray["", n];
+            notes[[1]] = rowNoteDivide[1, pNow];
+            AppendTo[content, augRender2[
+              before, after, notes,
+              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}|>,
+              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}, "ZeroCells" -> {{1, 1}, {1, n + 1}}|>
+            ]];
+            aug = after;
+          ]
+        ]
+      ];
+
+      addHeader["Hotový tvar (I | x)"];
+      addText["Po úpravách dostaneme tvar (I | x). Riešenie prečítame z pravej strany."];
+
+      notes = If[
+        st === "ONE",
+        Table[
+          Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[aug[[i, n + 1]]]}],
+          {i, 1, n}
+        ],
+        ConstantArray["", n]
+      ];
+
+      If[showElemQ,
+        AppendTo[
+          content,
+          namedAugmentedStateCard[
+            Subscript[Style["M", Italic], $ElemMatrixCounter],
+            aug,
+            notes,
+            <|"BoldDiagonal" -> True|>
+          ]
+        ],
+        addMatrix[aug, notes]
+      ];
+
+      If[st === "INFINITE",
+        Module[{paramIdxs, paramSymbols},
+          paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
+          paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+
+          addHeader["Analýza riadkov"];
+          addText[
+            If[Length[paramIdxs] === 1,
+              "Jeden nulový riadok znamená, že jedna premenná je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho.",
+              "Dva nulové riadky znamenajú, že dve premenné sú voľné. Označíme ich parametrami a ostatné premenné vyjadríme pomocou nich."
+            ]
+          ];
+
+          notes = ConstantArray["", n];
+          Scan[(notes[[#]] = "nulový riadok -> parameter") &, paramIdxs];
+
+          If[showElemQ,
+            AppendTo[content,
+              namedAugmentedStateCard[
+                Subscript[Style["M", Italic], $ElemMatrixCounter],
+                aug,
+                notes,
+                <|"ActiveRows" -> paramIdxs|>
+              ]
+            ],
+            addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>]
+          ];
+
+          Do[
+            addText[Row[{"Premennú ", vars[[paramIdxs[[k]]]], " označíme parametrom ", TraditionalForm[paramSymbols[[k]]], "."}]];
+            addGap[content, 6];
+            AppendTo[content, highlightGrid @ Grid[
+              {{tf[vars[[paramIdxs[[k]]]]], "=", TraditionalForm[paramSymbols[[k]]] }},
+              Alignment -> {{Right, Center, Left}},
+              BaseStyle -> {FontSize -> 16}
+            ]];
+            addGap[content, 6];
+            ,
+            {k, 1, Length[paramIdxs]}
+          ];
+
+          If[!showElemQ, addHeader["Vyjadrenie ostatných premenných pomocou parametrov"]];
+
+          solExprs = ConstantArray[0, n];
+          Do[
+            solExprs[[paramIdxs[[k]]]] = paramSymbols[[k]],
+            {k, 1, Length[paramIdxs]}
+          ];
+
+          Do[
+            If[MemberQ[paramIdxs, i], Continue[]];
+
+            row = aug[[i]];
+            pivot = row[[i]];
+            If[pivot === 0, Continue[]];
+
+            knownTerm = Total@Table[If[j === i, 0, row[[j]]*solExprs[[j]]], {j, 1, n}];
+            solExprs[[i]] = Expand[(row[[n + 1]] - knownTerm)/pivot];
+
+            If[!showElemQ,
+              notes = ConstantArray["", n];
+              notes[[i]] = Row[{lhsStyle[vars[[i]]], " = ", TraditionalForm[solExprs[[i]]]}];
+
+              addMatrix[
+                aug,
+                notes,
+                <|
+                  "ActiveRow" -> i,
+                  "PivotPos" -> {i, i},
+                  "ZeroCells" -> {{i, i}, {i, n + 1}}
+                |>
+              ];
+
+              addGap[content, 6];
+              AppendTo[content, highlightGrid @ Grid[
+                {{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[solExprs[[i]]] }},
+                Alignment -> {{Right, Center, Left}},
+                BaseStyle -> {FontSize -> 16}
+              ]];
+              addGap[content, 6];
+            ];
+            ,
+            {i, n, 1, -1}
+          ];
+
+          addHeader["Skúška správnosti"];
+          addText[
+            If[Length[paramIdxs] === 1,
+              "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ].",
+              "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
+            ]
+          ];
+          content = Join[content, verificationStepsInfinite[data, solExprs]];
+          Return[<|"Content" -> content, "Solution" -> "INFINITE"|>];
+        ]
+      ];
+
+      solLocal = aug[[All, n + 1]];
+
+      addHeader["Skúška správnosti"];
+      addText["Porovnáme A \[CenterDot] x s pravou stranou b po riadkoch."];
+      content = Join[content, verificationSteps[data, solLocal]];
+
+      <|"Content" -> content, "Solution" -> solLocal|>
+    ],
+    "StopMatrixSteps"
+  ]
+];
+
+stepsInverseMatrix[data_Association] := Module[
+  {content = {}, n, A, b, vars, augInv, invMatrix, xResult,
+    addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow},
+
+  n = data["n"];
+  A = data["A"];
+  b = data["b"];
+  vars = data["Vars"];
+
+  addHeader[text_] := appendStepHeader[content, text];
+  addText[text_String] := AppendTo[content, text];
+  addText[expr_] := AppendTo[content, Cell[BoxData @ ToBoxes[expr, StandardForm], "Text", ShowStringCharacters -> False]];
+  addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrixInverse[m, rowNotes, hi]];
+
+  addHeader["Prepis matice do tvaru (A | E)"];
+  addText[Row[{"Na ľavú stranu zapíšeme maticu A a na pravú jednotkovú maticu E. Rovnakými úpravami dostaneme z ľavej časti E a z pravej ", inverseASymbol[], "."}]];
+
+  augInv = Join[A, IdentityMatrix[n], 2];
+  addMatrix[augInv];
+
+  addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
+  addText["Postupujeme po stĺpcoch zľava doprava. Vyberieme vhodný pivot a vynulujeme prvky pod ním."];
+
+  Do[
+    kPivot = gaussPivotRowByMinAbs[augInv, i];
+
+    If[kPivot =!= i,
+      before = augInv;
+      after = rowApplySwap[before, i, kPivot];
+      notes = ConstantArray["", n];
+      notes[[i]] = rowNoteSwap[i, kPivot];
+      AppendTo[content, augRender2Inverse[
+        before, after, notes,
+        <|"ActiveRow" -> i, "SourceRows" -> {kPivot}, "PivotPos" -> {i, i}|>,
+        <|"ActiveRow" -> kPivot, "SourceRows" -> {i}, "PivotPos" -> {i, i}|>
+      ]];
+      augInv = after;
+    ];
+
+    pNow = augInv[[i, i]];
+    If[pNow === 0, Continue[]];
+
+    Do[
+      If[augInv[[r, i]] =!= 0,
+        before = augInv;
+        elimRes = rowApplyElimStable[before, r, i];
+        augInv = rowAppendElimStepInverse[content, before, elimRes, r, i, n, <|"SourceRows" -> {i}|>];
+      ],
+      {r, i + 1, n}
+    ];
+    ,
+    {i, 1, n - 1}
+  ];
+
+  addHeader["Spätná eliminácia"];
+  addText["Rovnakým spôsobom vynulujeme aj prvky nad diagonálou."];
+
+  Do[
+    pNow = augInv[[i, i]];
+    If[pNow === 0, Continue[]];
+
+    Do[
+      If[augInv[[r, i]] =!= 0,
+        before = augInv;
+        elimRes = rowApplyElimStable[before, r, i];
+        augInv = rowAppendElimStepInverse[content, before, elimRes, r, i, n, <||>];
+      ],
+      {r, 1, i - 1}
+    ];
+    ,
+    {i, n, 2, -1}
+  ];
+
+  addHeader[Row[{"Hotový tvar (E | ", inverseASymbol[], ")"}]];
+  addText[Row[{"Ľavá časť je jednotková matica. Pravá časť je teda inverzná matica ", inverseASymbol[], "."}]];
+  addMatrix[augInv, {}, <|"BoldIdentity" -> True|>];
+
+  invMatrix = augInv[[All, n + 1 ;; 2 n]];
+
+  addGap[content, 6];
+
+  AppendTo[content, Grid[
+    {{Style[Row[{inverseASymbol[], " ="}], Bold, FontSize -> 16], styledPlainMatrix[invMatrix]}},
+    Alignment -> {{Right, Left}},
+    Spacings -> {1.2, 0}
+  ]];
+
+  addHeader[Row[{"Výpočet riešenia x = ", inverseASymbol[], " \[CenterDot] b"}]];
+  addText[Row[{"Riešenie teraz vypočítame zo vzťahu x = ", inverseASymbol[], " \[CenterDot] b."}]];
+
+  xResult = invMatrix . b;
+
+  AppendTo[content, Module[{resultNotes},
+    resultNotes = Grid[
+      List /@ MapThread[
+        Style[Row[{lhsStyle[#1], " = ", tft[#2]}], GrayLevel[.35], FontSize -> 13] &,
+        {vars, xResult}
+      ],
+      Alignment -> Left,
+      Spacings -> {0, 1.15}
+    ];
+
+    Grid[
+      {{
+        Style["x =", Bold, FontSize -> 16],
+        styledPlainMatrix[invMatrix],
+        Style["\[CenterDot]", Bold, FontSize -> 18],
+        styledPlainMatrix[List /@ b],
+        Style["=", Bold, FontSize -> 18],
+        styledPlainMatrix[List /@ xResult],
+        Spacer[12],
+        resultNotes
+      }},
+      Alignment -> {Left, Center, Center, Center, Center, Center, Center, Left},
+      Spacings -> {1.1, 0}
+    ]
+  ]];
+
+  addHeader["Skúška správnosti"];
+  addText[Row[{"Najprv skontrolujeme, že A \[CenterDot] ", inverseASymbol[], " = E. Potom overíme, že platí aj A \[CenterDot] x = b."}]];
+
+  Module[{product, isIdentity},
+    product = Together[A . invMatrix];
+    isIdentity = product === IdentityMatrix[n];
+
+    AppendTo[content, Grid[
+      {{
+        Style[Row[{"A \[CenterDot] ", inverseASymbol[], " ="}], FontSize -> 13],
+        TraditionalForm[MatrixForm[product]],
+        If[isIdentity, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]];
+  ];
+
+  content = Join[content, verificationSteps[data, xResult]];
+
+  <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
+];
+
+stepsLU[data_Association] := Module[
+  {
+    content = {}, n, A, b, vars, luData, L, U, y, x,
+    addHeader, addText, addMatrixPair, addVector, addFormula, addSubHeader, resultStyle,
+    i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck,
+    xSymbols, formatLinearEquation, formatForwardEquation, formatBackwardEquation,
+    symbolicProductSum, numericProductSum, sigmaUDisplay, sigmaLDisplay,
+    buildUFormulaLines, buildLFormulaLines, buildYFormulaLines, currentLBoldPositions, currentUBoldPositions
+  },
+
+  n = data["n"];
+  A = data["A"];
+  b = data["b"];
+  vars = data["Vars"];
+  xSymbols = vars;
+
+  addHeader[text_] := appendStepHeader[content, text];
+  addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
+  addText[text_] := AppendTo[content, text];
+  addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}] := AppendTo[
+    content, luMatrixPairGrid[l, u, lBold, uBold]
+  ];
+  addVector[label_, vec_] := AppendTo[content, namedVectorGrid[label, vec]];
+  addFormula[expr_] := AppendTo[content, expr];
+  resultStyle[expr_] := Style[expr, Bold, Blue];
+
+  currentLBoldPositions[step_] := Join[
+    Table[{r, r}, {r, 1, n}], Flatten[Table[{r, c}, {c, 1, Min[step, n - 1]}, {r, c + 1, n}], 1]
+  ];
+
+  currentUBoldPositions[step_] := Flatten[
+    Table[{r, c}, {r, 1, step}, {c, r, n}], 1
+  ];
+
+  (* pomocný formát lineárnej rovnice so znamienkami *)
+  formatLinearEquation[coeffList_, symbolList_, rhs_] := Module[
+    {pairs, nz, firstPair, pieces = {}, c, s, absC},
+    pairs = Transpose[{coeffList, symbolList}];
+    nz = Select[pairs, #[[1]] =!= 0 &];
+
+    If[nz === {},
+      Return[Row[{0, " = ", tft[rhs]}]]
+    ];
+
+    firstPair = First[nz];
+    c = firstPair[[1]];
+    s = firstPair[[2]];
+    absC = Abs[c];
+
+    AppendTo[
+      pieces,
+      Which[
+        c === 1, s,
+        c === -1, Row[{"-", s}],
+        c < 0, Row[{"-", tft[absC], "\[CenterDot]", s}],
+        True, Row[{tft[c], "\[CenterDot]", s}]
+      ]
+    ];
+
+    Do[
+      c = pair[[1]];
+      s = pair[[2]];
+      absC = Abs[c];
+
+      AppendTo[
+        pieces,
+        Which[
+          c === 1, Row[{" + ", s}],
+          c === -1, Row[{" - ", s}],
+          c > 0, Row[{" + ", tft[absC], "\[CenterDot]", s}],
+          True, Row[{" - ", tft[absC], "\[CenterDot]", s}]
+        ]
+      ];
+      ,
+      {pair, Rest[nz]}
+    ];
+
+    Row[{Row[pieces], " = ", tft[rhs]}]
+  ];
+
+  (* rovnica pre L.y = b *)
+  formatForwardEquation[row_, rhs_, i_] := Module[
+    {coeffList, symbolList},
+    coeffList = row[[1 ;; i]];
+    symbolList = Table[luScalarSymbol["y", k], {k, 1, i}];
+    formatLinearEquation[coeffList, symbolList, rhs]
+  ];
+
+  (* rovnica pre U.x = y *)
+  formatBackwardEquation[row_, rhs_, i_] := Module[
+    {coeffList, symbolList},
+    coeffList = row[[i ;; n]];
+    symbolList = vars[[i ;; n]];
+    formatLinearEquation[coeffList, symbolList, rhs]
+  ];
+
+  (* symbolický rozpis sumy bez sigma *)
+  symbolicProductSum[factors_List] := If[
+    factors === {},
+    tft[0],
+    Row @ Riffle[(Row[#[[1 ;; 2]]] & /@ factors), " + "]
+  ];
+
+  (* číselný rozpis súčinu bez sčítania *)
+  numericProductSum[terms_List] := If[
+    terms === {},
+    tft[0],
+    Row @ Riffle[
+      (Row[{luFactorDisplay[#[[1]]], "\[CenterDot]", luFactorDisplay[#[[2]]]}] & /@ terms),
+      " + "
+    ]
+  ];
+
+  (* telo sumy so symbolickým k bez interného k$123 *)
+  sigmaUDisplay[rowIdx_, colIdx_] := Row[{
+    Subscript[Style["l", Italic], Row[{rowIdx, ",", Style["k", Italic]}]],
+    Subscript[Style["u", Italic], Row[{Style["k", Italic], ",", colIdx}]]
+  }];
+
+  sigmaLDisplay[rowIdx_, colIdx_] := Row[{
+    Subscript[Style["l", Italic], Row[{rowIdx, ",", Style["k", Italic]}]],
+    Subscript[Style["u", Italic], Row[{Style["k", Italic], ",", colIdx}]]
+  }];
+
+  (* riadky výpočtu pre prvok U *)
+  buildUFormulaLines[i_, j_, terms_, value_] := Module[
+    {symbolicTerms},
+    If[terms === {},
+      {
+        Row[{
+          lhsStyle[luEntrySymbol["u", i, j]], " = ",
+          luEntrySymbol["a", i, j], " = ",
+          resultStyle[tft[value]]
+        }]
+      },
+      symbolicTerms = Table[
+        {luEntrySymbol["l", i, kk], luEntrySymbol["u", kk, j]},
+        {kk, 1, i - 1}
+      ];
+      {
+        Row[{
+          lhsStyle[luEntrySymbol["u", i, j]], " = ",
+          luEntrySymbol["a", i, j], " - ",
+          Underoverscript["\[Sum]", Row[{Style["k", Italic], " = 1"}], i - 1],
+          sigmaUDisplay[i, j],
+          " = ",
+          luEntrySymbol["a", i, j], " - (", symbolicProductSum[symbolicTerms], ")"
+        }],
+        Row[{
+          lhsStyle[luEntrySymbol["u", i, j]], " = ",
+          tft[A[[i, j]]], " - (", numericProductSum[terms], ")"
+        }],
+        Row[{
+          lhsStyle[luEntrySymbol["u", i, j]], " = ",
+          tft[A[[i, j]]], " - ", luWrappedSumDisplay[terms], " = ",
+          resultStyle[tft[value]]
+        }]
+      }
+    ]
+  ];
+  (* riadky výpočtu pre prvok L *)
+  buildLFormulaLines[j_, i_, terms_, pivot_, value_] := Module[
+    {symbolicTerms},
+    If[terms === {},
+      {
+        Row[{
+          lhsStyle[luEntrySymbol["l", j, i]], " = ",
+          luEntrySymbol["a", j, i], " / ", luEntrySymbol["u", i, i],
+          " = ", tft[A[[j, i]]], " / ", tft[pivot],
+          " = ", resultStyle[tft[value]]
+        }]
+      },
+      symbolicTerms = Table[
+        {luEntrySymbol["l", j, kk], luEntrySymbol["u", kk, i]},
+        {kk, 1, i - 1}
+      ];
+      {
+        Row[{
+          lhsStyle[luEntrySymbol["l", j, i]], " = (",
+          luEntrySymbol["a", j, i], " - ",
+          Underoverscript["\[Sum]", Row[{Style["k", Italic], " = 1"}], i - 1],
+          sigmaLDisplay[j, i],
+          ") / ", luEntrySymbol["u", i, i],
+          " = (",
+          luEntrySymbol["a", j, i], " - (", symbolicProductSum[symbolicTerms], ")) / ",
+          luEntrySymbol["u", i, i]
+        }],
+        Row[{
+          lhsStyle[luEntrySymbol["l", j, i]], " = (",
+          tft[A[[j, i]]], " - (", numericProductSum[terms], ")) / ", tft[pivot]
+        }],
+        Row[{
+          lhsStyle[luEntrySymbol["l", j, i]], " = (",
+          tft[A[[j, i]]], " - ", luWrappedSumDisplay[terms], ") / ", tft[pivot],
+          " = ", resultStyle[tft[value]]
+        }]
+      }
+    ]
+  ];
+  buildYFormulaLines[i_, terms_, value_] := Module[{},
+    If[terms === {},
+      {
+        Row[{
+          lhsStyle[luScalarSymbol["y", i]], " = ",
+          resultStyle[tft[value]]
+        }]
+      },
+      {
+        formatForwardEquation[L[[i]], b[[i]], i],
+        Row[{
+          lhsStyle[luScalarSymbol["y", i]], " = ",
+          tft[b[[i]]], " - (", numericProductSum[terms], ")"
+        }],
+        Row[{
+          lhsStyle[luScalarSymbol["y", i]], " = ",
+          tft[b[[i]]], " - ", luWrappedSumDisplay[terms], " = ",
+          resultStyle[tft[value]]
+        }]
+      }
+    ]
+  ];
+  addHeader["Prepis sústavy do maticového tvaru"];
+  addText["Sústavu zapíšeme v maticovom tvare A \[CenterDot] x = b."];
+
+  AppendTo[
+    content,
+    highlightGrid @ Grid[
+      {{
+        Style["A =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[A]],
+        Spacer[18],
+        Style["x =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[xSymbols]],
+        Spacer[18],
+        Style["b =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[b]]
+      }},
+      Alignment -> Left,
+      Spacings -> {2, 1}
+    ]
+  ];
+
+  addText["Maticu A rozložíme na súčin A = L \[CenterDot] U."];
+
+  AppendTo[
+    content,
+    highlightGrid @ Grid[
+      {
+        {Style["A \[CenterDot] x = b", Bold]},
+        {Style["A = L \[CenterDot] U", Bold]},
+        {Style["Označíme", Plain]},
+        {Style["U \[CenterDot] x = y", Bold]},
+        {Style["Ďalej riešime v dvoch krokoch:", Plain]},
+        {Style["1. vyriešime L \[CenterDot] y = b", Plain]},
+        {Style["2. potom vyriešime U \[CenterDot] x = y", Plain]}
+      },
+      Alignment -> Left,
+      Spacings -> {1, 0.6}
+    ]
+  ];
+
+  luData = luSolveData[A, b];
+
+  If[luData === $Failed,
+    addHeader["Výsledok"];
+    addText["Počas rozkladu sa objavil nulový pivot, preto LU rozklad bez pivotovania nemožno použiť."];
+    Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
+  ];
+
+  L = IdentityMatrix[n];
+  U = ConstantArray[0, {n, n}];
+
+  addHeader["Inicializácia matíc"];
+  addText["Na začiatku poznáme len jednotkovú diagonálu matice L. Ostatné prvky matíc L a U dopočítame postupne."];
+  addMatrixPair[L, U, Table[{r, r}, {r, 1, n}], {}];
+
+  Do[
+    If[
+      i < n,
+      addHeader[
+        "Krok " <> ToString[i] <> " – výpočet " <> ToString[i] <>
+            ". riadku matice U a " <> ToString[i] <> ". stĺpca matice L"
+      ],
+      addHeader["Krok " <> ToString[i] <> " – výpočet posledného prvku matice U"]
+    ];
+
+    If[i < n,
+      addText["Najprv vypočítame prvky matice U."];
+      addSubHeader["Prvky matice U:"];
+      Do[
+        terms = Table[{L[[i, kk]], U[[kk, j]]}, {kk, 1, i - 1}];
+        sumTerm = Total[Times @@@ terms];
+        U[[i, j]] = Together[A[[i, j]] - sumTerm];
+        Scan[addFormula, buildUFormulaLines[i, j, terms, U[[i, j]]]];
+
+        If[j < n && i > 1,
+          addGap[content, 3]
+        ];
+        ,
+        {j, i, n}
+      ];
+      ,
+      addSubHeader["Prvok matice U:"];
+      terms = Table[{L[[i, kk]], U[[kk, i]]}, {kk, 1, i - 1}];
+      sumTerm = Total[Times @@@ terms];
+      U[[i, i]] = Together[A[[i, i]] - sumTerm];
+      Scan[addFormula, buildUFormulaLines[i, i, terms, U[[i, i]]]];
+    ];
+
+    pivotValue = Together[U[[i, i]]];
+    addText[Row[{"Pivot v tomto kroku je ", luEntrySymbol["u", i, i], " = ", tft[pivotValue], "."}]];
+
+    If[i < n,
+      addSubHeader["Prvky matice L:"];
+      Do[
+        terms = Table[{L[[j, kk]], U[[kk, i]]}, {kk, 1, i - 1}];
+        sumTerm = Total[Times @@@ terms];
+        L[[j, i]] = Together[(A[[j, i]] - sumTerm)/pivotValue];
+        Scan[addFormula, buildLFormulaLines[j, i, terms, pivotValue, L[[j, i]]]];
+
+        If[j < n && i > 1,
+          addGap[content, 5]
+        ];
+        ,
+        {j, i + 1, n}
+      ];
+    ];
+
+    If[i < n,
+      addText["Po tomto kroku dostaneme:"];
+      addMatrixPair[L, U, currentLBoldPositions[i], currentUBoldPositions[i]];
+    ];
+    ,
+    {i, 1, n}
+  ];
+
+  addHeader["Hotový rozklad A = L \[CenterDot] U"];
+  addText["Po výpočte dostaneme maticu L s jednotkami na diagonále a hornú trojuholníkovú maticu U."];
+  addMatrixPair[
+    L, U,
+    Join[Table[{r, r}, {r, 1, n}], Flatten[Table[{r, c}, {c, 1, n - 1}, {r, c + 1, n}], 1]],
+    Flatten[Table[{r, c}, {r, 1, n}, {c, r, n}], 1]
+  ];
+  addHeader["Overenie rozkladu L \[CenterDot] U = A"];
+  luProduct = Together[L . U];
+  addText["Skontrolujeme, že súčin L \[CenterDot] U sa rovná matici A."];
+  AppendTo[content, matrixProductDisplay[L, U]];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] U =", FontSize -> 13],
+        TraditionalForm[MatrixForm[luProduct]],
+        If[luProduct === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
+  addText["Keďže L je dolná trojuholníková matica s jednotkami na diagonále, vektor y určíme dopredným dosadzovaním."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
+
+  y = ConstantArray[0, n];
+  Do[
+    terms = Table[{L[[i, k]], y[[k]]}, {k, 1, i - 1}];
+    sumTerm = Total[Times @@@ terms];
+    y[[i]] = Together[b[[i]] - sumTerm];
+
+    Scan[addFormula, buildYFormulaLines[i, terms, y[[i]]]];
+
+    If[i < n,
+      addGap[content, 5]
+    ];
+    ,
+    {i, 1, n}
+  ];
+
+  addVector["y", y];
+  addHeader["Riešenie sústavy U \[CenterDot] x = y"];
+  addText["Keď poznáme vektor y, vyriešime sústavu U \[CenterDot] x = y spätným dosadzovaním."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[U, y], {}, <|"BoldDiagonal" -> True|>]];
+
+  x = ConstantArray[0, n];
+  Do[
+    terms = Table[{U[[i, k]], x[[k]]}, {k, i + 1, n}];
+    sumTerm = Total[Times @@@ terms];
+    x[[i]] = Together[(y[[i]] - sumTerm)/U[[i, i]]];
+
+    addFormula[formatBackwardEquation[U[[i]], y[[i]], i]];
+
+    addFormula[
+      If[
+        terms === {},
+        Row[{lhsStyle[vars[[i]]], " = ", tft[y[[i]]], " / ", tft[U[[i, i]]], " = ", resultStyle[tft[x[[i]]]]}],
+        Row[{
+          lhsStyle[vars[[i]]], " = (", tft[y[[i]]], " - ", luWrappedSumDisplay[terms], ") / ", tft[U[[i, i]]],
+          " = ", resultStyle[tft[x[[i]]]]
+        }]
+      ]
+    ];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  addHeader["Skúška správnosti"];
+  addText["Skontrolujeme rozklad A = L \[CenterDot] U, pomocnú sústavu L \[CenterDot] y = b, sústavu U \[CenterDot] x = y aj pôvodnú sústavu A \[CenterDot] x = b."];
+
+  lowerCheck = Together[L . y];
+  upperCheck = Together[U . x];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] U =", FontSize -> 13],
+        TraditionalForm[MatrixForm[luProduct]],
+        Style["A =", FontSize -> 13],
+        TraditionalForm[MatrixForm[A]],
+        If[luProduct === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] y =", FontSize -> 13],
+        TraditionalForm[MatrixForm[lowerCheck]],
+        Style["b =", FontSize -> 13],
+        TraditionalForm[MatrixForm[b]],
+        If[lowerCheck === b, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["U \[CenterDot] x =", FontSize -> 13],
+        TraditionalForm[MatrixForm[upperCheck]],
+        Style["y =", FontSize -> 13],
+        TraditionalForm[MatrixForm[y]],
+        If[upperCheck === y, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  <|
+    "Content" -> content,
+    "Solution" -> x,
+    "L" -> L,
+    "U" -> U,
+    "Y" -> y
+  |>
+];
+
+stepsCholesky[data_Association] := Module[
+  {
+    content = {}, n, A, b, vars, choleskyData, L, LT, y, x,
+    addHeader, addText, addSubHeader, addFormula, addMatrixPair, addVector,
+    i, j, productCheck, lowerCheck, upperCheck, ySymbols,
+    currentLBoldPositions, currentLTBoldPositions
+  },
+
+  n = data["n"];
+  A = data["A"];
+  b = data["b"];
+  vars = data["Vars"];
+  ySymbols = Table[luScalarSymbol["y", k], {k, 1, n}];
+
+  addHeader[text_] := appendStepHeader[content, text];
+  addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
+  addText[text_] := AppendTo[content, text];
+  addFormula[expr_] := AppendTo[content, expr];
+  addMatrixPair[l_, lt_, lBold_List : {}, ltBold_List : {}] := AppendTo[
+    content,
+    choleskyMatrixPairGrid[l, lt, lBold, ltBold]
+  ];
+  addVector[label_, vec_] := AppendTo[content, namedVectorGrid[label, vec]];
+
+  currentLBoldPositions[step_] := Flatten[
+    Table[{r, c}, {c, 1, step}, {r, c, n}],
+    1
+  ];
+
+  currentLTBoldPositions[step_] := Reverse /@ currentLBoldPositions[step];
+
+  addHeader["Prepis sústavy do maticového tvaru"];
+  addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Maticu A rozložíme na tvar A = L \[CenterDot] L^T."];
+
+  AppendTo[
+    content,
+    highlightGrid @ Grid[
+      {{
+        Style["A =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[A]],
+        Spacer[18],
+        Style["x =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[vars]],
+        Spacer[18],
+        Style["b =", Bold, FontSize -> 16],
+        TraditionalForm[MatrixForm[b]]
+      }},
+      Alignment -> Left,
+      Spacings -> {2, 1}
+    ]
+  ];
+
+  AppendTo[
+    content,
+    highlightGrid @ Grid[
+      {
+        {Style["A \[CenterDot] x = b", Bold]},
+        {Style["A = L \[CenterDot] L^T", Bold]},
+        {Style["Označíme", Plain]},
+        {Style["L^T \[CenterDot] x = y", Bold]},
+        {Style["Ďalej riešime v dvoch krokoch:", Plain]},
+        {Style["1. vyriešime L \[CenterDot] y = b", Plain]},
+        {Style["2. potom vyriešime L^T \[CenterDot] x = y", Plain]}
+      },
+      Alignment -> Left,
+      Spacings -> {1, 0.6}
+    ]
+  ];
+
+  choleskyData = choleskySolveData[A, b];
+
+  If[choleskyData === $Failed,
+    addHeader["Výsledok"];
+    addText["Pre túto maticu sa nepodarilo zostrojiť Choleského rozklad A = L \[CenterDot] L^T."];
+    Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>];
+  ];
+
+  L = ConstantArray[0, {n, n}];
+  LT = ConstantArray[0, {n, n}];
+
+  addHeader["Inicializácia matice L"];
+  addText["Prvky matice L vypočítame postupne po stĺpcoch. Po každom kroku si ukážeme tvar matíc L a L^T."];
+  addMatrixPair[L, LT];
+
+  Do[
+    addHeader["Krok " <> ToString[i] <> " – výpočet " <> ToString[i] <> ". stĺpca matice L"];
+
+    addSubHeader["Diagonálny prvok"];
+    Scan[
+      addFormula,
+      buildCholeskyDiagonalLines[i, A, L, choleskyData["L"][[i, i]]]
+    ];
+
+    L[[i, i]] = choleskyData["L"][[i, i]];
+
+    If[i < n,
+      addSubHeader["Prvky pod diagonálou"];
+      Do[
+        Scan[
+          addFormula,
+          buildCholeskyOffDiagonalLines[j, i, A, L, L[[i, i]], choleskyData["L"][[j, i]]]
+        ];
+
+        L[[j, i]] = choleskyData["L"][[j, i]];
+
+        If[j < n, addGap[content, 4]];
+        ,
+        {j, i + 1, n}
+      ];
+    ];
+
+    LT = Transpose[L];
+    addText["Po tomto kroku dostaneme:"];
+    addMatrixPair[L, LT, currentLBoldPositions[i], currentLTBoldPositions[i]];
+    ,
+    {i, 1, n}
+  ];
+
+  LT = Transpose[L];
+  y = choleskyData["Y"];
+  x = choleskyData["X"];
+
+  addHeader["Hotový rozklad A = L \[CenterDot] L^T"];
+  addText["Po výpočte dostaneme dolnú trojuholníkovú maticu L a jej transpozíciu L^T."];
+  addMatrixPair[L, LT, currentLBoldPositions[n], currentLTBoldPositions[n]];
+
+  addHeader["Overenie rozkladu L \[CenterDot] L^T = A"];
+  addText["Skontrolujeme, že súčin L \[CenterDot] L^T sa rovná matici A."];
+  productCheck = Together[L . LT];
+
+  AppendTo[content, matrixProductDisplay[L, LT]];
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] L^T =", FontSize -> 13],
+        TraditionalForm[MatrixForm[productCheck]],
+        Style["A =", FontSize -> 13],
+        TraditionalForm[MatrixForm[A]],
+        If[productCheck === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
+  addText["Keďže L je dolná trojuholníková matica, vektor y určíme dopredným dosadzovaním."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True|>]];
+
+  Do[
+    addFormula[forwardEquationDisplay[L[[i]], b[[i]], ySymbols, i]];
+    addFormula[
+      If[
+        i === 1,
+        Row[{
+          lhsStyle[luScalarSymbol["y", i]], " = ",
+          tft[b[[i]]], " / ", tft[L[[i, i]]], " = ",
+          Style[tft[y[[i]]], Bold, Blue]
+        }],
+        Row[{
+          lhsStyle[luScalarSymbol["y", i]], " = (",
+          tft[b[[i]]], " - ",
+          luWrappedSumDisplay[Table[{L[[i, k]], y[[k]]}, {k, 1, i - 1}]],
+          ") / ", tft[L[[i, i]]],
+          " = ", Style[tft[y[[i]]], Bold, Blue]
+        }]
+      ]
+    ];
+
+    If[i < n, addGap[content, 5]];
+    ,
+    {i, 1, n}
+  ];
+
+  addVector["y", y];
+
+  addHeader["Riešenie sústavy L^T \[CenterDot] x = y"];
+  addText["Keď poznáme vektor y, vyriešime sústavu L^T \[CenterDot] x = y spätným dosadzovaním."];
+  AppendTo[content, alignedAugmentedMatrix[augFromAb[LT, y], {}, <|"BoldDiagonal" -> True|>]];
+
+  Do[
+    addFormula[backwardEquationDisplay[LT[[i]], y[[i]], vars, i, n]];
+    addFormula[
+      If[
+        i === n,
+        Row[{
+          lhsStyle[vars[[i]]], " = ",
+          tft[y[[i]]], " / ", tft[LT[[i, i]]], " = ",
+          Style[tft[x[[i]]], Bold, Blue]
+        }],
+        Row[{
+          lhsStyle[vars[[i]]], " = (",
+          tft[y[[i]]], " - ",
+          luWrappedSumDisplay[Table[{LT[[i, k]], x[[k]]}, {k, i + 1, n}]],
+          ") / ", tft[LT[[i, i]]],
+          " = ", Style[tft[x[[i]]], Bold, Blue]
+        }]
+      ]
+    ];
+    ,
+    {i, n, 1, -1}
+  ];
+
+  addHeader["Skúška správnosti"];
+  addText["Skontrolujeme rozklad A = L \[CenterDot] L^T, pomocnú sústavu L \[CenterDot] y = b, sústavu L^T \[CenterDot] x = y aj pôvodnú sústavu A \[CenterDot] x = b."];
+
+  lowerCheck = Together[L . y];
+  upperCheck = Together[LT . x];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] L^T =", FontSize -> 13],
+        TraditionalForm[MatrixForm[productCheck]],
+        Style["A =", FontSize -> 13],
+        TraditionalForm[MatrixForm[A]],
+        If[productCheck === A, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L \[CenterDot] y =", FontSize -> 13],
+        TraditionalForm[MatrixForm[lowerCheck]],
+        Style["b =", FontSize -> 13],
+        TraditionalForm[MatrixForm[b]],
+        If[lowerCheck === b, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+
+  AppendTo[
+    content,
+    Grid[
+      {{
+        Style["L^T \[CenterDot] x =", FontSize -> 13],
+        TraditionalForm[MatrixForm[upperCheck]],
+        Style["y =", FontSize -> 13],
+        TraditionalForm[MatrixForm[y]],
+        If[upperCheck === y, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+      }},
+      Alignment -> Left,
+      Spacings -> {1, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  addGap[content, 6];
+  content = Join[content, verificationSteps[data, x]];
+
+  <|
+    "Content" -> content,
+    "Solution" -> x,
+    "L" -> L,
+    "LT" -> LT,
+    "Y" -> y
   |>
 ];
 
@@ -4880,29 +4897,6 @@ verificationStepsInfinite[data_Association, solExprs_List] := Module[{content = 
 
   content
 ];
-
-verificationStepsInfiniteRank[data_Association] := Module[{content = {}, A = data["A"], b = data["b"], n, aug0, rA, rAug},
-  n = Length[b];
-  aug0 = augFromAb[A, b];
-  rA = MatrixRank[A];
-  rAug = MatrixRank[aug0];
-
-  AppendTo[content,
-    Grid[
-      {
-        {Row[{"hodnosť(A) = ", rA}]},
-        {Row[{"hodnosť([A|b]) = ", rAug}]},
-        {If[rA === rAug && rA < n,
-          Style["hodnosť(A) = hodnosť([A|b]) < n  \[Rule]  sústava má nekonečne veľa riešení (OK)", Darker[Green]],
-          Style["hodnosti nesp\:013aňajú podmienku pre nekonečne veľa riešení - over postup (CHYBA)", Red]
-        ]}
-      },
-      Alignment -> Left, Spacings -> {0, 0.4}, BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-  content
-];
-
 
 (* ~-~-~ TASK / RESULT PRINTING ~-~-~ *)
 
