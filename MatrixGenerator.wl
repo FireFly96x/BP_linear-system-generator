@@ -165,6 +165,20 @@ lhsStyle[expr_] := Style[expr, Bold];
 inverseASymbol[] := Superscript[Style["A", Italic], -1];
 transposeLSymbol[] := Superscript[Style["L", Italic], Style["T", Italic]]
 
+resultValueStyle[expr_] := Style[expr, Bold, Blue];
+resultEquationLine[lhs_, rhs_] := Row[{lhsStyle[lhs], " = ", resultValueStyle[tft[rhs]]}];
+plainEquationLine[lhs_, rhs_] := Row[{lhsStyle[lhs], " = ", tft[rhs]}];
+
+highlightResultEquation[lhs_, rhs_] := highlightGrid @ Grid[
+  {{
+    tf[lhsStyle[lhs]],
+    "=",
+    TraditionalForm[rhs]
+  }},
+  Alignment -> {{Right, Center, Left}},
+  BaseStyle -> {FontSize -> 16}
+];
+
 SetAttributes[addGap, HoldFirst];
 addGap[content_, h_: 5] := AppendTo[content, Cell["", "Text", CellMargins -> {{Inherited, Inherited}, {0, 0}}, CellSize -> {Automatic, h}]];
 
@@ -1647,11 +1661,7 @@ appendTriangularSubstitutionSteps[
       ];
     ];
 
-    AppendTo[out, highlightGrid @ Grid[
-      {{tf[lhsStyle[vars[[rowIdx]]]], "=", TraditionalForm[exprVal]}},
-      Alignment -> {{Right, Center, Left}},
-      BaseStyle -> {FontSize -> 16}
-    ]];
+    AppendTo[out, highlightResultEquation[vars[[rowIdx]], exprVal]];
 
     AppendTo[solvedIdxs, rowIdx];
   ];
@@ -2568,7 +2578,7 @@ renderCramer4x4Reduction[matrix_, label_] := Module[
   If[line1 === Missing["NotFound"],
     value = Together[Det[matrix]];
     AppendTo[content, "Matica nemá vhodný riedky riadok ani stĺpec, preto determinant dopočítame priamo."];
-    AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+    AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
     Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
@@ -2588,12 +2598,9 @@ renderCramer4x4Reduction[matrix_, label_] := Module[
   det3Data = renderCramer3x3Det[minor3, minor3Label];
   content = Join[content, det3Data["Content"]];
 
+  addGap[content, 4];
   value = Together[signed1 det3Data["Value"]];
 
-  AppendTo[content, Row[{
-    cramerDetLabel[minor3Label], " = ",
-    cramerFactor[det3Data["Value"]]
-  }]];
   AppendTo[content, Row[{
     cramerDetLabel[label], " = ",
     cramerFactor[signed1], " \[CenterDot] ", cramerDetLabel[minor3Label],
@@ -2602,7 +2609,7 @@ renderCramer4x4Reduction[matrix_, label_] := Module[
     " = ",
     cramerFactor[value]
   }]];
-  AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+  AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
 
   <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
@@ -2847,7 +2854,6 @@ cramerSparseExplanation[lineData_Association] := If[
 
 cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
 cramerDetLabel[label_] := Row[{"det(", label, ")"}];
-cramerResultStyle[expr_] := Style[expr, Bold, Blue];
 
 cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[
   {
@@ -2895,15 +2901,15 @@ cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[
         styleOpts
       ];
 
-      Style[#1, Sequence @@ styleArgs]
+      Style[TraditionalForm[#1], Sequence @@ styleArgs]
     ] &,
     matrix,
     {2}
   ]
 ];
 
-cramerMatrixCard[matrix_, hi_Association : <||>] := TraditionalForm[
-  MatrixForm[cramerStyledMatrix[matrix, hi]]
+cramerMatrixCard[matrix_, hi_Association : <||>] := styledPlainMatrix[
+  cramerStyledMatrix[matrix, hi]
 ];
 
 cramerReductionHighlight[lineData_Association, extra_Association : <||>] := Module[
@@ -2930,16 +2936,12 @@ cramerLaplaceReductionPanel[matrix_, lineData_Association, minorLabel_, minorMat
   {{
     cramerMatrixCard[matrix, cramerReductionHighlight[lineData]],
     Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
-    Grid[
-      {{
-        Style[Row[{minorLabel, " ="}], Bold, FontSize -> 15],
-        cramerMatrixCard[minorMatrix, <|"FontSize" -> 13, "CellWidth" -> 1.05|>]
-      }},
-      Alignment -> {Left, Center},
-      Spacings -> {0.8, 0.4}
+    labeledMatrixBlock[
+      minorLabel,
+      cramerMatrixCard[minorMatrix, <|"FontSize" -> 13, "CellWidth" -> 1.05|>]
     ]
   }},
-  Alignment -> {Left, Center, Left},
+  Alignment -> {Center, Center, Center},
   Spacings -> {1.8, 1}
 ];
 
@@ -3016,23 +3018,71 @@ cramerFactor[value_] := If[
   tft[value]
 ];
 
-cramerLabeledMatrixGrid[label_, matrix_, hi_Association : <||>] := Grid[
-  {{
-    Style[Row[{label, " ="}], Bold, FontSize -> 16],
-    cramerMatrixCard[matrix, hi]
-  }},
-  Alignment -> Left,
-  Spacings -> {2, 1}
+cramerLabeledMatrixGrid[label_, matrix_, hi_Association : <||>] := labeledMatrixBlock[
+  label,
+  cramerMatrixCard[matrix, hi]
 ];
 
-cramerEqualityGrid[label_, value_] := highlightGrid @ Grid[
-  {{
-    Style[label, Bold, FontSize -> 15],
-    "=",
-    cramerResultStyle[tft[value]]
-  }},
-  Alignment -> {{Right, Center, Left}},
-  BaseStyle -> {FontSize -> 16}
+cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[
+  {leftBg, rightBg, matrixWithColumnBackground},
+
+  leftBg = RGBColor[0.95, 0.92, 1.00];
+  rightBg = RGBColor[0.90, 0.95, 1.00];
+
+  (* lokálne vykreslenie matice so zvýrazneným stĺpcom *)
+  matrixWithColumnBackground[m_, bg_] := Module[
+    {nRows, nCols, leftBracketCell, rightBracketCell, makeCell, rows},
+
+    {nRows, nCols} = Dimensions[m];
+
+    makeCell[i_, j_] := Module[{cell},
+      cell = TraditionalForm[m[[i, j]]];
+
+      If[j === column,
+        cell = Style[cell, Bold]
+      ];
+
+      Item[
+        Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}],
+        Background -> If[j === column, bg, None]
+      ]
+    ];
+
+    leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
+    rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
+
+    rows = Table[
+      Join[
+        {If[i === 1, leftBracketCell, SpanFromAbove]},
+        Table[makeCell[i, j], {j, 1, nCols}],
+        {If[i === 1, rightBracketCell, SpanFromAbove]}
+      ],
+      {i, 1, nRows}
+    ];
+
+    Grid[
+      rows,
+      Alignment -> Join[{Center}, ConstantArray[Right, nCols], {Center}],
+      Spacings -> {1, 1},
+      BaseStyle -> {FontSize -> 14}
+    ]
+  ];
+
+  Grid[
+    {{
+      labeledMatrixBlock[
+        Style["A", Italic],
+        matrixWithColumnBackground[A, leftBg]
+      ],
+      Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
+      labeledMatrixBlock[
+        auxLabel,
+        matrixWithColumnBackground[auxMatrix, rightBg]
+      ]
+    }},
+    Alignment -> {Center, Center, Center},
+    Spacings -> {1.5, 0}
+  ]
 ];
 
 cramerSolutionGrid[vars_List, values_List] := highlightGrid @ Grid[
@@ -3128,12 +3178,14 @@ cramer3x3ModeColor[mode_String, pos_List] := Module[{groups, colors},
 
 cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[
   {styled},
+
   styled = MapIndexed[
-    Style[#1, FontColor -> cramer3x3ModeColor[mode, #2], Bold] &,
+    Style[TraditionalForm[#1], FontColor -> cramer3x3ModeColor[mode, #2], Bold] &,
     matrix,
     {2}
   ];
-  TraditionalForm[MatrixForm[styled]]
+
+  styledPlainMatrix[styled]
 ];
 
 cramer3x3TermProduct[values_List, color_] := Row @ Riffle[
@@ -3160,10 +3212,53 @@ cramer3x3FormulaDisplay[matrix_] := Module[
   }]
 ];
 
+cramer3x3ProductValues[matrix_] := Module[
+  {a, b, c, d, e, f, g, h, i},
+
+  {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
+
+  {
+    a*e*i,
+    b*f*g,
+    c*d*h,
+    -c*e*g,
+    -a*f*h,
+    -b*d*i
+  }
+];
+
+cramerSignedValueSum[values_List] := Module[
+  {clean, first, rest},
+
+  clean = Select[Together /@ values, # =!= 0 &];
+
+  If[clean === {},
+    Return[tft[0]]
+  ];
+
+  first = First[clean];
+  rest = Rest[clean];
+
+  Row @ Flatten @ Join[
+    {
+      If[first < 0,
+        Row[{"-", tft[Abs[first]]}],
+        tft[first]
+      ]
+    },
+    Table[
+      If[value < 0,
+        {" - ", tft[Abs[value]]},
+        {" + ", tft[value]}
+      ],
+      {value, rest}
+    ]
+  ]
+];
+
 cramer3x3VisualPanel[label_, matrix_] := Grid[
   {{
-    Style[Row[{label, " ="}], Bold, FontSize -> 16],
-    TraditionalForm[MatrixForm[matrix]],
+    labeledMatrixBlock[label, cramerMatrixCard[matrix]],
     Style["\[LongRightArrow]", Bold, FontSize -> 26],
     Grid[
       {{
@@ -3182,26 +3277,80 @@ cramer3x3VisualPanel[label_, matrix_] := Grid[
       Spacings -> {0.4, 0}
     ]
   }},
-  Alignment -> {Left, Center, Center, Left, Left},
+  Alignment -> {Center, Center, Center, Center},
   Spacings -> {1.5, 1}
 ];
 
 (* vykreslí determinant 3×3 štandardným vzorcom *)
 renderCramer3x3Det[matrix_, label_] := Module[
-  {content = {}, value},
+  {content = {}, value, knownQ, knownMatrices, knownPos, knownData},
 
   value = Together[Det[matrix]];
+
+  (* ak sa rovnaká 3x3 matica už počítala, nerozpisujeme Sarrusa znova *)
+  knownQ = ValueQ[cramerKnown3x3] && ListQ[cramerKnown3x3];
+
+  If[knownQ,
+    knownMatrices = Lookup[cramerKnown3x3, "Matrix", {}];
+    knownPos = FirstPosition[knownMatrices, matrix, Missing["NotFound"]];
+
+    If[knownPos =!= Missing["NotFound"],
+      knownData = cramerKnown3x3[[First[knownPos]]];
+
+      AppendTo[content, "Tento determinant matice 3×3 sme už vypočítali vyššie, preto Sarrusovo pravidlo nemusíme znova rozpisovať."];
+      AppendTo[content, resultEquationLine[cramerDetLabel[label], knownData["Value"]]];
+
+      Return[
+        <|
+          "Content" -> content,
+          "Value" -> knownData["Value"],
+          "Matrix" -> matrix
+        |>
+      ];
+    ];
+  ];
 
   AppendTo[content, Row[{
     "Determinant matice 3×3 vypočítame pomocou ",
     Style["Sarrusovho pravidla", Bold],
     "."
   }]];
-  AppendTo[content, cramer3x3VisualPanel[label, matrix]];
-  AppendTo[content, Row[{cramerDetLabel[label], " = ", cramer3x3FormulaDisplay[matrix]}]];
-  AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
 
-  <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
+  AppendTo[content, cramer3x3VisualPanel[label, matrix]];
+
+  AppendTo[content, Row[
+    {
+      cramerDetLabel[label],
+      " = ",
+      cramer3x3FormulaDisplay[matrix]
+    }
+  ]];
+
+  AppendTo[content, Row[
+    {
+      cramerDetLabel[label],
+      " = ",
+      cramerSignedValueSum[cramer3x3ProductValues[matrix]]
+    }
+  ]];
+
+  AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
+
+  If[knownQ,
+    AppendTo[
+      cramerKnown3x3,
+      <|
+        "Matrix" -> matrix,
+        "Value" -> value
+      |>
+    ];
+  ];
+
+  <|
+    "Content" -> content,
+    "Value" -> value,
+    "Matrix" -> matrix
+  |>
 ];
 
 (* vykreslí determinant 5×5 cez dva laplaceove rozvoje a následný determinant 3×3 *)
@@ -3221,7 +3370,7 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
   If[line1 === Missing["NotFound"],
     value = Together[Det[matrix]];
     AppendTo[content, "Matica nemá vhodný riedky riadok ani stĺpec, preto determinant dopočítame priamo."];
-    AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+    AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
     Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
 
@@ -3241,7 +3390,9 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
   If[cramerZeroRowIndex[minor4] =!= Missing["NotFound"],
     det4Value = 0;
     AppendTo[content, "Minor 4×4 obsahuje nulový riadok, preto jeho determinant je 0."];
-    AppendTo[content, cramerEqualityGrid[cramerDetLabel[minor4Label], det4Value]];
+    AppendTo[content, resultEquationLine[cramerDetLabel[minor4Label], det4Value]];
+
+    addGap[content, 4];
 
     value = Together[signed1 det4Value];
     AppendTo[content, Row[{
@@ -3252,7 +3403,7 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
       " = ",
       cramerFactor[value]
     }]];
-    AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+    AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
 
     Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
@@ -3261,7 +3412,7 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
   If[line2 === Missing["NotFound"],
     det4Value = Together[Det[minor4]];
     AppendTo[content, "Minor 4×4 už nemá vhodný riedky riadok ani stĺpec, preto jeho determinant dopočítame priamo."];
-    AppendTo[content, cramerEqualityGrid[cramerDetLabel[minor4Label], det4Value]];
+    AppendTo[content, resultEquationLine[cramerDetLabel[minor4Label], det4Value]];
 
     value = Together[signed1 det4Value];
     AppendTo[content, Row[{
@@ -3272,7 +3423,7 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
       " = ",
       cramerFactor[value]
     }]];
-    AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+    AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
 
     Return[<|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>];
   ];
@@ -3293,11 +3444,10 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
   det3Data = renderCramer3x3Det[minor3, minor3Label];
   content = Join[content, det3Data["Content"]];
 
+  addGap[content, 4];
+
   det4Value = Together[signed2 det3Data["Value"]];
-  AppendTo[content, Row[{
-    cramerDetLabel[minor3Label], " = ",
-    cramerFactor[det3Data["Value"]]
-  }]];
+
   AppendTo[content, Row[{
     cramerDetLabel[minor4Label], " = ",
     cramerFactor[signed2], " \[CenterDot] ", cramerDetLabel[minor3Label],
@@ -3306,9 +3456,12 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
     " = ",
     cramerFactor[det4Value]
   }]];
-  AppendTo[content, cramerEqualityGrid[cramerDetLabel[minor4Label], det4Value]];
+  AppendTo[content, resultEquationLine[cramerDetLabel[minor4Label], det4Value]];
+
+  addGap[content, 4];
 
   value = Together[signed1 det4Value];
+
   AppendTo[content, Row[{
     cramerDetLabel[label], " = ",
     cramerFactor[signed1], " \[CenterDot] ", cramerDetLabel[minor4Label],
@@ -3317,7 +3470,7 @@ renderCramer5x5Reduction[matrix_, label_] := Module[
     " = ",
     cramerFactor[value]
   }]];
-  AppendTo[content, cramerEqualityGrid[cramerDetLabel[label], value]];
+  AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
 
   <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
@@ -3330,7 +3483,7 @@ renderCramerDeterminant[matrix_, label_] := Switch[
   _, <|
     "Content" -> {
       cramerLabeledMatrixGrid[label, matrix],
-      cramerEqualityGrid[cramerDetLabel[label], Together[Det[matrix]]]
+      resultEquationLine[cramerDetLabel[label], Together[Det[matrix]]]
     },
     "Value" -> Together[Det[matrix]],
     "Matrix" -> matrix
@@ -4523,7 +4676,7 @@ stepsCholesky[data_Association] := Module[
   |>
 ];
 
-stepsCramer[data_Association] := Module[
+stepsCramer[data_Association] := Block[{cramerKnown3x3 = {}}, Module[
   {
     content = {}, n, A, b, vars, solveData, detData, auxData, auxLabel,
     addHeader, addText
@@ -4543,14 +4696,12 @@ stepsCramer[data_Association] := Module[
   addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Potom vypočítame determinant matice A a determinanty pomocných matíc."];
   AppendTo[content, Grid[
     {{
-      Style["A =", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[A]],
-      Spacer[18],
-      Style["b =", Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[b]]
+      matrixBlock[Style["A", Italic], A],
+      Spacer[20],
+      vectorBlock[Style["b", Italic], b]
     }},
-    Alignment -> Left,
-    Spacings -> {2, 1}
+    Alignment -> {Center, Center, Center},
+    Spacings -> {1.2, 0}
   ]];
 
   addHeader["Výpočet det(A)"];
@@ -4569,28 +4720,41 @@ stepsCramer[data_Association] := Module[
     auxLabel = cramerMatrixLabel[vars[[i]]];
 
     addHeader["Pomocná matica pre premennú " <> ToString[vars[[i]], InputForm]];
-    addText[Row[{
-      "Maticu ", auxLabel,
-      " dostaneme tak, že ",
-      i, ". stĺpec matice A nahradíme vektorom b."
-    }]];
+    AppendTo[
+      content,
+      cramerAuxiliaryMatrixPanel[
+        A,
+        solveData["AuxMatrices"][[i]],
+        i,
+        auxLabel
+      ]
+    ];
 
     auxData = renderCramerDeterminant[solveData["AuxMatrices"][[i]], auxLabel];
     content = Join[content, auxData["Content"]];
 
-    AppendTo[content, highlightGrid @ Grid[
-      {{
-        tf[lhsStyle[vars[[i]]]],
-        "=",
+    addGap[content, 3];
+
+    AppendTo[content, Row[
+      {
+        lhsStyle[tf[vars[[i]]]],
+        " = ",
         Row[{cramerDetLabel[auxLabel], " / ", cramerDetLabel[Style["A", Italic]]}],
-        "=",
+        " = ",
         Row[{tft[solveData["AuxDeterminants"][[i]]], " / ", tft[solveData["DetA"]]}],
-        "=",
-        cramerResultStyle[tft[solveData["Solution"][[i]]]]
-      }},
-      Alignment -> {{Right, Center, Left, Center, Left, Center, Left}},
-      BaseStyle -> {FontSize -> 15}
+        " = ",
+        tft[solveData["Solution"][[i]]]
+      }
     ]];
+
+
+    AppendTo[
+      content,
+      highlightResultEquation[
+        vars[[i]],
+        solveData["Solution"][[i]]
+      ]
+    ];
     ,
     {i, 1, n}
   ];
@@ -4604,7 +4768,7 @@ stepsCramer[data_Association] := Module[
     "DetA" -> solveData["DetA"],
     "AuxDeterminants" -> solveData["AuxDeterminants"]
   |>
-];
+]];
 
 (* ~-~-~ VERIFICATION STEPS ~-~-~ *)
 
@@ -4903,28 +5067,37 @@ printResultCramer[data_Association, vars_List, st_, steps_] := Module[
 
   printTextCell["Determinant matice A:"];
   printFormulaCell[
-    cramerEqualityGrid[cramerDetLabel[Style["A", Italic]], detA]
+    plainEquationLine[cramerDetLabel[Style["A", Italic]], detA]
   ];
 
   printTextCell["Pomocné determinanty:"];
   printFormulaCell[
-    highlightGrid @ Grid[
+    Grid[
       Table[
         {
-          cramerDetLabel[cramerMatrixLabel[vars[[i]]]],
-          "=",
-          cramerResultStyle[tft[auxDeterminants[[i]]]]
+          plainEquationLine[
+            cramerDetLabel[cramerMatrixLabel[vars[[i]]]],
+            auxDeterminants[[i]]
+          ]
         },
         {i, 1, Length[vars]}
       ],
-      Alignment -> {{Right, Center, Left}},
-      BaseStyle -> {FontSize -> 15}
+      Alignment -> Left,
+      Spacings -> {0, 0.8}
     ]
   ];
 
-  printTextCell["Riešenie sústavy:"];
-  printFormulaCell[
-    cramerSolutionGrid[vars, solution]
+  If[ListQ[solution],
+    printTextCell["Riešenie sústavy:"];
+    printFormulaCell[
+      Row[Flatten[{
+        "(",
+        Riffle[vars, ", "],
+        ") = (",
+        Riffle[TraditionalForm /@ solution, ", "],
+        ")"
+      }]]
+    ];
   ];
 ];
 
