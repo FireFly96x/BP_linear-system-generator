@@ -154,7 +154,7 @@ printCellStyle[expr_, style_String] := If[inNotebookQ[], CellPrint @ Cell[expr, 
 printTextCell[str_String] := printCellStyle[str, "Text"];
 printSectionCell[str_String] := printCellStyle[str, "Section"];
 printSubsectionCell[str_String] := printCellStyle[str, "Subsection"];
-printFormulaCell[expr_] := Module[{boxes}, boxes = Quiet @ Check[BoxData @ ToBoxes[expr, StandardForm], expr]; printCellStyle[boxes, "DisplayFormula"]];
+printFormulaCell[expr_] := Module[{ boxes}, boxes = Quiet @ Check[BoxData @ ToBoxes[expr, StandardForm], expr]; printCellStyle[boxes, "DisplayFormula"]];
 
 highlightGrid[grid_] := Style[grid, Background -> RGBColor[0.95, 0.95, 0.95], Frame -> True, FrameStyle -> None, FrameMargins -> 5];
 tf[val_] := TraditionalForm[val];
@@ -206,8 +206,7 @@ renderStepItem[item_] := Which[
 buildVars[n_] := Take[{a, b, c, d, e, f}, n];
 
 (* pre output vypise infinte ↓, neskor to vymyslim inak *)
-infiniteSolutionFromSolvedAug[data_Association] := Module[
-  {n = data["n"], augS, A, b, idxs, params, solExprs, pivot, knownTerm},
+infiniteSolutionFromSolvedAug[data_Association] := Module[{ n = data["n"], augS, A, b, idxs, params, solExprs, pivot, knownTerm},
 
   augS = data["SolvedAug"];
   A = augS[[All, 1 ;; n]];
@@ -254,8 +253,7 @@ rowNoteMultiply[i_, p_] := Row[{"R", i, " \[LeftArrow] ", tf[p], "\[CenterDot]R"
 rowApplyMultiply[aug_, i_Integer, p_] := ReplacePart[aug, i -> (p aug[[i]])];
 
 (* note pre kombináciu riadkov *)
-rowNoteCombine[i_, terms_List] := Module[
-  {base = Row[{"R", i, " \[LeftArrow] R", i}], termDisplay},
+rowNoteCombine[i_, terms_List] := Module[{ base = Row[{"R", i, " \[LeftArrow] R", i}], termDisplay},
 
   termDisplay[row_, coeff_] := Row[{
     If[coeff < 0, " - ", " + "],
@@ -268,7 +266,7 @@ rowNoteCombine[i_, terms_List] := Module[
   Row @ Prepend[(termDisplay @@@ terms), base]
 ];
 
-rowApplyCombine[aug_, i_Integer, terms_List] := Module[{row = aug[[i]]},
+rowApplyCombine[aug_, i_Integer, terms_List] := Module[{ row = aug[[i]]},
   ReplacePart[aug,  i -> (row + Total[terms[[All, 2]] aug[[terms[[All, 1]]]]])]
 ];
 
@@ -310,8 +308,7 @@ appendElemTransition[
   content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer,
   eIndex_Integer, mIndex_Integer, boldPos_: Automatic,
   hiBefore_Association : <||>, hiAfter_Association : <||>
-] := Module[
-  {notes, eLabel, prevLabel, nextLabel, eHi, eBoldPositions, eActiveCol},
+] := Module[{ notes, eLabel, prevLabel, nextLabel, eHi, eBoldPositions, eActiveCol},
 
   notes = ConstantArray["", n];
   notes[[targetRow]] = note;
@@ -378,7 +375,7 @@ SetAttributes[applyElemMultiplyStep, HoldFirst];
 
 applyElemMultiplyStep[
   content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotPos_: None
-] := Module[{before, after, eMat, hi},
+] := Module[{ before, after, eMat, hi},
   before = aug;
   after = rowApplyMultiply[before, rowIdx, factor];
   eMat = elemMatrixScale[n, rowIdx, factor];
@@ -403,7 +400,7 @@ SetAttributes[applyElemCombineStep, HoldFirst];
 
 applyElemCombineStep[
   content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None
-] := Module[{before, after, eMat, hiBefore, hiAfter},
+] := Module[{ before, after, eMat, hiBefore, hiAfter},
   before = aug;
   after = rowApplyCombine[before, rowIdx, terms];
   eMat = elemMatrixCombine[n, rowIdx, terms];
@@ -435,7 +432,7 @@ SetAttributes[applyElemDivideStep, HoldFirst];
 
 applyElemDivideStep[
   content_, aug_, rowIdx_Integer, divisor_, n_Integer, pivotPos_: None
-] := Module[{before, after, eMat, hi},
+] := Module[{ before, after, eMat, hi},
   before = aug;
   after = rowApplyDivide[before, rowIdx, divisor];
   eMat = elemMatrixScale[n, rowIdx, 1/divisor];
@@ -460,7 +457,7 @@ SetAttributes[applyJordanSwapStep, HoldFirst];
 
 applyJordanSwapStep[
   content_, aug_, i_Integer, k_Integer, n_Integer, showElemQ_?BooleanQ
-] := Module[{before, after, notes, eMat, hi1, hi2},
+] := Module[{ before, after, notes, eMat, hi1, hi2},
   before = aug;
   after = rowApplySwap[before, i, k];
 
@@ -491,8 +488,7 @@ SetAttributes[applyJordanElimStep, HoldFirst];
 applyJordanElimStep[
   content_, aug_, r_Integer, i_Integer, n_Integer,
   hiBase_Association, showElemQ_?BooleanQ
-] := Module[
-  {workAug, before, elimRes, p, a, g, p2, a2, g2},
+] := Module[{ workAug, before, elimRes, p, a, g, p2, a2, g2},
 
   If[!showElemQ,
     before = aug;
@@ -528,7 +524,7 @@ applyJordanElimStep[
 
 SetAttributes[rowAppendElimStep, HoldFirst];
 
-rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[{notes, notes2, mid, after2, hi1, hi2, hi3},
+rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[{ notes, notes2, mid, after2, hi1, hi2, hi3},
   notes = ConstantArray["", n];
   notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
 
@@ -558,8 +554,7 @@ rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, 
 
 SetAttributes[rowAppendElimStepInverse, HoldFirst];
 
-rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[
-  {notes, notes2, mid, after2, hi1, hi2, hi3},
+rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[{ notes, notes2, mid, after2, hi1, hi2, hi3},
 
   notes = ConstantArray["", n];
   notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
@@ -590,9 +585,9 @@ rowAppendElimStepInverse[content_, before_, elimRes_, r_Integer, i_Integer, n_In
 
 (* ~-~-~ MATRIX ROW HELPERS ~-~-~ *)
 
-rowAbsGCD[row_List] := Module[{g = Apply[GCD, Abs[row]]}, If[g === 0, 1, g]];
+rowAbsGCD[row_List] := Module[{ g = Apply[GCD, Abs[row]]}, If[g === 0, 1, g]];
 
-normalizeRow[row_List] := Module[{g = rowAbsGCD[row], first},
+normalizeRow[row_List] := Module[{ g = rowAbsGCD[row], first},
   first = FirstCase[Most[row], x_ /; x =!= 0, 1];
   If[g > 1, row/g, If[first === -1, -row, row]]
 ];
@@ -601,7 +596,7 @@ rowNoteSwap[i_, k_] := Row[{"R", i, " \[LeftRightArrow] R", k}];
 
 rowApplySwap[aug_, i_Integer, k_Integer] := ReplacePart[aug, {i -> aug[[k]], k -> aug[[i]]}];
 
-rowNoteElim[r_, i_, p2_, a2_] := Module[{leftPart, rightPart, op},
+rowNoteElim[r_, i_, p2_, a2_] := Module[{ leftPart, rightPart, op},
   leftPart = If[p2 === 1, Row[{"R", r}], Row[{tf[p2], "\[CenterDot]", "R", r}]];
   rightPart = If[Abs[a2] === 1, Row[{"R", i}], Row[{tf[Abs[a2]], "\[CenterDot]", "R", i}]];
   op = If[a2 < 0, " + ", " - "];
@@ -609,8 +604,7 @@ rowNoteElim[r_, i_, p2_, a2_] := Module[{leftPart, rightPart, op},
   Row[{"R", r, " \[LeftArrow] ", leftPart, op, rightPart}]
 ];
 
-rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[
-  {p, a, g1, p2, a2, rowRaw, g2, div, rowFinal, augRaw, augFinal},
+rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{ p, a, g1, p2, a2, rowRaw, g2, div, rowFinal, augRaw, augFinal},
 
   p = aug[[i, i]];
   a = aug[[r, i]];
@@ -635,17 +629,17 @@ rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[
 ];
 
 (* elementárne matice *)
-elemMatrixSwap[n_Integer, i_Integer, k_Integer] := Module[{e = IdentityMatrix[n]},
+elemMatrixSwap[n_Integer, i_Integer, k_Integer] := Module[{ e = IdentityMatrix[n]},
   e[[{i, k}]] = e[[{k, i}]];
   e
 ];
 
-elemMatrixScale[n_Integer, i_Integer, factor_] := Module[{e = IdentityMatrix[n]},
+elemMatrixScale[n_Integer, i_Integer, factor_] := Module[{ e = IdentityMatrix[n]},
   e[[i, i]] = factor;
   e
 ];
 
-elemMatrixCombine[n_Integer, i_Integer, terms_List] := Module[{e = IdentityMatrix[n]},
+elemMatrixCombine[n_Integer, i_Integer, terms_List] := Module[{ e = IdentityMatrix[n]},
   Scan[
     Function[{term},
       With[{src = term[[1]], coeff = term[[2]]},
@@ -658,19 +652,18 @@ elemMatrixCombine[n_Integer, i_Integer, terms_List] := Module[{e = IdentityMatri
 ];
 
 (* pre INFINITE a NONE *)
-contradictionRowQ[row_List] := Module[{lhs = Most[row], rhs = Last[row]}, (AllTrue[lhs, # === 0 &] && rhs =!= 0)];
-findContradictionRow[aug_] := Module[{idx = FirstCase[Range[Length[aug]], i_ /; contradictionRowQ[aug[[i]]], Missing["NotFound"]]}, idx];
+contradictionRowQ[row_List] := Module[{ lhs = Most[row], rhs = Last[row]}, (AllTrue[lhs, # === 0 &] && rhs =!= 0)];
+findContradictionRow[aug_] := Module[{ idx = FirstCase[Range[Length[aug]], i_ /; contradictionRowQ[aug[[i]]], Missing["NotFound"]]}, idx];
 
 (* ~-~-~ MATRIX VISUALIZATION ~-~-~ *)
 
 matrixCellDisplay[val_] := If[MemberQ[{Tooltip, MouseAppearance, Style, Row, Grid, Pane, Framed, TraditionalForm}, Head[val]], val, TraditionalForm[val]];
 
-dotProductTooltipMatrix[left_, right_] := Module[
-  {makeTermDisplay, makeTooltipCell},
+dotProductTooltipMatrix[left_, right_] := Module[{ makeTermDisplay, makeTooltipCell},
 
   makeTermDisplay[a_, b_] := Row[{luFactorDisplay[a], "\[CenterDot]", luFactorDisplay[b]}];
 
-  makeTooltipCell[i_, j_] := Module[{terms, value, tooltipExpr},
+  makeTooltipCell[i_, j_] := Module[{ terms, value, tooltipExpr},
     terms = Transpose[{left[[i]], right[[All, j]]}];
     value = Together[left[[i]] . right[[All, j]]];
 
@@ -718,9 +711,7 @@ matrixProductDisplay[left_, right_] := highlightGrid @ Grid[
 ];
 
 (* zvýraznené zobrazenie obyčajnej matice s riadkom a stĺpcom *)
-styledPlainMatrix[m_, hi_Association : <||>] := Module[
-  {
-    nRows, nCols, activeRows, sourceRows, activeCols, sourceCols,
+styledPlainMatrix[m_, hi_Association : <||>] := Module[{ nRows, nCols, activeRows, sourceRows, activeCols, sourceCols,
     boldPositions, cellBg, makeCell, leftBracketCell, rightBracketCell,
     rows
   },
@@ -744,7 +735,7 @@ styledPlainMatrix[m_, hi_Association : <||>] := Module[
     boldPositions = {boldPositions}
   ];
 
-  cellBg[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
+  cellBg[i_, j_] := Module[{ aRowQ, sRowQ, aColQ, sColQ},
     aRowQ = MemberQ[activeRows, i];
     sRowQ = MemberQ[sourceRows, i];
     aColQ = MemberQ[activeCols, j];
@@ -763,7 +754,7 @@ styledPlainMatrix[m_, hi_Association : <||>] := Module[
     ]
   ];
 
-  makeCell[i_, j_, val_] := Module[{cell = matrixCellDisplay[val]},
+  makeCell[i_, j_, val_] := Module[{ cell = matrixCellDisplay[val]},
     If[
       MemberQ[boldPositions, {i, j}] || (MemberQ[activeRows, i] && MemberQ[activeCols, j]),
       cell = Style[cell, Bold]
@@ -808,14 +799,8 @@ labeledMatrixBlock[label_, body_] := Column[
 matrixBlock[label_, m_, bold_List : {}] := labeledMatrixBlock[label, styledPlainMatrix[m, <|"BoldPositions" -> bold|>]];
 vectorBlock[label_, v_List] := labeledMatrixBlock[label, styledPlainMatrix[List /@ v]];
 
-alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
-  {
-    nRows, nCols, nA, notes2, pivotPos, activeRows, sourceRows,
-    activeCols, sourceCols, ZeroCells, orangeCells, bar,
-    leftLabel, rightLabel, showLabelsQ,
-    cellBg, makeCell, makeBar, leftBracketCell, rightBracketCell,
-    rows, matrixGrid, notesGrid, notesWithLabels, colSizes, labelGrid, matrixWithLabels
-  },
+alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{ nRows, nCols, nA, notes2, pivotPos, activeRows, sourceRows, activeCols, sourceCols, ZeroCells, orangeCells, bar,
+  leftLabel, rightLabel, showLabelsQ, cellBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, colSizes, labelGrid, matrixWithLabels},
 
   {nRows, nCols} = Dimensions[aug];
   nA = nCols - 1;
@@ -844,7 +829,7 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
 
   bar = Style["|", GrayLevel[.35], FontSize -> 16];
 
-  cellBg[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
+  cellBg[i_, j_] := Module[{ aRowQ, sRowQ, aColQ, sColQ},
     aRowQ = MemberQ[activeRows, i];
     sRowQ = MemberQ[sourceRows, i];
     aColQ = MemberQ[activeCols, j];
@@ -863,7 +848,7 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
     ]
   ];
 
-  makeCell[i_, j_, val_] := Module[{cell = TraditionalForm[val], isGreen, isOrange, isDiag, isPivot},
+  makeCell[i_, j_, val_] := Module[{ cell = TraditionalForm[val], isGreen, isOrange, isDiag, isPivot},
     isGreen = MemberQ[ZeroCells, {i, j}];
     isOrange = MemberQ[orangeCells, {i, j}];
     isDiag = j <= nA && i === j;
@@ -968,11 +953,8 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[
 ];
 
 (* renderovanie pre tvar (A|E)                                            *)
-alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[
-  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, ZeroCells, bar,
-    rowColor, sourceColor, wrapBg, makeCell, makeBar, leftBracketCell, rightBracketCell,
-    rows, matrixGrid, notesGrid, notesWithLabels, showPivotQ, boldDiagQ, leftLabel, rightLabel,
-    showLabelsQ, colSizes, labelGrid, matrixWithLabels},
+alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[{ nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, ZeroCells, bar, rowColor, sourceColor, wrapBg,
+  makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, showPivotQ, boldDiagQ, leftLabel, rightLabel, showLabelsQ, colSizes, labelGrid, matrixWithLabels},
 
   {nRows, nCols} = Dimensions[aug];
   nA = Quotient[nCols, 2];
@@ -991,7 +973,7 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
   rowColor = RGBColor[0.90, 0.95, 1];
   sourceColor = RGBColor[0.95, 0.92, 1.00];
 
-  wrapBg[i_, expr_] := Module[{bg = None},
+  wrapBg[i_, expr_] := Module[{ bg = None},
     If[IntegerQ[activeRow] && i === activeRow, bg = rowColor,
       If[MemberQ[sourceRows, i], bg = sourceColor]
     ];
@@ -1150,8 +1132,7 @@ matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
 
 SetAttributes[appendNoneConclusionAndStop, HoldFirst];
 
-appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False, mIndex_: None] := Module[
-  {n, badIdx, notes},
+appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False, mIndex_: None] := Module[{ n, badIdx, notes},
 
   n = data["n"];
   badIdx = findContradictionRow[aug];
@@ -1179,8 +1160,7 @@ appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False,
   Throw[<|"Content" -> content, "Solution" -> "NONE"|>, "StopMatrixSteps"]
 ];
 
-generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, pivotMode_: "ZERO", boundAugFn_: Automatic, boundCheckFn_: Automatic] := Module[
-  {data, retries = 0, augForCheck, resolvedBoundAugFn, resolvedBoundCheckFn},
+generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, pivotMode_: "ZERO", boundAugFn_: Automatic, boundCheckFn_: Automatic] := Module[{ data, retries = 0, augForCheck, resolvedBoundAugFn, resolvedBoundCheckFn},
 
   resolvedBoundAugFn = If[
     boundAugFn === Automatic,
@@ -1227,12 +1207,7 @@ kSetGauss := nonzeroRange[-2, 3];
 lowerNonzeroCount[m_] := Count[LowerTriangularize[m, -1], x_ /; x =!= 0, {2}];
 
 (* vytvorenie vyriešenej augmentovanej matice *)
-makeDiagonalAug[n_Integer, solType_String] := Module[
-  {
-    A, b, x, idx, paramIdx, paramIdxs = {}, badRow, rhsNonzero,
-    numParams, pivotRows, coeffPool, buildParamColumn,
-    col1, col2, tries
-  },
+makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, paramIdxs = {}, badRow, rhsNonzero, numParams, pivotRows, coeffPool, buildParamColumn, col1, col2, tries},
 
   rhsNonzero = DeleteCases[Range[$bRange[[1]], $bRange[[2]]], 0];
 
@@ -1378,8 +1353,7 @@ makeDiagonalAug[n_Integer, solType_String] := Module[
 
 (* ~-~-~ DATA GENERATION ~-~-~ *)
 
-generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[
-  {solved, augSolved, augTask, A, b, vars},
+generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{ solved, augSolved, augTask, A, b, vars},
 
   solved = makeDiagonalAug[n, solType];
   augSolved = solved["Aug"];
@@ -1409,8 +1383,7 @@ generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[
     "ParamIdxs" -> Lookup[solved, "ParamIdxs", {}]
   |>
 ];
-genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Gauss_ : True] := Module[
-  {aug = aug0, n = Length[aug0], bnd, kSet, withinQ, protectedLastRowQ, chooseK, chooseS, i, r, k, s},
+genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Gauss_ : True] := Module[{ aug = aug0, n = Length[aug0], bnd, kSet, withinQ, protectedLastRowQ, chooseK, chooseS, i, r, k, s},
 
   bnd = $Bounds;
   kSet = If[TrueQ[Gauss], kSetGauss, kSetTri];
@@ -1430,7 +1403,7 @@ genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Ga
     False
   ];
 
-  chooseK[target_, src_] := Module[{k0, cand, ks},
+  chooseK[target_, src_] := Module[{ k0, cand, ks},
     k0 = RandomChoice[kSet];
     cand = target + k0*src; If[withinQ[cand], Return[k0]];
     cand = target - k0*src; If[withinQ[cand], Return[-k0]];
@@ -1444,7 +1417,7 @@ genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Ga
     1
   ];
 
-  chooseS[row_] := Module[{s0, cand, ss},
+  chooseS[row_] := Module[{ s0, cand, ss},
     If[!TrueQ[Gauss], Return[1]];
     s0 = RandomChoice[kSet];
     cand = s0*row; If[withinQ[cand], Return[s0]];
@@ -1494,8 +1467,7 @@ genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Ga
   aug
 ];
 
-genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
-  {n, x, L, U, A, b, valueLimit, diagLimit, lowerPool, upperPool, diagPool},
+genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ n, x, L, U, A, b, valueLimit, diagLimit, lowerPool, upperPool, diagPool},
 
   n = Length[aug0];
   x = aug0[[All, n + 1]];
@@ -1528,8 +1500,7 @@ genScrambleLU[diff_String, aug0_, triType_String, solType_String : "ONE"] := Mod
   augFromAb[A, b]
 ];
 
-genScrambleCholesky[diff_String, aug0_, triType_, solType_String : "ONE"] := Module[
-  {n, solutionVector, lMatrix, aMatrix, bVector, tries = 0, lowerPool, diagPool, diagMax, lowerMax},
+genScrambleCholesky[diff_String, aug0_, triType_, solType_String : "ONE"] := Module[{ n, solutionVector, lMatrix, aMatrix, bVector, tries = 0, lowerPool, diagPool, diagMax, lowerMax},
 
   n = Length[aug0];
   solutionVector = aug0[[All, n + 1]];
@@ -1575,8 +1546,7 @@ genScrambleCholesky[diff_String, aug0_, triType_, solType_String : "ONE"] := Mod
   $Failed
 ];
 
-genScrambleCramer[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
-  {n, solutionVector, A, b, tries = 0},
+genScrambleCramer[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ n, solutionVector, A, b, tries = 0},
 
   n = Length[aug0];
   solutionVector = aug0[[All, n + 1]];
@@ -1610,15 +1580,12 @@ genScrambleCramer[diff_String, aug0_, triType_String, solType_String : "ONE"] :=
 
 (* ~-~-~ STEP GENERATION HELPERS ~-~-~ *)
 
-appendTriangularSubstitutionSteps[
-  mat_, rhs_, vars_, sol0_, order_List, content_,
-  initialKnownIdxs_List : {}, skipIdxs_List : {}
-] := Module[
-  {n = Length[mat], sol = sol0, out = content, solvedIdxs, boldVal, coeffTimes, addOneRow},
+appendTriangularSubstitutionSteps[mat_, rhs_, vars_, sol0_, order_List, content_, initialKnownIdxs_List : {}, skipIdxs_List : {}] := Module[{ n = Length[mat], sol = sol0, out = content,
+  solvedIdxs, boldVal, coeffTimes, addOneRow},
 
   solvedIdxs = initialKnownIdxs;
 
-  boldVal[val_] := Module[{expandedVal = Expand[val]},
+  boldVal[val_] := Module[{ expandedVal = Expand[val]},
     Style[
       If[(IntegerQ[expandedVal] && expandedVal < 0) || MatchQ[expandedVal, _Plus],
         Row[{"(", TraditionalForm[expandedVal], ")"}],
@@ -1691,8 +1658,7 @@ appendTriangularSubstitutionSteps[
 (* --- Gauss / Gauss-Jordan / Elementar HELPERS --- *)
 
 (* výber riadku s najmenším pivotom v absolútnej hodnote *)
-gaussPivotRowByMinAbs[aug_, i_Integer] := Module[
-  {n = Length[aug], candidates, currentPivot, betterCandidates},
+gaussPivotRowByMinAbs[aug_, i_Integer] := Module[{ n = Length[aug], candidates, currentPivot, betterCandidates},
 
   candidates = Select[Range[i, n], aug[[#, i]] =!= 0 &];
   If[candidates === {}, Return[i]];
@@ -1710,14 +1676,14 @@ gaussPivotRowByMinAbs[aug_, i_Integer] := Module[
 ];
 
 (* výber prvého nenulového pivotu pod diagonálou *)
-gaussPivotRowByNonzero[aug_, i_Integer] := Module[{n = Length[aug], candidates},
+gaussPivotRowByNonzero[aug_, i_Integer] := Module[{ n = Length[aug], candidates},
   If[aug[[i, i]] =!= 0, Return[i]];
   candidates = Select[Range[i + 1, n], aug[[#, i]] =!= 0 &];
   If[candidates === {}, i, First[candidates]]
 ];
 
 (* vysvetlenie výmeny pivotových riadkov *)
-gaussPivotSwapExplanation[aug_, i_Integer, k_Integer] := Module[{currentPivot, newPivot},
+gaussPivotSwapExplanation[aug_, i_Integer, k_Integer] := Module[{ currentPivot, newPivot},
   currentPivot = aug[[i, i]];
   newPivot = aug[[k, i]];
 
@@ -1734,7 +1700,7 @@ gaussPivotSwapExplanation[aug_, i_Integer, k_Integer] := Module[{currentPivot, n
 ];
 
 (* stĺpce, v ktorých vynucujeme pivotovanie *)
-gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{possibleCols},
+gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
   possibleCols = Range[Max[0, pivotCount - 1]];
 
   Which[
@@ -1746,8 +1712,7 @@ gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{possibleCols},
 ];
 
 (* stĺpce so zmysluplnou výmenou pivotu *)
-gaussObservedPivotSwapColumns[trace_List] := Module[
-  {cols = {}, step, prev, i, k, currentPivot, newPivot},
+gaussObservedPivotSwapColumns[trace_List] := Module[{ cols = {}, step, prev, i, k, currentPivot, newPivot},
 
   Do[
     step = trace[[t]];
@@ -1774,8 +1739,7 @@ gaussObservedPivotSwapColumns[trace_List] := Module[
 ];
 
 (* vynútenie susednej výmeny pre pivotovanie *)
-gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[
-  {work = aug, rowI, rowK, factors, chosen},
+gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[{ work = aug, rowI, rowK, factors, chosen},
 
   If[i >= Length[aug], Return[work]];
 
@@ -1788,7 +1752,7 @@ gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[
 
   chosen = SelectFirst[
     factors,
-    Module[{cand = # rowK},
+    Module[{ cand = # rowK},
       Max[Abs[cand]] <= bnd &&
           cand[[i]] =!= 0 &&
           Abs[cand[[i]]] > Abs[rowI[[i]]]
@@ -1804,8 +1768,7 @@ gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[
 ];
 
 (* trace doprednej eliminácie pre Gaussa *)
-gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[
-  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
+gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[{ workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
 
   workAug = aug;
   n = Length[workAug];
@@ -1867,8 +1830,7 @@ gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[
 ];
 
 (* kontrola medzí počas Gaussovej eliminácie *)
-gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[
-  {traceData, limit},
+gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[{ traceData, limit},
 
   limit = $MaxBounds;
   traceData = gaussForwardEliminationTrace[aug, pivotMode];
@@ -1880,8 +1842,7 @@ gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[
 ];
 
 (* trace celej Gauss-Jordanovej eliminácie *)
-gaussJordanEliminationTrace[aug_, pivotMode_: "MIN"] := Module[
-  {workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}, after},
+gaussJordanEliminationTrace[aug_, pivotMode_: "MIN"] := Module[{ workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}, after},
 
   workAug = aug;
   n = Length[workAug];
@@ -1996,8 +1957,7 @@ gaussJordanEliminationTrace[aug_, pivotMode_: "MIN"] := Module[
 ];
 
 (* kontrola medzí počas Gauss-Jordanovej eliminácie *)
-gaussJordanEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[
-  {traceData, limit},
+gaussJordanEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[{ traceData, limit},
 
   limit = $MaxBounds;
   traceData = gaussJordanEliminationTrace[aug, pivotMode];
@@ -2009,7 +1969,7 @@ gaussJordanEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[
 ];
 
 (* premiešanie sústavy pre Gaussovu metódu *)
-genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{n, pairs, chosenPairs, kSet, bnd, maxAttempts, maxKTries, aug, r, i, k, rowNew, currentLower},
+genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ n, pairs, chosenPairs, kSet, bnd, maxAttempts, maxKTries, aug, r, i, k, rowNew, currentLower},
   n = Length[aug0];
   pairs = Flatten[Table[{r, i}, {r, 2, n}, {i, 1, r - 1}], 1]; (* (2,1) => R2=R2+k.R1; (3,1); (3,2) *)
 
@@ -2054,8 +2014,7 @@ genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := 
 ];
 
 (* premiešanie sústavy pre pivotovaný Gauss-Jordan *)
-genScrambleGaussJordanPivot[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[
-  {aug, n, pivotCount, plannedCols, bnd, tries = 0, trace, observedCols},
+genScrambleGaussJordanPivot[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ aug, n, pivotCount, plannedCols, bnd, tries = 0, trace, observedCols},
 
   n = Length[aug0];
   bnd = $Bounds;
@@ -2092,8 +2051,7 @@ genScrambleGaussJordanPivot[diff_String, aug0_, triType_String, solType_String :
 
 (* --- LU / Cholesky HELPERS --- *)
 
-luSolveData[A_, b_] := Module[
-  {n, L, U, y, x, i, j, terms, sumTerm, pivotValue},
+luSolveData[A_, b_] := Module[{ n, L, U, y, x, i, j, terms, sumTerm, pivotValue},
 
   n = Length[A];
   L = IdentityMatrix[n];
@@ -2146,8 +2104,7 @@ luSolveData[A_, b_] := Module[
   <|"L" -> L, "U" -> U, "Y" -> y, "X" -> x|>
 ];
 
-choleskySolveData[A_, b_] := Module[
-  {n, L, y, x, i, j, diagTerms, mixedTerms, diagRadicand, diagValue, sumTerm},
+choleskySolveData[A_, b_] := Module[{ n, L, y, x, i, j, diagTerms, mixedTerms, diagRadicand, diagValue, sumTerm},
 
   n = Length[A];
 
@@ -2204,8 +2161,7 @@ choleskySolveData[A_, b_] := Module[
   <|"L" -> L, "Y" -> y, "X" -> x|>
 ];
 
-luDecompositionWithinBoundsQ[data_Association] := Module[
-  {luData, limit},
+luDecompositionWithinBoundsQ[data_Association] := Module[{ luData, limit},
 
   limit = $MaxBounds;
   luData = luSolveData[data["A"], data["b"]];
@@ -2220,8 +2176,7 @@ luDecompositionWithinBoundsQ[data_Association] := Module[
   ]
 ];
 
-choleskyDecompositionWithinBoundsQ[data_Association] := Module[
-  {choleskyData, limit},
+choleskyDecompositionWithinBoundsQ[data_Association] := Module[{ choleskyData, limit},
 
   limit = $MaxBounds;
   choleskyData = choleskySolveData[data["A"], data["b"]];
@@ -2245,7 +2200,7 @@ luCoeffTimes[a_, x_] := Which[
   True, Row[{tft[a], "\[CenterDot]", x}]
 ];
 
-luSignedScalarSum[vals_List] := Module[{clean, first, rest},
+luSignedScalarSum[vals_List] := Module[{ clean, first, rest},
   clean = Select[Together /@ vals, # =!= 0 &];
   If[clean === {}, Return[tft[0]]];
 
@@ -2268,7 +2223,7 @@ luSignedScalarSum[vals_List] := Module[{clean, first, rest},
 
 luSumDisplay[terms_List] := luSignedScalarSum[Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &]];
 
-luSumNeedsParensQ[terms_List] := Module[{vals, sumVal},
+luSumNeedsParensQ[terms_List] := Module[{ vals, sumVal},
   vals = Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &];
   If[vals === {}, Return[False]];
   If[Length[vals] > 1, Return[True]];
@@ -2276,13 +2231,12 @@ luSumNeedsParensQ[terms_List] := Module[{vals, sumVal},
   NumericQ[sumVal] && sumVal < 0
 ];
 
-luWrappedSumDisplay[terms_List] := Module[{sumDisp},
+luWrappedSumDisplay[terms_List] := Module[{ sumDisp},
   sumDisp = luSumDisplay[terms];
   If[luSumNeedsParensQ[terms], Row[{"(", sumDisp, ")"}], sumDisp]
 ];
 
-luLinearCombinationDisplay[terms_List] := Module[
-  {clean, first, rest, formatPositiveTerm, formatFirstTerm, formatNextTerm},
+luLinearCombinationDisplay[terms_List] := Module[{ clean, first, rest, formatPositiveTerm, formatFirstTerm, formatNextTerm},
 
   clean = Select[terms, Together[#[[1]]] =!= 0 &];
   If[clean === {}, Return[tft[0]]];
@@ -2307,8 +2261,7 @@ luLinearCombinationDisplay[terms_List] := Module[
     formatNextTerm /@ rest
   ]
 ];
-matrixPairGrid[leftLabel_, leftMatrix_, rightLabel_, rightMatrix_, leftBold_List : {}, rightBold_List : {}] := Module[
-  {styledLeft, styledRight},
+matrixPairGrid[leftLabel_, leftMatrix_, rightLabel_, rightMatrix_, leftBold_List : {}, rightBold_List : {}] := Module[{ styledLeft, styledRight},
 
   styledLeft = MapIndexed[
     If[MemberQ[leftBold, #2], Style[#1, Bold], #1] &,
@@ -2356,7 +2309,7 @@ namedVectorGrid[label_String, vec_List] := highlightGrid @ Grid[
   Spacings -> {1, 0}
 ];
 
-luGeneralMatricesGrid[n_Integer] := Module[{Lsym, Usym},
+luGeneralMatricesGrid[n_Integer] := Module[{ Lsym, Usym},
   Lsym = Table[
     Which[
       i < j, 0,
@@ -2396,12 +2349,12 @@ luFormulaLGeneral[j_Integer, i_Integer] := If[i === 1,
   }]
 ];
 
-forwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer] := Module[{terms},
+forwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer] := Module[{ terms},
   terms = Table[{row[[j]], vars[[j]]}, {j, 1, idx}];
   Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
 ];
 
-backwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer, n_Integer] := Module[{terms},
+backwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer, n_Integer] := Module[{ terms},
   terms = Table[{row[[j]], vars[[j]]}, {j, idx, n}];
   Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
 ];
@@ -2435,8 +2388,7 @@ choleskyNumericSquareSum[vals_List] := If[
   ]
 ];
 
-buildCholeskyDiagonalLines[i_Integer, A_, L_, value_] := Module[
-  {diagTerms, diagRadicand},
+buildCholeskyDiagonalLines[i_Integer, A_, L_, value_] := Module[{ diagTerms, diagRadicand},
 
   diagTerms = Table[L[[i, k]]^2, {k, 1, i - 1}];
   diagRadicand = Together[A[[i, i]] - Total[diagTerms]];
@@ -2472,8 +2424,7 @@ buildCholeskyDiagonalLines[i_Integer, A_, L_, value_] := Module[
   ]
 ];
 
-buildCholeskyOffDiagonalLines[j_Integer, i_Integer, A_, L_, diagValue_, value_] := Module[
-  {mixedTerms, numerator},
+buildCholeskyOffDiagonalLines[j_Integer, i_Integer, A_, L_, diagValue_, value_] := Module[{ mixedTerms, numerator},
 
   mixedTerms = Table[{L[[j, k]], L[[i, k]]}, {k, 1, i - 1}];
   numerator = Together[A[[j, i]] - Total[Times @@@ mixedTerms]];
@@ -2508,15 +2459,14 @@ buildCholeskyOffDiagonalLines[j_Integer, i_Integer, A_, L_, diagValue_, value_] 
 
 (* --- Cramer HELPERS --- *)
 
-replaceColumn[matrix_, column_Integer, values_List] := Module[{updated = matrix},
+replaceColumn[matrix_, column_Integer, values_List] := Module[{ updated = matrix},
   Do[updated[[i, column]] = values[[i]], {i, 1, Length[values]}];
   updated
 ];
 
 cramerRandomNonzeroValue[maxAbs_Integer : 4] := RandomChoice[DeleteCases[Range[-maxAbs, maxAbs], 0]];
 
-cramerRandomInvertible3x3[maxAbs_Integer : 4, maxDet_Integer : 30] := Module[
-  {candidate, tries = 0, pool},
+cramerRandomInvertible3x3[maxAbs_Integer : 4, maxDet_Integer : 30] := Module[{ candidate, tries = 0, pool},
   pool = Join[Range[-maxAbs, -1], Range[1, maxAbs], Range[-maxAbs, -1], Range[1, maxAbs]];
 
   While[tries < $MaxRetryCount,
@@ -2530,8 +2480,7 @@ cramerRandomInvertible3x3[maxAbs_Integer : 4, maxDet_Integer : 30] := Module[
   $Failed
 ];
 
-cramerOrthogonalTwoNonzeroRow[xCore_List] := Module[
-  {pairs, chosenPair, row, p, q, g},
+cramerOrthogonalTwoNonzeroRow[xCore_List] := Module[{ pairs, chosenPair, row, p, q, g},
 
   pairs = Select[
     Subsets[Range[Length[xCore]], {2}],
@@ -2562,8 +2511,7 @@ cramerOrthogonalTwoNonzeroRow[xCore_List] := Module[
   normalizeRow[row]
 ];
 
-generateCramerEasyMatrix[solutionVector_List] := Module[
-  {candidate, rhsVector, tries = 0, pool},
+generateCramerEasyMatrix[solutionVector_List] := Module[{ candidate, rhsVector, tries = 0, pool},
 
   pool = Join[Range[-4, -1], Range[1, 4], Range[-4, -1], Range[1, 4]];
 
@@ -2584,8 +2532,7 @@ generateCramerEasyMatrix[solutionVector_List] := Module[
   $Failed
 ];
 
-renderCramer4x4Reduction[matrix_, label_] := Module[
-  {content = {}, line1, signed1, minor3, minor3Label, det3Data, value},
+renderCramer4x4Reduction[matrix_, label_] := Module[{ content = {}, line1, signed1, minor3, minor3Label, det3Data, value},
 
   minor3Label = Subscript[Style["M", Italic], 3];
 
@@ -2631,8 +2578,7 @@ renderCramer4x4Reduction[matrix_, label_] := Module[
   <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
 
-generateCramerMediumMatrix[solutionVector_List] := Module[
-  {core, candidate, rhsVector, s1, tries = 0},
+generateCramerMediumMatrix[solutionVector_List] := Module[{ core, candidate, rhsVector, s1, tries = 0},
 
   While[tries < $MaxRetryCount,
     core = cramerRandomInvertible3x3[3, 18];
@@ -2661,8 +2607,7 @@ generateCramerMediumMatrix[solutionVector_List] := Module[
   $Failed
 ];
 
-generateCramerHardMatrix[solutionVector_List] := Module[
-  {core, candidate, rhsVector, s1, s2, tries = 0},
+generateCramerHardMatrix[solutionVector_List] := Module[{ core, candidate, rhsVector, s1, s2, tries = 0},
 
   While[tries < $MaxRetryCount,
     core = cramerRandomInvertible3x3[3, 18];
@@ -2693,8 +2638,7 @@ generateCramerHardMatrix[solutionVector_List] := Module[
   $Failed
 ];
 
-cramerSolveData[A_, b_] := Module[
-  {detA, auxMatrices, auxDeterminants, solution},
+cramerSolveData[A_, b_] := Module[{ detA, auxMatrices, auxDeterminants, solution},
 
   detA = Together[Det[A]];
   auxMatrices = Table[replaceColumn[A, i, b], {i, 1, Length[b]}];
@@ -2714,8 +2658,7 @@ cramerSolveData[A_, b_] := Module[
   |>
 ];
 
-cramerDeterminantsWithinBoundsQ[A_, b_] := Module[
-  {solveData, allDeterminants},
+cramerDeterminantsWithinBoundsQ[A_, b_] := Module[{ solveData, allDeterminants},
 
   solveData = cramerSolveData[A, b];
   allDeterminants = Join[{solveData["DetA"]}, solveData["AuxDeterminants"]];
@@ -2726,7 +2669,7 @@ cramerDeterminantsWithinBoundsQ[A_, b_] := Module[
   ]
 ];
 
-cramerSignedTermDisplay[coeff_, body_, firstQ_] := Module[{absCoeff = Abs[coeff]},
+cramerSignedTermDisplay[coeff_, body_, firstQ_] := Module[{ absCoeff = Abs[coeff]},
   If[firstQ,
     If[coeff < 0,
       Row[{"-", cramerFactor[absCoeff], " \[CenterDot] ", body}],
@@ -2739,67 +2682,6 @@ cramerSignedTermDisplay[coeff_, body_, firstQ_] := Module[{absCoeff = Abs[coeff]
   ]
 ];
 
-(* nájde stĺpec s práve jedným nenulovým prvkom *)
-cramerSingletonColumnGlobalIndex[matrix_] := Module[
-  {columnCounts},
-  columnCounts = Count[#, x_ /; x =!= 0] & /@ Transpose[matrix];
-
-  FirstCase[
-    Range[Length[columnCounts]],
-    j_ /; columnCounts[[j]] == 1,
-    Missing["NotFound"]
-  ]
-];
-
-(* v zadanom stĺpci nájde riadok jediného nenulového prvku *)
-cramerSingletonRowInColumn[matrix_, column_Integer] := Module[
-  {rows},
-  rows = Select[
-    Range[Length[matrix]],
-    matrix[[#, column]] =!= 0 &
-  ];
-
-  If[Length[rows] == 1,
-    First[rows],
-    Missing["NotFound"]
-  ]
-];
-
-(* nájde vhodnú laplaceovu líniu: najprv riadok, potom stĺpec *)
-cramerSingletonLineData[matrix_] := Module[
-  {rowIndex, colIndex, pivotRow, pivotColumn},
-
-  rowIndex = cramerSingletonRowIndex[matrix];
-  If[rowIndex =!= Missing["NotFound"],
-    colIndex = cramerSingletonColumnIndex[matrix, rowIndex];
-
-    If[colIndex =!= Missing["NotFound"],
-      Return[<|
-        "Type" -> "Row",
-        "LineIndex" -> rowIndex,
-        "PivotRow" -> rowIndex,
-        "PivotColumn" -> colIndex
-      |>]
-    ];
-  ];
-
-  colIndex = cramerSingletonColumnGlobalIndex[matrix];
-  If[colIndex =!= Missing["NotFound"],
-    rowIndex = cramerSingletonRowInColumn[matrix, colIndex];
-
-    If[rowIndex =!= Missing["NotFound"],
-      Return[<|
-        "Type" -> "Column",
-        "LineIndex" -> colIndex,
-        "PivotRow" -> rowIndex,
-        "PivotColumn" -> colIndex
-      |>]
-    ];
-  ];
-
-  Missing["NotFound"]
-];
-
 (* text pre laplaceov rozvoj *)
 cramerLaplaceExplanation[lineData_Association] := If[
   lineData["Type"] === "Row",
@@ -2810,11 +2692,7 @@ cramerLaplaceExplanation[lineData_Association] := If[
 cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
 cramerDetLabel[label_] := Row[{"det(", label, ")"}];
 
-cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[
-  {
-    activeRow, activeColumn, pivotPos, focusCells,
-    columnAsRowQ, rowTextColor, colTextColor, focusTextColor, pivotTextColor, zeroTextColor
-  },
+cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[{ activeRow, activeColumn, pivotPos, focusCells, columnAsRowQ, rowTextColor, colTextColor, focusTextColor, pivotTextColor, zeroTextColor},
 
   activeRow = Lookup[hi, "ActiveRow", None];
   activeColumn = Lookup[hi, "ActiveColumn", None];
@@ -2829,7 +2707,7 @@ cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[
   zeroTextColor = GrayLevel[0.50];
 
   MapIndexed[
-    Module[{i = #2[[1]], j = #2[[2]], styleOpts = {}, textColor = Automatic, styleArgs, inRowQ, inColumnQ, inFocusQ},
+    Module[{ i = #2[[1]], j = #2[[2]], styleOpts = {}, textColor = Automatic, styleArgs, inRowQ, inColumnQ, inFocusQ},
       inRowQ = IntegerQ[activeRow] && i === activeRow;
       inColumnQ = IntegerQ[activeColumn] && j === activeColumn;
       inFocusQ = MemberQ[focusCells, {i, j}];
@@ -2867,8 +2745,7 @@ cramerMatrixCard[matrix_, hi_Association : <||>] := styledPlainMatrix[
   cramerStyledMatrix[matrix, hi]
 ];
 
-cramerReductionHighlight[lineData_Association, extra_Association : <||>] := Module[
-  {base},
+cramerReductionHighlight[lineData_Association, extra_Association : <||>] := Module[{ base},
   base = If[
     lineData["Type"] === "Row",
     <|
@@ -2912,13 +2789,9 @@ cramerFactor[value_] := If[
   tft[value]
 ];
 
-cramerLabeledMatrixGrid[label_, matrix_, hi_Association : <||>] := labeledMatrixBlock[
-  label,
-  cramerMatrixCard[matrix, hi]
-];
+cramerLabeledMatrixGrid[label_, matrix_, hi_Association : <||>] := labeledMatrixBlock[label, cramerMatrixCard[matrix, hi]];
 
-cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[
-  {leftBg, rightBg, matrixWithColumnBackground},
+cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[{ leftBg, rightBg, matrixWithColumnBackground},
 
   leftBg = RGBColor[0.95, 0.92, 1.00];
   rightBg = RGBColor[0.90, 0.95, 1.00];
@@ -2929,7 +2802,7 @@ cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[
 
     {nRows, nCols} = Dimensions[m];
 
-    makeCell[i_, j_] := Module[{cell},
+    makeCell[i_, j_] := Module[{ cell},
       cell = TraditionalForm[m[[i, j]]];
 
       If[j === column,
@@ -2980,47 +2853,16 @@ cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[
 ];
 
 cramerSolutionGrid[vars_List, values_List] := highlightGrid @ Grid[
-  Table[
-    {tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[values[[i]]]},
-    {i, 1, Length[vars]}
-  ],
+  Table[{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[values[[i]]]}, {i, 1, Length[vars]}],
   Alignment -> {{Right, Center, Left}},
   BaseStyle -> {FontSize -> 16}
 ];
 
-cramerZeroRowIndex[matrix_] := FirstCase[
-  Range[Length[matrix]],
-  row_ /; AllTrue[matrix[[row]], # === 0 &],
-  Missing["NotFound"]
-];
+cramerZeroRowIndex[matrix_] := FirstCase[Range[Length[matrix]], row_ /; AllTrue[matrix[[row]], # === 0 &], Missing["NotFound"]];
 
-cramerMinor[matrix_, row_Integer, column_Integer] := Module[
-  {withoutRow},
+cramerMinor[matrix_, row_Integer, column_Integer] := Module[{ withoutRow},
   withoutRow = Delete[matrix, row];
   Map[Delete[#, column] &, withoutRow]
-];
-
-cramerSingletonRowIndex[matrix_] := Module[
-  {rowCounts},
-  rowCounts = Count[#, x_ /; x =!= 0] & /@ matrix;
-  FirstCase[
-    Range[Length[rowCounts]],
-    i_ /; rowCounts[[i]] == 1,
-    Missing["NotFound"]
-  ]
-];
-
-cramerSingletonColumnIndex[matrix_, row_Integer] := Module[
-  {cols},
-  cols = Select[
-    Range[Length[matrix[[row]]]],
-    matrix[[row, #]] =!= 0 &
-  ];
-
-  If[Length[cols] == 1,
-    First[cols],
-    Missing["NotFound"]
-  ]
 ];
 
 cramer3x3PositiveColors = {
@@ -3035,7 +2877,7 @@ cramer3x3NegativeColors = {
   RGBColor[0.00, 0.60, 0.78]
 };
 
-cramer3x3ModeColor[mode_String, pos_List] := Module[{groups, colors},
+cramer3x3ModeColor[mode_String, pos_List] := Module[{ groups, colors},
   {groups, colors} = Switch[
     mode,
     "Positive",
@@ -3065,8 +2907,7 @@ cramer3x3ModeColor[mode_String, pos_List] := Module[{groups, colors},
   ]
 ];
 
-cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[
-  {styled},
+cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[{ styled},
 
   styled = MapIndexed[
     Style[TraditionalForm[#1], FontColor -> cramer3x3ModeColor[mode, #2], Bold] &,
@@ -3082,8 +2923,7 @@ cramer3x3TermProduct[values_List, color_] := Row @ Riffle[
   Style["\[CenterDot]", FontColor -> color, Bold]
 ];
 
-cramer3x3FormulaDisplay[matrix_] := Module[
-  {a, b, c, d, e, f, g, h, i},
+cramer3x3FormulaDisplay[matrix_] := Module[{ a, b, c, d, e, f, g, h, i},
   {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
 
   Row[{
@@ -3101,8 +2941,7 @@ cramer3x3FormulaDisplay[matrix_] := Module[
   }]
 ];
 
-cramer3x3ProductValues[matrix_] := Module[
-  {a, b, c, d, e, f, g, h, i},
+cramer3x3ProductValues[matrix_] := Module[{ a, b, c, d, e, f, g, h, i},
 
   {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
 
@@ -3116,8 +2955,7 @@ cramer3x3ProductValues[matrix_] := Module[
   }
 ];
 
-cramerSignedValueSum[values_List] := Module[
-  {clean, first, rest},
+cramerSignedValueSum[values_List] := Module[{ clean, first, rest},
 
   clean = Select[Together /@ values, # =!= 0 &];
 
@@ -3145,8 +2983,7 @@ cramerSignedValueSum[values_List] := Module[
   ]
 ];
 
-cramer3x3VisualPanel[label_, matrix_] := Grid[
-  {{
+cramer3x3VisualPanel[label_, matrix_] := Grid[{{
     labeledMatrixBlock[label, cramerMatrixCard[matrix]],
     Style["\[LongRightArrow]", Bold, FontSize -> 26],
     Grid[
@@ -3171,8 +3008,7 @@ cramer3x3VisualPanel[label_, matrix_] := Grid[
 ];
 
 (* vykreslí determinant 3×3 štandardným vzorcom *)
-renderCramer3x3Det[matrix_, label_] := Module[
-  {content = {}, value, knownQ, knownMatrices, knownPos, knownData},
+renderCramer3x3Det[matrix_, label_] := Module[{ content = {}, value, knownQ, knownMatrices, knownPos, knownData},
 
   value = Together[Det[matrix]];
 
@@ -3242,13 +3078,65 @@ renderCramer3x3Det[matrix_, label_] := Module[
   |>
 ];
 
+(* nájde vhodnú laplaceovu line: najprv riadok, potom stĺpec *)
+cramerSingletonLineData[matrix_] := Module[{ rowCounts, columnCounts, rowIndex, columnIndex, rowsInColumn},
+
+(* najprv hľadáme riadok s práve jedným nenulovým prvkom *)
+  rowCounts = Count[#, x_ /; x =!= 0] & /@ matrix;
+
+  rowIndex = FirstCase[
+    Range[Length[rowCounts]],
+    i_ /; rowCounts[[i]] == 1,
+    Missing["NotFound"]
+  ];
+
+  If[rowIndex =!= Missing["NotFound"],
+    columnIndex = FirstCase[
+      Range[Length[matrix[[rowIndex]]]],
+      j_ /; matrix[[rowIndex, j]] =!= 0,
+      Missing["NotFound"]
+    ];
+
+    If[columnIndex =!= Missing["NotFound"],
+      Return[<|
+        "Type" -> "Row",
+        "LineIndex" -> rowIndex,
+        "PivotRow" -> rowIndex,
+        "PivotColumn" -> columnIndex
+      |>]
+    ];
+  ];
+
+  (* ak vhodný riadok neexistuje, hľadáme stĺpec s práve jedným nenulovým prvkom *)
+  columnCounts = Count[#, x_ /; x =!= 0] & /@ Transpose[matrix];
+
+  columnIndex = FirstCase[
+    Range[Length[columnCounts]],
+    j_ /; columnCounts[[j]] == 1,
+    Missing["NotFound"]
+  ];
+
+  If[columnIndex =!= Missing["NotFound"],
+    rowsInColumn = Select[
+      Range[Length[matrix]],
+      matrix[[#, columnIndex]] =!= 0 &
+    ];
+
+    If[Length[rowsInColumn] == 1,
+      Return[<|
+        "Type" -> "Column",
+        "LineIndex" -> columnIndex,
+        "PivotRow" -> First[rowsInColumn],
+        "PivotColumn" -> columnIndex
+      |>]
+    ];
+  ];
+
+  Missing["NotFound"]
+];
+
 (* vykreslí determinant 5×5 cez dva laplaceove rozvoje a následný determinant 3×3 *)
-renderCramer5x5Reduction[matrix_, label_] := Module[
-  {
-    content = {}, line1, line2,
-    signed1, signed2, minor4, minor3,
-    minor4Label, minor3Label, det3Data, det4Value, value
-  },
+renderCramer5x5Reduction[matrix_, label_] := Module[{ content = {}, line1, line2, signed1, signed2, minor4, minor3, minor4Label, minor3Label, det3Data, det4Value, value},
 
   minor4Label = Subscript[Style["M", Italic], 4];
   minor3Label = Subscript[Style["M", Italic], 3];
@@ -3454,7 +3342,7 @@ stepsGauss[data_Association] := Catch[Module[ {content = {}, n, aug, vars, st, a
   ];
 
   If[st === "INFINITE",
-    Module[{paramIdxs, paramSymbols},
+    Module[{ paramIdxs, paramSymbols},
       paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
       paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
 
@@ -3552,7 +3440,7 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
       ];
 
       Do[
-        Module[{kPivot},
+        Module[{ kPivot},
           kPivot = pivotRowFn[aug, i];
 
           If[pivotQ && kPivot =!= i,
@@ -3610,7 +3498,7 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
         If[pNow =!= 0 && pNow =!= 1,
           If[showElemQ,
             aug = applyElemDivideStep[content, aug, i, pNow, n, {i, i}],
-            Module[{before, after},
+            Module[{ before, after},
               before = aug;
               after = rowApplyDivide[before, i, pNow];
               notes = ConstantArray["", n];
@@ -3632,7 +3520,7 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
       If[pNow =!= 0 && pNow =!= 1,
         If[showElemQ,
           aug = applyElemDivideStep[content, aug, 1, pNow, n, {1, 1}],
-          Module[{before, after},
+          Module[{ before, after},
             before = aug;
             after = rowApplyDivide[before, 1, pNow];
             notes = ConstantArray["", n];
@@ -3677,7 +3565,7 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
       ];
 
       If[st === "INFINITE",
-        Module[{paramIdxs, paramSymbols},
+        Module[{ paramIdxs, paramSymbols},
           paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
           paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
 
@@ -3715,7 +3603,7 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
             {k, 1, Length[paramIdxs]}
           ];
 
-          Module[{tmp},
+          Module[{ tmp},
             tmp = appendTriangularSubstitutionSteps[
               aug[[All, 1 ;; n]], aug[[All, n + 1]],
               vars, solExprs, Range[n, 1, -1], content, paramIdxs, paramIdxs
@@ -3749,9 +3637,7 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
   ]
 ];
 
-stepsInverseMatrix[data_Association] := Module[
-  {content = {}, n, A, b, vars, augInv, invMatrix, xResult,
-    addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow},
+stepsInverseMatrix[data_Association] := Module[{ content = {}, n, A, b, vars, augInv, invMatrix, xResult, addHeader, addText, addMatrix, notes, before, after, kPivot, elimRes, pNow},
 
   n = data["n"];
   A = data["A"];
@@ -3838,7 +3724,7 @@ stepsInverseMatrix[data_Association] := Module[
 
   xResult = invMatrix . b;
 
-  AppendTo[content, Module[{resultNotes},
+  AppendTo[content, Module[{ resultNotes},
     resultNotes = Grid[
       List /@ MapThread[
         Style[Row[{lhsStyle[#1], " = ", tft[#2]}], GrayLevel[.35], FontSize -> 13] &,
@@ -3869,7 +3755,7 @@ stepsInverseMatrix[data_Association] := Module[
   addHeader["Skúška správnosti"];
   addText[Row[{"Najprv skontrolujeme, že A \[CenterDot] ", inverseASymbol[], " = E. Potom overíme, že platí aj A \[CenterDot] x = b."}]];
 
-  Module[{product, isIdentity},
+  Module[{ product, isIdentity},
     product = Together[A . invMatrix];
     isIdentity = product === IdentityMatrix[n];
 
@@ -3891,14 +3777,9 @@ stepsInverseMatrix[data_Association] := Module[
   <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
 ];
 
-stepsLU[data_Association] := Module[
-  {
-    content = {}, n, A, b, vars, luData, L, U, y, x, tmp,
-    addHeader, addText, addMatrixPair, addVector, addFormula, addSubHeader, resultStyle,
-    prettyMatrix, prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality,
-    i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck,
-    xSymbols, formatLinearEquation, formatForwardEquation, formatBackwardEquation,
-    symbolicProductSum, numericProductSum, sigmaUDisplay, sigmaLDisplay,
+stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U, y, x, tmp, addHeader, addText, addMatrixPair, addVector, addFormula, addSubHeader, resultStyle,
+    prettyMatrix, prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality, i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck,
+    xSymbols, formatLinearEquation, formatForwardEquation, formatBackwardEquation, symbolicProductSum, numericProductSum, sigmaUDisplay, sigmaLDisplay,
     buildUFormulaLines, buildLFormulaLines, buildYFormulaLines, currentLBoldPositions, currentUBoldPositions
   },
 
@@ -4020,14 +3901,14 @@ stepsLU[data_Association] := Module[
   ];
 
   (* rovnica pre L.y = b *)
-  formatForwardEquation[row_, rhs_, i_] := Module[{coeffList, symbolList},
+  formatForwardEquation[row_, rhs_, i_] := Module[{ coeffList, symbolList},
     coeffList = row[[1 ;; i]];
     symbolList = Table[luScalarSymbol["y", k], {k, 1, i}];
     formatLinearEquation[coeffList, symbolList, rhs]
   ];
 
   (* rovnica pre U.x = y *)
-  formatBackwardEquation[row_, rhs_, i_] := Module[{coeffList, symbolList},
+  formatBackwardEquation[row_, rhs_, i_] := Module[{ coeffList, symbolList},
     coeffList = row[[i ;; n]];
     symbolList = vars[[i ;; n]];
     formatLinearEquation[coeffList, symbolList, rhs]
@@ -4062,7 +3943,7 @@ stepsLU[data_Association] := Module[
   }];
 
   (* riadky výpočtu pre prvok U *)
-  buildUFormulaLines[i_, j_, terms_, value_] := Module[{symbolicTerms},
+  buildUFormulaLines[i_, j_, terms_, value_] := Module[{ symbolicTerms},
     If[terms === {},
       {
         Row[{
@@ -4099,7 +3980,7 @@ stepsLU[data_Association] := Module[
   ];
 
   (* riadky výpočtu pre prvok L *)
-  buildLFormulaLines[j_, i_, terms_, pivot_, value_] := Module[{symbolicTerms},
+  buildLFormulaLines[j_, i_, terms_, pivot_, value_] := Module[{ symbolicTerms},
     If[terms === {},
       {
         Row[{
@@ -4138,7 +4019,7 @@ stepsLU[data_Association] := Module[
     ]
   ];
 
-  buildYFormulaLines[i_, terms_, value_] := Module[{},
+  buildYFormulaLines[i_, terms_, value_] := Module[{ },
     If[terms === {},
       {
         Row[{
@@ -4339,14 +4220,8 @@ stepsLU[data_Association] := Module[
   |>
 ];
 
-stepsCholesky[data_Association] := Module[
-  {
-    content = {}, n, A, b, vars, choleskyData, L, LT, y, x, tmp,
-    addHeader, addText, addSubHeader, addFormula, addMatrixPair, addVector,
-    prettyMatrix, prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality,
-    i, j, productCheck, lowerCheck, upperCheck, ySymbols,
-    currentLBoldPositions, currentLTBoldPositions
-  },
+stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, choleskyData, L, LT, y, x, tmp, addHeader, addText, addSubHeader, addFormula, addMatrixPair, addVector, prettyMatrix,
+  prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality, i, j, productCheck, lowerCheck, upperCheck, ySymbols, currentLBoldPositions, currentLTBoldPositions},
 
   n = data["n"];
   A = data["A"];
@@ -4565,11 +4440,7 @@ stepsCholesky[data_Association] := Module[
   |>
 ];
 
-stepsCramer[data_Association] := Block[{cramerKnown3x3 = {}}, Module[
-  {
-    content = {}, n, A, b, vars, solveData, detData, auxData, auxLabel,
-    addHeader, addText
-  },
+stepsCramer[data_Association] := Block[{cramerKnown3x3 = {}}, Module[{ content = {}, n, A, b, vars, solveData, detData, auxData, auxLabel, addHeader, addText},
 
   n = data["n"];
   A = data["A"];
@@ -4661,7 +4532,7 @@ stepsCramer[data_Association] := Block[{cramerKnown3x3 = {}}, Module[
 
 (* ~-~-~ VERIFICATION STEPS ~-~-~ *)
 
-verificationSteps[data_Association, sol_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs},
+verificationSteps[data_Association, sol_List] := Module[{ content = {}, A = data["A"], b = data["b"], n = data["n"], lhs},
   Do[
     lhs = A[[i]] . sol;
     AppendTo[content,
@@ -4680,7 +4551,7 @@ verificationSteps[data_Association, sol_List] := Module[{content = {}, A = data[
 
   content
 ];
-verificationStepsNone[data_Association] := Module[{content = {}, A = data["A"], b = data["b"], aug0, rA, rAug, n},
+verificationStepsNone[data_Association] := Module[{ content = {}, A = data["A"], b = data["b"], aug0, rA, rAug, n},
 
   n = Length[b];
   aug0 = augFromAb[A, b];
@@ -4704,7 +4575,8 @@ verificationStepsNone[data_Association] := Module[{content = {}, A = data["A"], 
   ];
   content
 ];
-verificationStepsInfinite[data_Association, solExprs_List] := Module[{content = {}, A = data["A"], b = data["b"], n = data["n"], lhs, diff, okQ, coeffs},
+verificationStepsInfinite[data_Association, solExprs_List] := Module[{ content = {}, A = data["A"], b = data["b"], n = data["n"], lhs, diff, okQ, coeffs},
+
   Do[
     lhs = Together[A[[i]] . solExprs];
     diff = Together[lhs - b[[i]]];
@@ -4738,7 +4610,7 @@ verificationStepsInfinite[data_Association, solExprs_List] := Module[{content = 
 
 (* ~-~-~ TASK / RESULT PRINTING ~-~-~ *)
 
-printDefaultTask[data_Association, vars_List] := Module[{},
+printDefaultTask[data_Association, vars_List] := Module[{ },
   printTextCell["Riešte sústavu rovníc."];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
@@ -4747,7 +4619,7 @@ printDefaultTask[data_Association, vars_List] := Module[{},
   ];
 ];
 
-printTaskInverse[data_Association, vars_List] := Module[{},
+printTaskInverse[data_Association, vars_List] := Module[{ },
   printTextCell["Vypočítajte inverznú maticu a potom pomocou nej určte riešenie sústavy."];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
@@ -4756,7 +4628,7 @@ printTaskInverse[data_Association, vars_List] := Module[{},
   ];
 ];
 
-printTaskLU[data_Association, vars_List] := Module[{},
+printTaskLU[data_Association, vars_List] := Module[{ },
   printTextCell["Rozložte maticu sústavy pomocou LU rozkladu (Doolittle, bez pivotovania) v tvare A = L · U, kde L má jednotky na diagonále. Potom vyriešte sústavy L · y = b a U · x = y."];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
@@ -4766,7 +4638,7 @@ printTaskLU[data_Association, vars_List] := Module[{},
   printTextCell["Pracujte priamo s maticami L a U bez pivotovania."];
 ];
 
-printTaskCholesky[data_Association, vars_List] := Module[{},
+printTaskCholesky[data_Association, vars_List] := Module[{ },
   printCellStyle[
     BoxData @ ToBoxes[
       Row[{"Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L \[CenterDot] ", transposeLSymbol[], ". Potom vyriešte sústavy L \[CenterDot] y = b a ", transposeLSymbol[], " \[CenterDot] x = y."}],
@@ -4780,7 +4652,7 @@ printTaskCholesky[data_Association, vars_List] := Module[{},
   ];
 ];
 
-printTaskCramer[data_Association, vars_List] := Module[{},
+printTaskCramer[data_Association, vars_List] := Module[{ },
   printTextCell["Riešte sústavu rovníc pomocou Cramerovho pravidla."];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
@@ -4790,7 +4662,7 @@ printTaskCramer[data_Association, vars_List] := Module[{},
   printTextCell["Najprv vypočítajte determinant matice A a potom determinanty matíc, ktoré vzniknú nahradením jednotlivých stĺpcov vektorom b."];
 ];
 
-printDefaultResult[data_Association, vars_List, st_] := Module[{},
+printDefaultResult[data_Association, vars_List, st_] := Module[{ },
   If[st === "ONE",
     printFormulaCell[
       Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ data["x"], ", "], ")"}]]
@@ -4803,7 +4675,7 @@ printDefaultResult[data_Association, vars_List, st_] := Module[{},
 
   If[st === "INFINITE",
     printTextCell["Sústava má nekonečne veľa riešení."];
-    Module[{solExprs = infiniteSolutionFromSolvedAug[data], paramIdxs},
+    Module[{ solExprs = infiniteSolutionFromSolvedAug[data], paramIdxs},
       paramIdxs = Lookup[data, "ParamIdxs", {}];
 
       printFormulaCell[
@@ -4816,8 +4688,7 @@ printDefaultResult[data_Association, vars_List, st_] := Module[{},
   ];
 ];
 
-printResultInverse[data_Association, vars_List, st_, steps_] := Module[
-  {solution, invMatrix},
+printResultInverse[data_Association, vars_List, st_, steps_] := Module[{ solution, invMatrix},
 
   solution = Which[
     AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
@@ -4843,8 +4714,7 @@ printResultInverse[data_Association, vars_List, st_, steps_] := Module[
   ];
 ];
 
-printResultLU[data_Association, vars_List, st_, steps_] := Module[
-  {solution, lMatrix, uMatrix, yVector},
+printResultLU[data_Association, vars_List, st_, steps_] := Module[{ solution, lMatrix, uMatrix, yVector},
 
   solution = Which[
     AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
@@ -4890,8 +4760,7 @@ printResultLU[data_Association, vars_List, st_, steps_] := Module[
   ];
 ];
 
-printResultCholesky[data_Association, vars_List, st_, steps_] := Module[
-  {solution, lMatrix, ltMatrix, yVector},
+printResultCholesky[data_Association, vars_List, st_, steps_] := Module[{ solution, lMatrix, ltMatrix, yVector},
 
   solution = Which[
     AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
@@ -4934,8 +4803,7 @@ printResultCholesky[data_Association, vars_List, st_, steps_] := Module[
   ];
 ];
 
-printResultCramer[data_Association, vars_List, st_, steps_] := Module[
-  {solveData, detA, auxDeterminants, solution},
+printResultCramer[data_Association, vars_List, st_, steps_] := Module[{ solveData, detA, auxDeterminants, solution},
 
   solveData = cramerSolveData[data["A"], data["b"]];
 
@@ -4992,10 +4860,8 @@ printResultCramer[data_Association, vars_List, st_, steps_] := Module[
 
 (* ~-~-~ MAIN CONTROLLER ~-~-~ *)
 
-runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPattern[]] := Module[
-  {n, vars, st, tri, data, steps = Missing["NotComputed"], validateExtraQ, resolveExtra,
-    sectionTitle, stepFn, scrambleFn, taskPrinter, resultPrinter, useRetryQ, pivotMode,
-    boundAugFn, boundCheckFn},
+runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPattern[]] := Module[{ n, vars, st, tri, data, steps = Missing["NotComputed"], validateExtraQ, resolveExtra,
+  sectionTitle, stepFn, scrambleFn, taskPrinter, resultPrinter, useRetryQ, pivotMode, boundAugFn, boundCheckFn},
 
   If[!TrueQ[ValidateDifficulty[diff]],
     Message[MessageName[spec["MsgPrefix"], "baddiff"], diff];
@@ -5091,7 +4957,7 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
   ];
 ];
 
-GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenTriangular, "MsgPrefix" -> GenTriangular, "DimKey" -> "Triangular", "SectionTitle" -> "Trojuholníková metóda",
     "ScrambleFn" -> genScrambleTriang, "StepsFn" -> stepsTriangular,
@@ -5109,7 +4975,7 @@ GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec
 ];
 
 (* generátor Gaussovej eliminačnej metódy *)
-GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenGauss,
     "MsgPrefix" -> GenGauss,
@@ -5126,7 +4992,7 @@ GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
 ];
 
 (* generátor Gauss-Jordanovej metódy *)
-GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenGaussJordan,
     "MsgPrefix" -> GenGaussJordan,
@@ -5143,7 +5009,7 @@ GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spe
 ];
 
 (* generátor pivotovaného Gauss-Jordana *)
-GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenGaussJordanPivot,
     "MsgPrefix" -> GenGaussJordanPivot,
@@ -5160,7 +5026,7 @@ GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module
 ];
 
 (* generátor Gauss-Jordana s elementárnymi maticami *)
-GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenElemGJ,
     "MsgPrefix" -> GenElemGJ,
@@ -5178,7 +5044,7 @@ GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
 ];
 
 (* generátor výpočtu inverznej matice *)
-GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenInverse,
     "MsgPrefix" -> GenInverse,
@@ -5198,7 +5064,7 @@ GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenLU,
     "MsgPrefix" -> GenLU,
@@ -5217,7 +5083,7 @@ GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-GenCholesky[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenCholesky[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenCholesky,
     "MsgPrefix" -> GenCholesky,
@@ -5236,7 +5102,7 @@ GenCholesky[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-GenCramer[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spec},
+GenCramer[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenCramer,
     "MsgPrefix" -> GenCramer,
