@@ -166,7 +166,7 @@ rowEquivalentSymbol[] := Style["\[TildeTilde]", Bold, FontSize -> 18];
 (* základné zvýraznenie ľavej strany rovnosti *)
 lhsStyle[expr_] := Style[expr, Bold];
 inverseASymbol[] := Superscript[Style["A", Italic], -1];
-transposeLSymbol[] := Superscript[Style["L", Italic], Style["T", Italic]]
+transposeLSymbol[] := Superscript[Style["L", Italic], Style["T", Italic]];
 
 resultValueStyle[expr_] := Style[expr, Bold, Blue];
 resultEquationLine[lhs_, rhs_] := Row[{lhsStyle[lhs], " = ", resultValueStyle[tft[rhs]]}];
@@ -1206,7 +1206,6 @@ kSetGauss := nonzeroRange[-2, 3];
 
 lowerNonzeroCount[m_] := Count[LowerTriangularize[m, -1], x_ /; x =!= 0, {2}];
 
-(* vytvorenie vyriešenej augmentovanej matice *)
 makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, paramIdxs = {}, badRow, rhsNonzero, numParams, pivotRows, coeffPool, buildParamColumn, col1, col2, tries},
 
   rhsNonzero = DeleteCases[Range[$bRange[[1]], $bRange[[2]]], 0];
@@ -1351,6 +1350,153 @@ makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, p
   |>
 ];
 
+(* -- Scramble Gauss Helpers -- *)
+
+(* stĺpce, v ktorých vynucujeme pivotovanie *)
+gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
+  possibleCols = Range[Max[0, pivotCount - 1]];
+
+  Which[
+    possibleCols === {}, {},
+    Length[possibleCols] === 1, {1},
+    Length[possibleCols] === 2, {1, 2},
+    True, {2, Last[possibleCols]}
+  ]
+];
+
+(* stĺpce so zmysluplnou výmenou pivotu *)
+gaussObservedPivotSwapColumns[trace_List] := Module[{ cols = {}, step, prev, i, k, currentPivot, newPivot},
+
+  Do[
+    step = trace[[t]];
+    If[Lookup[step, "Type", None] =!= "Swap" || t == 1, Continue[]];
+
+    prev = trace[[t - 1, "Matrix"]];
+    i = step["PivotCol"];
+    k = step["SourceRow"];
+
+    currentPivot = prev[[i, i]];
+    newPivot = prev[[k, i]];
+
+    If[
+      currentPivot =!= 0 &&
+          newPivot =!= 0 &&
+          Abs[newPivot] < Abs[currentPivot],
+      AppendTo[cols, i]
+    ];
+    ,
+    {t, 1, Length[trace]}
+  ];
+
+  cols
+];
+
+(* vynútenie susednej výmeny pre pivotovanie *)
+gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[{ work = aug, rowI, rowK, factors, chosen},
+
+  If[i >= Length[aug], Return[work]];
+
+  rowI = work[[i]];
+  rowK = work[[i + 1]];
+
+  If[rowI[[i]] === 0 || rowK[[i]] === 0, Return[work]];
+
+  factors = {2, 3, -2, -3};
+
+  chosen = SelectFirst[
+    factors,
+    Module[{ cand = # rowK},
+      Max[Abs[cand]] <= bnd &&
+          cand[[i]] =!= 0 &&
+          Abs[cand[[i]]] > Abs[rowI[[i]]]
+    ] &,
+    Missing["NotFound"]
+  ];
+
+  If[chosen =!= Missing["NotFound"],
+    work[[i + 1]] = chosen work[[i + 1]];
+  ];
+
+  rowApplySwap[work, i, i + 1]
+];
+
+(* trace doprednej eliminácie pre Gaussa *)
+gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[{ workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
+
+  workAug = aug;
+  n = Length[workAug];
+
+  pivotRowFn = Switch[pivotMode,
+    "MIN", gaussPivotRowByMinAbs,
+    _, gaussPivotRowByNonzero
+  ];
+
+  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
+
+  Do[
+    pivotRow = pivotRowFn[workAug, i];
+
+    If[pivotRow =!= i,
+      workAug = rowApplySwap[workAug, i, pivotRow];
+      AppendTo[trace, <|
+        "Type" -> "Swap",
+        "PivotCol" -> i,
+        "Row" -> i,
+        "SourceRow" -> pivotRow,
+        "Matrix" -> workAug
+      |>];
+    ];
+
+    pivotValue = workAug[[i, i]];
+    If[pivotValue === 0, Continue[]];
+
+    Do[
+      If[workAug[[r, i]] =!= 0,
+        elimRes = rowApplyElimStable[workAug, r, i];
+
+        If[elimRes["DivG"] > 1,
+          AppendTo[trace, <|
+            "Type" -> "ElimRaw",
+            "PivotCol" -> i,
+            "Row" -> r,
+            "Matrix" -> elimRes["AugRaw"]
+          |>]
+        ];
+
+        workAug = elimRes["Aug"];
+        AppendTo[trace, <|
+          "Type" -> "ElimFinal",
+          "PivotCol" -> i,
+          "Row" -> r,
+          "Matrix" -> workAug
+        |>];
+      ],
+      {r, i + 1, n}
+    ],
+    {i, 1, n - 1}
+  ];
+
+  <|
+    "FinalAug" -> workAug,
+    "Trace" -> trace
+  |>
+];
+
+(* kontrola medzí počas Gaussovej eliminácie *)
+gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[{ traceData, limit},
+
+  limit = $MaxBounds;
+  traceData = gaussForwardEliminationTrace[aug, pivotMode];
+
+  AllTrue[
+    traceData["Trace"],
+    matrixMaxAbs[#["Matrix"]] <= limit &
+  ]
+];
+
+(* -- Scramble Gauss Helpers -- *)
+
+
 (* ~-~-~ DATA GENERATION ~-~-~ *)
 
 generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{ solved, augSolved, augTask, A, b, vars},
@@ -1383,7 +1529,7 @@ generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{ solve
     "ParamIdxs" -> Lookup[solved, "ParamIdxs", {}]
   |>
 ];
-genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Gauss_ : True] := Module[{ aug = aug0, n = Length[aug0], bnd, kSet, withinQ, protectedLastRowQ, chooseK, chooseS, i, r, k, s},
+genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Gauss_ : True] := Module[{ aug = aug0, n = Length[aug0], bnd, kSet, withinQ, protectedRowQ, chooseK, chooseS, i, r, k, s},
 
   bnd = $Bounds;
   kSet = If[TrueQ[Gauss], kSetGauss, kSetTri];
@@ -1462,6 +1608,85 @@ genScrambleTriang[diff_String, aug0_, triType_String, solType_String : "ONE", Ga
         aug[[i]] = s*aug[[i]];
       ];
     ]
+  ];
+
+  aug
+];
+
+genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ n, pairs, chosenPairs, kSet, bnd, maxAttempts, maxKTries, aug, r, i, k, rowNew, currentLower},
+  n = Length[aug0];
+  pairs = Flatten[Table[{r, i}, {r, 2, n}, {i, 1, r - 1}], 1]; (* (2,1) => R2=R2+k.R1; (3,1); (3,2) *)
+
+  kSet = kSetGauss;
+  bnd = $Bounds;
+
+  maxAttempts = $MaxRetryCount;   (* koľkokrát reštartovať celý scramble *)
+  maxKTries = 10;     (* koľko rôznych k skúsiť pre jeden pár *)
+
+  Do[
+    aug = genScrambleTriang[diff, aug0, "U", solType, False];
+    aug = Map[normalizeRow, aug];
+
+    chosenPairs = If[solType === "ONE", RandomSample[pairs, Length[pairs]], pairs];
+
+    Do[
+      {r, i} = pair;
+
+      Do[
+        k = RandomChoice[kSet];
+        rowNew = aug[[r]] + k aug[[i]];
+        rowNew = normalizeRow[rowNew];
+
+        If[
+          Max[Abs[rowNew]] <= bnd,
+          aug[[r]] = rowNew;
+          Break[];
+        ];
+        ,
+        {t, 1, maxKTries}
+      ];
+      ,
+      {pair, chosenPairs}
+    ];
+
+    currentLower = lowerNonzeroCount[aug[[All, 1 ;; n]]];
+    If[currentLower == Length[pairs], Return[aug]];
+    ,
+    {attempt, 1, maxAttempts}
+  ];
+  aug
+];
+
+genScrambleGaussJordanPivot[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ aug, n, pivotCount, plannedCols, bnd, tries = 0, trace, observedCols},
+
+  n = Length[aug0];
+  bnd = $Bounds;
+
+  pivotCount = Count[
+    aug0[[All, 1 ;; n]],
+    row_ /; !AllTrue[row, # === 0 &]
+  ];
+
+  plannedCols = gaussPlannedPivotSwapColumns[pivotCount];
+
+  While[tries < $MaxRetryCount,
+    aug = genScrambleGauss[diff, aug0, triType, solType];
+
+    Do[
+      aug = gaussForceAdjacentPivotSwap[aug, i, bnd];
+      ,
+      {i, Reverse[plannedCols]}
+    ];
+
+    trace = gaussForwardEliminationTrace[aug, "MIN"]["Trace"];
+    observedCols = DeleteDuplicates[gaussObservedPivotSwapColumns[trace]];
+
+    If[
+      (n == 3 && Length[observedCols] == 1) ||
+          (n > 3 && Length[observedCols] >= 2),
+      Return[aug]
+    ];
+    tries++;
   ];
 
   aug
@@ -1699,148 +1924,6 @@ gaussPivotSwapExplanation[aug_, i_Integer, k_Integer] := Module[{ currentPivot, 
   ]
 ];
 
-(* stĺpce, v ktorých vynucujeme pivotovanie *)
-gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
-  possibleCols = Range[Max[0, pivotCount - 1]];
-
-  Which[
-    possibleCols === {}, {},
-    Length[possibleCols] === 1, {1},
-    Length[possibleCols] === 2, {1, 2},
-    True, {2, Last[possibleCols]}
-  ]
-];
-
-(* stĺpce so zmysluplnou výmenou pivotu *)
-gaussObservedPivotSwapColumns[trace_List] := Module[{ cols = {}, step, prev, i, k, currentPivot, newPivot},
-
-  Do[
-    step = trace[[t]];
-    If[Lookup[step, "Type", None] =!= "Swap" || t == 1, Continue[]];
-
-    prev = trace[[t - 1, "Matrix"]];
-    i = step["PivotCol"];
-    k = step["SourceRow"];
-
-    currentPivot = prev[[i, i]];
-    newPivot = prev[[k, i]];
-
-    If[
-      currentPivot =!= 0 &&
-          newPivot =!= 0 &&
-          Abs[newPivot] < Abs[currentPivot],
-      AppendTo[cols, i]
-    ];
-    ,
-    {t, 1, Length[trace]}
-  ];
-
-  cols
-];
-
-(* vynútenie susednej výmeny pre pivotovanie *)
-gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[{ work = aug, rowI, rowK, factors, chosen},
-
-  If[i >= Length[aug], Return[work]];
-
-  rowI = work[[i]];
-  rowK = work[[i + 1]];
-
-  If[rowI[[i]] === 0 || rowK[[i]] === 0, Return[work]];
-
-  factors = {2, 3, -2, -3};
-
-  chosen = SelectFirst[
-    factors,
-    Module[{ cand = # rowK},
-      Max[Abs[cand]] <= bnd &&
-          cand[[i]] =!= 0 &&
-          Abs[cand[[i]]] > Abs[rowI[[i]]]
-    ] &,
-    Missing["NotFound"]
-  ];
-
-  If[chosen =!= Missing["NotFound"],
-    work[[i + 1]] = chosen work[[i + 1]];
-  ];
-
-  rowApplySwap[work, i, i + 1]
-];
-
-(* trace doprednej eliminácie pre Gaussa *)
-gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[{ workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
-
-  workAug = aug;
-  n = Length[workAug];
-
-  pivotRowFn = Switch[pivotMode,
-    "MIN", gaussPivotRowByMinAbs,
-    _, gaussPivotRowByNonzero
-  ];
-
-  AppendTo[trace, <|"Type" -> "Start", "Matrix" -> workAug|>];
-
-  Do[
-    pivotRow = pivotRowFn[workAug, i];
-
-    If[pivotRow =!= i,
-      workAug = rowApplySwap[workAug, i, pivotRow];
-      AppendTo[trace, <|
-        "Type" -> "Swap",
-        "PivotCol" -> i,
-        "Row" -> i,
-        "SourceRow" -> pivotRow,
-        "Matrix" -> workAug
-      |>];
-    ];
-
-    pivotValue = workAug[[i, i]];
-    If[pivotValue === 0, Continue[]];
-
-    Do[
-      If[workAug[[r, i]] =!= 0,
-        elimRes = rowApplyElimStable[workAug, r, i];
-
-        If[elimRes["DivG"] > 1,
-          AppendTo[trace, <|
-            "Type" -> "ElimRaw",
-            "PivotCol" -> i,
-            "Row" -> r,
-            "Matrix" -> elimRes["AugRaw"]
-          |>]
-        ];
-
-        workAug = elimRes["Aug"];
-        AppendTo[trace, <|
-          "Type" -> "ElimFinal",
-          "PivotCol" -> i,
-          "Row" -> r,
-          "Matrix" -> workAug
-        |>];
-      ],
-      {r, i + 1, n}
-    ],
-    {i, 1, n - 1}
-  ];
-
-  <|
-    "FinalAug" -> workAug,
-    "Trace" -> trace
-  |>
-];
-
-(* kontrola medzí počas Gaussovej eliminácie *)
-gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[{ traceData, limit},
-
-  limit = $MaxBounds;
-  traceData = gaussForwardEliminationTrace[aug, pivotMode];
-
-  AllTrue[
-    traceData["Trace"],
-    matrixMaxAbs[#["Matrix"]] <= limit &
-  ]
-];
-
 (* trace celej Gauss-Jordanovej eliminácie *)
 gaussJordanEliminationTrace[aug_, pivotMode_: "MIN"] := Module[{ workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}, after},
 
@@ -1966,87 +2049,6 @@ gaussJordanEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[{ traceDa
     traceData["Trace"],
     matrixMaxAbs[#["Matrix"]] <= limit &
   ]
-];
-
-(* premiešanie sústavy pre Gaussovu metódu *)
-genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ n, pairs, chosenPairs, kSet, bnd, maxAttempts, maxKTries, aug, r, i, k, rowNew, currentLower},
-  n = Length[aug0];
-  pairs = Flatten[Table[{r, i}, {r, 2, n}, {i, 1, r - 1}], 1]; (* (2,1) => R2=R2+k.R1; (3,1); (3,2) *)
-
-  kSet = kSetGauss;
-  bnd = $Bounds;
-
-  maxAttempts = $MaxRetryCount;   (* koľkokrát reštartovať celý scramble *)
-  maxKTries = 10;     (* koľko rôznych k skúsiť pre jeden pár *)
-
-  Do[
-    aug = genScrambleTriang[diff, aug0, "U", solType, False];
-    aug = Map[normalizeRow, aug];
-
-    chosenPairs = If[solType === "ONE", RandomSample[pairs, Length[pairs]], pairs];
-
-    Do[
-      {r, i} = pair;
-
-      Do[
-        k = RandomChoice[kSet];
-        rowNew = aug[[r]] + k aug[[i]];
-        rowNew = normalizeRow[rowNew];
-
-        If[
-          Max[Abs[rowNew]] <= bnd,
-          aug[[r]] = rowNew;
-          Break[];
-        ];
-        ,
-        {t, 1, maxKTries}
-      ];
-      ,
-      {pair, chosenPairs}
-    ];
-
-    currentLower = lowerNonzeroCount[aug[[All, 1 ;; n]]];
-    If[currentLower == Length[pairs], Return[aug]];
-    ,
-    {attempt, 1, maxAttempts}
-  ];
-  aug
-];
-
-(* premiešanie sústavy pre pivotovaný Gauss-Jordan *)
-genScrambleGaussJordanPivot[diff_String, aug0_, triType_String, solType_String : "ONE"] := Module[{ aug, n, pivotCount, plannedCols, bnd, tries = 0, trace, observedCols},
-
-  n = Length[aug0];
-  bnd = $Bounds;
-
-  pivotCount = Count[
-    aug0[[All, 1 ;; n]],
-    row_ /; !AllTrue[row, # === 0 &]
-  ];
-
-  plannedCols = gaussPlannedPivotSwapColumns[pivotCount];
-
-  While[tries < $MaxRetryCount,
-    aug = genScrambleGauss[diff, aug0, triType, solType];
-
-    Do[
-      aug = gaussForceAdjacentPivotSwap[aug, i, bnd];
-      ,
-      {i, Reverse[plannedCols]}
-    ];
-
-    trace = gaussForwardEliminationTrace[aug, "MIN"]["Trace"];
-    observedCols = DeleteDuplicates[gaussObservedPivotSwapColumns[trace]];
-
-    If[
-      (n == 3 && Length[observedCols] == 1) ||
-          (n > 3 && Length[observedCols] >= 2),
-      Return[aug]
-    ];
-    tries++;
-  ];
-
-  aug
 ];
 
 (* --- LU / Cholesky HELPERS --- *)
@@ -2190,6 +2192,7 @@ choleskyDecompositionWithinBoundsQ[data_Association] := Module[{ choleskyData, l
 ];
 
 luEntrySymbol[sym_String, i_, j_] := Subscript[Style[sym, Italic], Row[{i, ",", j}]];
+
 luScalarSymbol[sym_String, i_] := Subscript[Style[sym, Italic], i];
 
 luFactorDisplay[val_] := If[NumberQ[val] && val < 0, Row[{"(", tft[val], ")"}], tft[val]];
@@ -2200,40 +2203,39 @@ luCoeffTimes[a_, x_] := Which[
   True, Row[{tft[a], "\[CenterDot]", x}]
 ];
 
-luSignedScalarSum[vals_List] := Module[{ clean, first, rest},
-  clean = Select[Together /@ vals, # =!= 0 &];
+luSumDisplay[terms_List] := Module[{values, clean, first, rest},
+  values = Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &];
+  clean = Select[Together /@ values, # =!= 0 &];
+
   If[clean === {}, Return[tft[0]]];
 
   first = First[clean];
   rest = Rest[clean];
 
   Row @ Flatten @ Join[
-    {
-      If[first < 0, Row[{"-", tft[Abs[first]]}], tft[first]]
-    },
+    {If[first < 0, Row[{"-", tft[Abs[first]]}], tft[first]]},
     Table[
       If[val < 0,
         {" - ", tft[Abs[val]]},
-        {" + ", tft[val]}
-      ],
+        {" + ", tft[val]}],
       {val, rest}
     ]
   ]
 ];
 
-luSumDisplay[terms_List] := luSignedScalarSum[Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &]];
-
-luSumNeedsParensQ[terms_List] := Module[{ vals, sumVal},
+luWrappedSumDisplay[terms_List] := Module[{vals, sumVal, sumDisp, needsParensQ},
   vals = Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &];
-  If[vals === {}, Return[False]];
-  If[Length[vals] > 1, Return[True]];
-  sumVal = Together[First[vals]];
-  NumericQ[sumVal] && sumVal < 0
-];
-
-luWrappedSumDisplay[terms_List] := Module[{ sumDisp},
   sumDisp = luSumDisplay[terms];
-  If[luSumNeedsParensQ[terms], Row[{"(", sumDisp, ")"}], sumDisp]
+
+  needsParensQ = Which[
+    vals === {}, False,
+    Length[vals] > 1, True,
+    True,
+    sumVal = Together[First[vals]];
+    NumericQ[sumVal] && sumVal < 0
+  ];
+
+  If[needsParensQ, Row[{"(", sumDisp, ")"}], sumDisp]
 ];
 
 luLinearCombinationDisplay[terms_List] := Module[{ clean, first, rest, formatPositiveTerm, formatFirstTerm, formatNextTerm},
@@ -2261,102 +2263,28 @@ luLinearCombinationDisplay[terms_List] := Module[{ clean, first, rest, formatPos
     formatNextTerm /@ rest
   ]
 ];
-matrixPairGrid[leftLabel_, leftMatrix_, rightLabel_, rightMatrix_, leftBold_List : {}, rightBold_List : {}] := Module[{ styledLeft, styledRight},
 
-  styledLeft = MapIndexed[
-    If[MemberQ[leftBold, #2], Style[#1, Bold], #1] &,
-    leftMatrix,
-    {2}
-  ];
+luMatrixPairGrid[L_, U_, lBold_List : {}, uBold_List : {}] := Module[{styledL, styledU},
+  styledL = MapIndexed[
+    If[MemberQ[lBold, #2], Style[#1, Bold], #1] &,
+    L,
+    {2}];
 
-  styledRight = MapIndexed[
-    If[MemberQ[rightBold, #2], Style[#1, Bold], #1] &,
-    rightMatrix,
-    {2}
-  ];
+  styledU = MapIndexed[
+    If[MemberQ[uBold, #2], Style[#1, Bold], #1] &,
+    U,
+    {2}];
 
   highlightGrid @ Grid[
     {{
-      Style[Row[{leftLabel, " ="}], Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledLeft]],
+      Style[Row[{"L", " ="}], Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[styledL]],
       Spacer[20],
-      Style[Row[{rightLabel, " ="}], Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledRight]]
+      Style[Row[{"U", " ="}], Bold, FontSize -> 16],
+      TraditionalForm[MatrixForm[styledU]]
     }},
     Alignment -> Left,
-    Spacings -> {2, 1}
-  ]
-];
-
-luMatrixPairGrid[L_, U_, lBold_List : {}, uBold_List : {}] :=
-    matrixPairGrid["L", L, "U", U, lBold, uBold];
-
-choleskyMatrixPairGrid[L_, LT_, lBold_List : {}, ltBold_List : {}] := highlightGrid @ Grid[
-  {{
-    matrixBlock[Style["L", Italic], L, lBold],
-    Spacer[20],
-    matrixBlock[transposeLSymbol[], LT, ltBold]
-  }},
-  Alignment -> {Center, Center, Center},
-  Spacings -> {1.2, 0}
-];
-
-namedVectorGrid[label_String, vec_List] := highlightGrid @ Grid[
-  {{
-    vectorBlock[Style[label, Italic], vec]
-  }},
-  Alignment -> Left,
-  Spacings -> {1, 0}
-];
-
-luGeneralMatricesGrid[n_Integer] := Module[{ Lsym, Usym},
-  Lsym = Table[
-    Which[
-      i < j, 0,
-      i == j, 1,
-      True, luEntrySymbol["l", i, j]
-    ],
-    {i, 1, n}, {j, 1, n}
-  ];
-  Usym = Table[
-    Which[
-      i > j, 0,
-      True, luEntrySymbol["u", i, j]
-    ],
-    {i, 1, n}, {j, 1, n}
-  ];
-  luMatrixPairGrid[Lsym, Usym]
-];
-
-luFormulaUGeneral[i_Integer, j_Integer] := If[i === 1,
-  Row[{luEntrySymbol["u", i, j], " = ", luEntrySymbol["a", i, j]}],
-  Row[{
-    luEntrySymbol["u", i, j], " = ",
-    luEntrySymbol["a", i, j], " - ",
-    Underoverscript["\[Sum]", Row[{k, " = 1"}], i - 1],
-    Row[{luEntrySymbol["l", i, k], luEntrySymbol["u", k, j]}]
-  }]
-];
-
-luFormulaLGeneral[j_Integer, i_Integer] := If[i === 1,
-  Row[{luEntrySymbol["l", j, i], " = ", luEntrySymbol["a", j, i], " / ", luEntrySymbol["u", i, i]}],
-  Row[{
-    luEntrySymbol["l", j, i], " = (",
-    luEntrySymbol["a", j, i], " - ",
-    Underoverscript["\[Sum]", Row[{k, " = 1"}], i - 1],
-    Row[{luEntrySymbol["l", j, k], luEntrySymbol["u", k, i]}],
-    ") / ", luEntrySymbol["u", i, i]
-  }]
-];
-
-forwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer] := Module[{ terms},
-  terms = Table[{row[[j]], vars[[j]]}, {j, 1, idx}];
-  Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
-];
-
-backwardEquationDisplay[row_List, rhs_, vars_List, idx_Integer, n_Integer] := Module[{ terms},
-  terms = Table[{row[[j]], vars[[j]]}, {j, idx, n}];
-  Row[{luLinearCombinationDisplay[terms], " = ", tft[rhs]}]
+    Spacings -> {2, 1}]
 ];
 
 choleskySqrtDisplay[arg_] := Row[{"\[Sqrt]", "(", arg, ")"}];
@@ -2478,37 +2406,6 @@ cramerRandomInvertible3x3[maxAbs_Integer : 4, maxDet_Integer : 30] := Module[{ c
   ];
 
   $Failed
-];
-
-cramerOrthogonalTwoNonzeroRow[xCore_List] := Module[{ pairs, chosenPair, row, p, q, g},
-
-  pairs = Select[
-    Subsets[Range[Length[xCore]], {2}],
-    With[{u = xCore[[#[[1]]]], v = xCore[[#[[2]]]]},
-      (u === 0 && v === 0) || (u =!= 0 && v =!= 0)
-    ] &
-  ];
-
-  If[pairs === {},
-    chosenPair = {1, 2},
-    chosenPair = RandomChoice[pairs]
-  ];
-
-  {p, q} = chosenPair;
-  row = ConstantArray[0, Length[xCore]];
-
-  If[xCore[[p]] === 0 && xCore[[q]] === 0,
-    row[[p]] = 1;
-    row[[q]] = 1;
-    ,
-    g = GCD[Abs[xCore[[p]]], Abs[xCore[[q]]]];
-    If[g === 0, g = 1];
-
-    row[[p]] = Quotient[xCore[[q]], g];
-    row[[q]] = -Quotient[xCore[[p]], g];
-  ];
-
-  normalizeRow[row]
 ];
 
 generateCramerEasyMatrix[solutionVector_List] := Module[{ candidate, rhsVector, tries = 0, pool},
@@ -2669,19 +2566,6 @@ cramerDeterminantsWithinBoundsQ[A_, b_] := Module[{ solveData, allDeterminants},
   ]
 ];
 
-cramerSignedTermDisplay[coeff_, body_, firstQ_] := Module[{ absCoeff = Abs[coeff]},
-  If[firstQ,
-    If[coeff < 0,
-      Row[{"-", cramerFactor[absCoeff], " \[CenterDot] ", body}],
-      Row[{cramerFactor[coeff], " \[CenterDot] ", body}]
-    ],
-    If[coeff < 0,
-      Row[{" - ", cramerFactor[absCoeff], " \[CenterDot] ", body}],
-      Row[{" + ", cramerFactor[coeff], " \[CenterDot] ", body}]
-    ]
-  ]
-];
-
 (* text pre laplaceov rozvoj *)
 cramerLaplaceExplanation[lineData_Association] := If[
   lineData["Type"] === "Row",
@@ -2690,9 +2574,11 @@ cramerLaplaceExplanation[lineData_Association] := If[
 ];
 
 cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
+
 cramerDetLabel[label_] := Row[{"det(", label, ")"}];
 
-cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[{ activeRow, activeColumn, pivotPos, focusCells, columnAsRowQ, rowTextColor, colTextColor, focusTextColor, pivotTextColor, zeroTextColor},
+cramerMatrixCard[matrix_, hi_Association : <||>] := Module[
+  {activeRow, activeColumn, pivotPos, focusCells, columnAsRowQ, rowTextColor, colTextColor, focusTextColor, pivotTextColor, zeroTextColor, styledMatrix},
 
   activeRow = Lookup[hi, "ActiveRow", None];
   activeColumn = Lookup[hi, "ActiveColumn", None];
@@ -2706,43 +2592,36 @@ cramerStyledMatrix[matrix_, hi_Association : <||>] := Module[{ activeRow, active
   pivotTextColor = RGBColor[0.16, 0.34, 0.90];
   zeroTextColor = GrayLevel[0.50];
 
-  MapIndexed[
-    Module[{ i = #2[[1]], j = #2[[2]], styleOpts = {}, textColor = Automatic, styleArgs, inRowQ, inColumnQ, inFocusQ},
-      inRowQ = IntegerQ[activeRow] && i === activeRow;
-      inColumnQ = IntegerQ[activeColumn] && j === activeColumn;
-      inFocusQ = MemberQ[focusCells, {i, j}];
+  styledMatrix = MapIndexed[
+    Function[{value, index},
+      Module[{i = index[[1]], j = index[[2]], styleOpts = {}, textColor = Automatic, styleArgs, inRowQ, inColumnQ, inFocusQ},
+        inRowQ = IntegerQ[activeRow] && i === activeRow;
+        inColumnQ = IntegerQ[activeColumn] && j === activeColumn;
+        inFocusQ = MemberQ[focusCells, {i, j}];
 
-      If[ListQ[pivotPos] && pivotPos === {i, j},
-        textColor = pivotTextColor;
-        styleOpts = {Bold};,
-        If[inFocusQ,
-          textColor = focusTextColor,
-          If[inColumnQ,
-            textColor = If[columnAsRowQ, rowTextColor, colTextColor],
-            If[inRowQ,
-              textColor = rowTextColor,
-              If[#1 === 0,
-                textColor = zeroTextColor
-              ]
-            ]
-          ]
-        ]
-      ];
+        Which[
+          ListQ[pivotPos] && pivotPos === {i, j},
+          textColor = pivotTextColor;
+          styleOpts = {Bold},
 
-      styleArgs = Join[
-        If[textColor === Automatic, {}, {textColor}],
-        styleOpts
-      ];
+          inFocusQ, textColor = focusTextColor,
 
-      Style[TraditionalForm[#1], Sequence @@ styleArgs]
-    ] &,
+          inColumnQ, textColor = If[columnAsRowQ, rowTextColor, colTextColor],
+
+          inRowQ, textColor = rowTextColor,
+
+          value === 0, textColor = zeroTextColor,
+
+          True, Null
+        ];
+
+        styleArgs = Join[If[textColor === Automatic, {}, {textColor}], styleOpts]; Style[TraditionalForm[value], Sequence @@ styleArgs]
+      ]
+    ],
     matrix,
-    {2}
-  ]
-];
+    {2}];
 
-cramerMatrixCard[matrix_, hi_Association : <||>] := styledPlainMatrix[
-  cramerStyledMatrix[matrix, hi]
+  styledPlainMatrix[styledMatrix]
 ];
 
 cramerReductionHighlight[lineData_Association, extra_Association : <||>] := Module[{ base},
@@ -2775,12 +2654,6 @@ cramerLaplaceReductionPanel[matrix_, lineData_Association, minorLabel_, minorMat
   }},
   Alignment -> {Center, Center, Center},
   Spacings -> {1.8, 1}
-];
-
-cramerLaplaceVisualizationTitle[lineData_Association] := If[
-  lineData["Type"] === "Row",
-  "Vizualizácia Laplaceovho rozvoja podľa " <> ToString[lineData["LineIndex"]] <> ". riadku:",
-  "Vizualizácia Laplaceovho rozvoja podľa " <> ToString[lineData["LineIndex"]] <> ". stĺpca:"
 ];
 
 cramerFactor[value_] := If[
@@ -2850,12 +2723,6 @@ cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[
     Alignment -> {Center, Center, Center},
     Spacings -> {1.5, 0}
   ]
-];
-
-cramerSolutionGrid[vars_List, values_List] := highlightGrid @ Grid[
-  Table[{tf[lhsStyle[vars[[i]]]], "=", TraditionalForm[values[[i]]]}, {i, 1, Length[vars]}],
-  Alignment -> {{Right, Center, Left}},
-  BaseStyle -> {FontSize -> 16}
 ];
 
 cramerZeroRowIndex[matrix_] := FirstCase[Range[Length[matrix]], row_ /; AllTrue[matrix[[row]], # === 0 &], Missing["NotFound"]];
@@ -3513,14 +3380,14 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
             If[Length[paramIdxs] === 1,
               "Jeden nulový riadok znamená, že jedna premenná je voľná. Označíme ju parametrom a ostatné premenné vyjadríme pomocou neho.",
               "Dva nulové riadky znamenajú, že dve premenné sú voľné. Označíme ich parametrami a ostatné premenné vyjadríme pomocou nich."
-            ]
+            ];
           ];
 
           notes = ConstantArray["", n];
           Scan[(notes[[#]] = "nulový riadok -> parameter") &, paramIdxs];
 
 
-          addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>]
+          addMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>];
 
           Do[
             addText[Row[{"Premennú ", vars[[paramIdxs[[k]]]], " označíme parametrom ", TraditionalForm[paramSymbols[[k]]], "."}]];
