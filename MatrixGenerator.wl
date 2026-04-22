@@ -1346,7 +1346,7 @@ makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, p
   |>
 ];
 
-(* -- Scramble Gauss Helpers -- *)
+(* -- Scramble Helpers -- *)
 
 gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
   possibleCols = Range[Max[0, pivotCount - 1]];
@@ -1474,6 +1474,8 @@ gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[{ workAug, n, i
   |>
 ];
 
+
+(* kontrola matice počas doprednej eliminácie *)
 gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[{ traceData, limit},
 
   limit = $MaxBounds;
@@ -1485,6 +1487,59 @@ gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[{ trace
   ]
 ];
 
+(* kontrola matice počas G-J eliminácie (aj inverse) *)
+gaussJordanEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[{ traceData, limit},
+
+  limit = $MaxBounds;
+  traceData = gaussJordanEliminationTrace[aug, pivotMode];
+
+  AllTrue[
+    traceData["Trace"],
+    matrixMaxAbs[#["Matrix"]] <= limit &
+  ]
+];
+
+(* kontrola A,b,L,U,y,x *)
+luDecompositionWithinBoundsQ[data_Association] := Module[{ luData, limit},
+
+  limit = $MaxBounds;
+  luData = luSolveData[data["A"], data["b"]];
+
+  If[luData === $Failed,
+    Return[False]
+  ];
+
+  AllTrue[
+    {data["A"], data["b"], luData["L"], luData["U"], luData["Y"], luData["X"]},
+    matrixMaxAbs[#] <= limit &
+  ]
+];
+
+(* kontrola A,b,L,L^T,y,x *)
+choleskyDecompositionWithinBoundsQ[data_Association] := Module[{ choleskyData, limit},
+
+  limit = $MaxBounds;
+  choleskyData = choleskySolveData[data["A"], data["b"]];
+
+  If[choleskyData === $Failed, Return[False]];
+
+  AllTrue[
+    {data["A"], data["b"], choleskyData["L"], Transpose[choleskyData["L"]], choleskyData["Y"], choleskyData["X"]},
+    matrixMaxAbs[#] <= limit &
+  ]
+];
+
+(* kontrola determinantov A a pomocných matíc *)
+cramerDeterminantsWithinBoundsQ[A_, b_] := Module[{ solveData, allDeterminants},
+
+  solveData = cramerSolveData[A, b];
+  allDeterminants = Join[{solveData["DetA"]}, solveData["AuxDeterminants"]];
+
+  AllTrue[
+    allDeterminants,
+    IntegerQ[#] && Abs[#] <= $MaxBounds &
+  ]
+];
 
 (* ~-~-~ DATA GENERATION ~-~-~ *)
 
@@ -1495,9 +1550,7 @@ generateData[diff_String, n_, solType_, triType_, scrambleFn_] := Module[{ solve
 
   augTask = scrambleFn[diff, augSolved, triType, solType];
 
-  If[augTask === $Failed,
-    Return[$Failed]
-  ];
+  If[augTask === $Failed, Return[$Failed]];
 
   A = augTask[[All, 1 ;; n]];
   b = augTask[[All, n + 1]];
@@ -2028,17 +2081,6 @@ gaussJordanEliminationTrace[aug_, pivotMode_: "MIN"] := Module[{ workAug, n, i, 
   |>
 ];
 
-(* kontrola medzí počas Gauss-Jordanovej eliminácie *)
-gaussJordanEliminationWithinBoundsQ[aug_, pivotMode_: "MIN"] := Module[{ traceData, limit},
-
-  limit = $MaxBounds;
-  traceData = gaussJordanEliminationTrace[aug, pivotMode];
-
-  AllTrue[
-    traceData["Trace"],
-    matrixMaxAbs[#["Matrix"]] <= limit &
-  ]
-];
 
 (* --- LU / Cholesky HELPERS --- *)
 
@@ -2150,34 +2192,6 @@ choleskySolveData[A_, b_] := Module[{ n, L, y, x, i, j, diagTerms, mixedTerms, d
   ];
 
   <|"L" -> L, "Y" -> y, "X" -> x|>
-];
-
-luDecompositionWithinBoundsQ[data_Association] := Module[{ luData, limit},
-
-  limit = $MaxBounds;
-  luData = luSolveData[data["A"], data["b"]];
-
-  If[luData === $Failed,
-    Return[False]
-  ];
-
-  AllTrue[
-    {data["A"], data["b"], luData["L"], luData["U"], luData["Y"], luData["X"]},
-    matrixMaxAbs[#] <= limit &
-  ]
-];
-
-choleskyDecompositionWithinBoundsQ[data_Association] := Module[{ choleskyData, limit},
-
-  limit = $MaxBounds;
-  choleskyData = choleskySolveData[data["A"], data["b"]];
-
-  If[choleskyData === $Failed, Return[False]];
-
-  AllTrue[
-    {data["A"], data["b"], choleskyData["L"], Transpose[choleskyData["L"]], choleskyData["Y"], choleskyData["X"]},
-    matrixMaxAbs[#] <= limit &
-  ]
 ];
 
 luEntrySymbol[sym_String, i_, j_] := Subscript[Style[sym, Italic], Row[{i, ",", j}]];
@@ -2542,17 +2556,6 @@ cramerSolveData[A_, b_] := Module[{ detA, auxMatrices, auxDeterminants, solution
     "AuxDeterminants" -> auxDeterminants,
     "Solution" -> solution
   |>
-];
-
-cramerDeterminantsWithinBoundsQ[A_, b_] := Module[{ solveData, allDeterminants},
-
-  solveData = cramerSolveData[A, b];
-  allDeterminants = Join[{solveData["DetA"]}, solveData["AuxDeterminants"]];
-
-  AllTrue[
-    allDeterminants,
-    IntegerQ[#] && Abs[#] <= $MaxBounds &
-  ]
 ];
 
 (* text pre laplaceov rozvoj *)
