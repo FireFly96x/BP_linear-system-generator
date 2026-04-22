@@ -160,6 +160,9 @@ highlightGrid[grid_] := Style[grid, Background -> RGBColor[0.95, 0.95, 0.95], Fr
 tf[val_] := TraditionalForm[val];
 tft[val_] := tf[Together[val]];
 
+(* symbol ekvivalentnej riadkovej úpravy *)
+rowEquivalentSymbol[] := Style["\[TildeTilde]", Bold, FontSize -> 18];
+
 (* základné zvýraznenie ľavej strany rovnosti *)
 lhsStyle[expr_] := Style[expr, Bold];
 inverseASymbol[] := Superscript[Style["A", Italic], -1];
@@ -269,17 +272,26 @@ rowApplyCombine[aug_, i_Integer, terms_List] := Module[{row = aug[[i]]},
   ReplacePart[aug,  i -> (row + Total[terms[[All, 2]] aug[[terms[[All, 1]]]]])]
 ];
 
-augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[{{
-  alignedAugmentedMatrix[before, notes, hiBefore], Spacer[18],
-  alignedAugmentedMatrix[after, {}, hiAfter]}},
-  Alignment -> {Left, Center, Left}, Spacings -> {0, 0}
+augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[
+  {{
+    alignedAugmentedMatrix[before, notes, hiBefore],
+    rowEquivalentSymbol[],
+    alignedAugmentedMatrix[after, {}, hiAfter]
+  }},
+  Alignment -> {Left, Center, Left},
+  Spacings -> {1.1, 0}
 ];
 
 augRender3[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[
-  {{alignedAugmentedMatrix[before, notes1, hi1],
-    Spacer[18], alignedAugmentedMatrix[mid, notes2, hi2],   (* "/gcd" *)
-    Spacer[18], alignedAugmentedMatrix[after, {}, hi3]      (* final *)
-  }}, Alignment -> {Left, Center, Left}, Spacings -> {0, 0}
+  {{
+    alignedAugmentedMatrix[before, notes1, hi1],
+    rowEquivalentSymbol[],
+    alignedAugmentedMatrix[mid, notes2, hi2],
+    rowEquivalentSymbol[],
+    alignedAugmentedMatrix[after, {}, hi3]
+  }},
+  Alignment -> {Left, Center, Left, Center, Left},
+  Spacings -> {1.1, 0}
 ];
 
 (* pomenovaný stav matice *)
@@ -343,7 +355,7 @@ appendElemTransition[
           alignedAugmentedMatrix[
             before,
             notes,
-            Join[<|"LeftLabel" -> Style["A", Italic], "RightLabel" -> Style["b", Italic]|>, hiBefore]
+            hiBefore
           ]
         ],
         Style["=", Bold, FontSize -> 18],
@@ -352,7 +364,7 @@ appendElemTransition[
           alignedAugmentedMatrix[
             after,
             {},
-            Join[<|"LeftLabel" -> Style["A", Italic], "RightLabel" -> Style["b", Italic]|>, hiAfter]
+            hiAfter
           ]
         ]
       }},
@@ -1102,21 +1114,26 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
   ]
 ];
 
-augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[{{
-  alignedAugmentedMatrixInverse[before, notes, hiBefore], Spacer[18],
-  alignedAugmentedMatrixInverse[after, {}, hiAfter]
-}},
+augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[
+  {{
+    alignedAugmentedMatrixInverse[before, notes, hiBefore],
+    rowEquivalentSymbol[],
+    alignedAugmentedMatrixInverse[after, {}, hiAfter]
+  }},
   Alignment -> {Left, Center, Left},
-  Spacings -> {0, 0}
+  Spacings -> {1.1, 0}
 ];
 
-augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[{{
-  alignedAugmentedMatrixInverse[before, notes1, hi1], Spacer[18],
-  alignedAugmentedMatrixInverse[mid, notes2, hi2], Spacer[18],
-  alignedAugmentedMatrixInverse[after, {}, hi3]
-}},
-  Alignment -> {Left, Center, Left},
-  Spacings -> {0, 0}
+augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[
+  {{
+    alignedAugmentedMatrixInverse[before, notes1, hi1],
+    rowEquivalentSymbol[],
+    alignedAugmentedMatrixInverse[mid, notes2, hi2],
+    rowEquivalentSymbol[],
+    alignedAugmentedMatrixInverse[after, {}, hi3]
+  }},
+  Alignment -> {Left, Center, Left, Center, Left},
+  Spacings -> {1.1, 0}
 ];
 
 (* ~-~-~ BOUNDS & SOLVER HELPERS ~-~-~ *)
@@ -2722,25 +2739,6 @@ cramerSignedTermDisplay[coeff_, body_, firstQ_] := Module[{absCoeff = Abs[coeff]
   ]
 ];
 
-(* zloží súčet členov laplaceovho rozvoja so zachovaním znamienok *)
-cramerDetTermSum[terms_List] := Row @ Table[
-  cramerSignedTermDisplay[
-    terms[[k, 1]],
-    cramerDetLabel[terms[[k, 2]]],
-    k === 1
-  ],
-  {k, 1, Length[terms]}
-];
-
-cramerValueTermSum[coeffs_List, values_List] := Row @ Table[
-  cramerSignedTermDisplay[
-    coeffs[[k]],
-    cramerFactor[values[[k]]],
-    k === 1
-  ],
-  {k, 1, Length[coeffs]}
-];
-
 (* nájde stĺpec s práve jedným nenulovým prvkom *)
 cramerSingletonColumnGlobalIndex[matrix_] := Module[
   {columnCounts},
@@ -2802,54 +2800,11 @@ cramerSingletonLineData[matrix_] := Module[
   Missing["NotFound"]
 ];
 
-(* nájde najriedší riadok alebo stĺpec *)
-cramerSparseLineData[matrix_] := Module[
-  {rowCounts, colCounts, minRowCount, minColCount, rowIndex, colIndex, nonzeroIndices},
-
-  rowCounts = Count[#, x_ /; x =!= 0] & /@ matrix;
-  colCounts = Count[#, x_ /; x =!= 0] & /@ Transpose[matrix];
-
-  minRowCount = Min[rowCounts];
-  minColCount = Min[colCounts];
-
-  If[minRowCount <= minColCount,
-    rowIndex = First @ FirstPosition[rowCounts, minRowCount];
-    nonzeroIndices = Select[
-      Range[Length[matrix[[rowIndex]]]],
-      matrix[[rowIndex, #]] =!= 0 &
-    ];
-
-    <|
-      "Type" -> "Row",
-      "LineIndex" -> rowIndex,
-      "NonzeroIndices" -> nonzeroIndices
-    |>,
-    colIndex = First @ FirstPosition[colCounts, minColCount];
-    nonzeroIndices = Select[
-      Range[Length[matrix]],
-      matrix[[#, colIndex]] =!= 0 &
-    ];
-
-    <|
-      "Type" -> "Column",
-      "LineIndex" -> colIndex,
-      "NonzeroIndices" -> nonzeroIndices
-    |>
-  ]
-];
-
 (* text pre laplaceov rozvoj *)
 cramerLaplaceExplanation[lineData_Association] := If[
   lineData["Type"] === "Row",
   Row[{"Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"], ". riadku, lebo obsahuje jeden nenulový prvok."}],
   Row[{"Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"], ". stĺpca, lebo obsahuje jeden nenulový prvok."}]
-];
-
-(* text pre výber najriedšej línie *)
-cramerSparseExplanation[lineData_Association] := If[
-  lineData["Type"] === "Row",
-  Row[{"Teraz rozvinieme determinant podľa ", lineData["LineIndex"], ". riadku, lebo obsahuje najviac núl."}],
-  Row[{"Teraz rozvinieme determinant podľa ", lineData["LineIndex"], ". stĺpca, lebo obsahuje najviac núl."}]
 ];
 
 cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
@@ -2949,67 +2904,6 @@ cramerLaplaceVisualizationTitle[lineData_Association] := If[
   lineData["Type"] === "Row",
   "Vizualizácia Laplaceovho rozvoja podľa " <> ToString[lineData["LineIndex"]] <> ". riadku:",
   "Vizualizácia Laplaceovho rozvoja podľa " <> ToString[lineData["LineIndex"]] <> ". stĺpca:"
-];
-
-cramerTermHighlight[sparseLine_Association, termIndex_Integer] := If[
-  sparseLine["Type"] === "Row",
-  <|
-    "ActiveRow" -> sparseLine["LineIndex"],
-    "ActiveColumn" -> termIndex,
-    "PivotPos" -> {sparseLine["LineIndex"], termIndex},
-    "FontSize" -> 12,
-    "CellWidth" -> 0.95
-  |>,
-  <|
-    "ActiveRow" -> termIndex,
-    "ActiveColumn" -> sparseLine["LineIndex"],
-    "PivotPos" -> {termIndex, sparseLine["LineIndex"]},
-    "FontSize" -> 12,
-    "CellWidth" -> 0.95
-  |>
-];
-
-cramerLaplaceTermVisual[sourceMatrix_, sparseLine_Association, coeff_, termIndex_Integer, termLabel_, minorMatrix_] := Grid[
-  {
-    {cramerMatrixCard[sourceMatrix, cramerTermHighlight[sparseLine, termIndex]]},
-    {Style[Row[{"\[DownArrow] ", termLabel}], Bold, FontSize -> 14, GrayLevel[0.25]]},
-    {
-      Grid[
-        {{
-          Style[cramerFactor[coeff], Bold, RGBColor[0.20, 0.38, 0.93], FontSize -> 15],
-          Style["\[CenterDot]", Bold, RGBColor[0.20, 0.38, 0.93], FontSize -> 15],
-          cramerMatrixCard[minorMatrix, <|"FontSize" -> 12, "CellWidth" -> 0.95|>]
-        }},
-        Alignment -> {Center, Center, Center},
-        Spacings -> {0.5, 0.4}
-      ]
-    }
-  },
-  Alignment -> Center,
-  Spacings -> {0.8, 0.7}
-];
-
-cramerLaplaceTermPanel[sourceMatrix_, sparseLine_Association, termInfos_List, termDataList_List, termIndices_List] := Module[
-  {termVisuals},
-  termVisuals = Table[
-    cramerLaplaceTermVisual[
-      sourceMatrix,
-      sparseLine,
-      termInfos[[k, 1]],
-      termIndices[[k]],
-      termInfos[[k, 2]],
-      termDataList[[k]]["Matrix"]
-    ],
-    {k, 1, Length[termInfos]}
-  ];
-
-  highlightGrid @ Column[
-    {
-      Style[cramerLaplaceVisualizationTitle[sparseLine], FontSize -> 14, GrayLevel[0.15]],
-      Grid[{termVisuals}, Alignment -> Center, Spacings -> {1.8, 0.8}]
-    },
-    Spacings -> 0.9
-  ]
 ];
 
 cramerFactor[value_] := If[
@@ -3127,11 +3021,6 @@ cramerSingletonColumnIndex[matrix_, row_Integer] := Module[
     First[cols],
     Missing["NotFound"]
   ]
-];
-
-cramerSparseRowIndex[matrix_] := First @ MinimalBy[
-  Range[Length[matrix]],
-  Count[matrix[[#]], x_ /; x =!= 0] &
 ];
 
 cramer3x3PositiveColors = {
@@ -3966,7 +3855,7 @@ stepsInverseMatrix[data_Association] := Module[
         Style["\[CenterDot]", Bold, FontSize -> 18],
         labeledMatrixBlock[Style["b", Italic], styledPlainMatrix[List /@ b]],
         Style["=", Bold, FontSize -> 18],
-        labeledMatrixBlock[Style["x", Italic], styledPlainMatrix[dotProductTooltipMatrix[invMatrix, List /@ b]]]
+        labeledMatrixBlock[Style["x", Italic], styledPlainMatrix[dotProductTooltipMatrix[invMatrix, List /@ b]]],
         Spacer[3],
         Column[{Style["\[InvisibleSpace]", Bold, FontSize -> 15], resultNotes},
           Alignment -> Left, Spacings -> {4.4}
