@@ -241,6 +241,19 @@ infiniteSolutionFromSolvedAug[data_Association] := Module[{ n = data["n"], augS,
 buildTaskEquations[A_, b_, vars_] := MapThread[HoldForm[#1 == #2] &, {A . vars, b}];
 augFromAb[A_, b_] := Join[A, List /@ b, 2];
 
+alignedTaskEquations[A_, b_, vars_] := Grid[
+  Table[
+    {
+      tf[A[[i]] . vars],
+      Style["=", 16],
+      tf[b[[i]]]
+    },
+    {i, 1, Length[b]}
+  ],
+  Alignment -> {{Right, Center, Left}},
+  Spacings -> {0.5, 0.8},
+  BaseStyle -> {FontSize -> 14}
+];
 
 (* ~-~-~ ROW OPERATIONS - delenie, kombinácia ~-~-~ *)
 
@@ -304,11 +317,7 @@ namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] :=
 
 SetAttributes[appendElemTransition, HoldFirst];
 
-appendElemTransition[
-  content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer,
-  eIndex_Integer, mIndex_Integer, boldPos_: Automatic,
-  hiBefore_Association : <||>, hiAfter_Association : <||>
-] := Module[{ notes, eLabel, prevLabel, nextLabel, eHi, eBoldPositions, eActiveCol},
+appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer, eIndex_Integer, mIndex_Integer, boldPos_: Automatic, hiBefore_Association : <||>, hiAfter_Association : <||>] := Module[{ notes, eLabel, prevLabel, nextLabel, eHi, eBoldPositions, eActiveCol},
 
   notes = ConstantArray["", n];
   notes[[targetRow]] = note;
@@ -373,9 +382,7 @@ appendElemTransition[
 
 SetAttributes[applyElemMultiplyStep, HoldFirst];
 
-applyElemMultiplyStep[
-  content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotPos_: None
-] := Module[{ before, after, eMat, hi},
+applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotPos_: None] := Module[{ before, after, eMat, hi},
   before = aug;
   after = rowApplyMultiply[before, rowIdx, factor];
   eMat = elemMatrixScale[n, rowIdx, factor];
@@ -398,9 +405,7 @@ applyElemMultiplyStep[
 
 SetAttributes[applyElemCombineStep, HoldFirst];
 
-applyElemCombineStep[
-  content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None
-] := Module[{ before, after, eMat, hiBefore, hiAfter},
+applyElemCombineStep[content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None] := Module[{ before, after, eMat, hiBefore, hiAfter},
   before = aug;
   after = rowApplyCombine[before, rowIdx, terms];
   eMat = elemMatrixCombine[n, rowIdx, terms];
@@ -430,9 +435,7 @@ applyElemCombineStep[
 
 SetAttributes[applyElemDivideStep, HoldFirst];
 
-applyElemDivideStep[
-  content_, aug_, rowIdx_Integer, divisor_, n_Integer, pivotPos_: None
-] := Module[{ before, after, eMat, hi},
+applyElemDivideStep[content_, aug_, rowIdx_Integer, divisor_, n_Integer, pivotPos_: None] := Module[{ before, after, eMat, hi},
   before = aug;
   after = rowApplyDivide[before, rowIdx, divisor];
   eMat = elemMatrixScale[n, rowIdx, 1/divisor];
@@ -455,9 +458,7 @@ applyElemDivideStep[
 
 SetAttributes[applyJordanSwapStep, HoldFirst];
 
-applyJordanSwapStep[
-  content_, aug_, i_Integer, k_Integer, n_Integer, showElemQ_?BooleanQ
-] := Module[{ before, after, notes, eMat, hi1, hi2},
+applyJordanSwapStep[content_, aug_, i_Integer, k_Integer, n_Integer, showElemQ_?BooleanQ] := Module[{ before, after, notes, eMat, hi1, hi2},
   before = aug;
   after = rowApplySwap[before, i, k];
 
@@ -485,10 +486,7 @@ applyJordanSwapStep[
 
 SetAttributes[applyJordanElimStep, HoldFirst];
 
-applyJordanElimStep[
-  content_, aug_, r_Integer, i_Integer, n_Integer,
-  hiBase_Association, showElemQ_?BooleanQ
-] := Module[{ workAug, before, elimRes, p, a, g, p2, a2, g2},
+applyJordanElimStep[content_, aug_, r_Integer, i_Integer, n_Integer, hiBase_Association, showElemQ_?BooleanQ] := Module[{ workAug, before, elimRes, p, a, g, p2, a2, g2},
 
   If[!showElemQ,
     before = aug;
@@ -628,7 +626,6 @@ rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{ p, a, g1, p2, a2, row
   ]
 ];
 
-(* elementárne matice *)
 elemMatrixSwap[n_Integer, i_Integer, k_Integer] := Module[{ e = IdentityMatrix[n]},
   e[[{i, k}]] = e[[{k, i}]];
   e
@@ -1123,12 +1120,11 @@ augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := 
 $bRange = {-10, 10};
 nonzeroRange[min_, max_] := DeleteCases[Range[min, max], 0];
 
-$MaxBounds = 20; (*väčšie číslo sa nemôže ukázať*)
+$MaxBounds = 20; (* zmeniť podľa preferencie *)
 $Bounds = 4 + Quotient[$MaxBounds, 1.4 + 0.156 Sqrt[$MaxBounds]];
 $MaxRetryCount = 150;
 
 matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
-
 
 SetAttributes[appendNoneConclusionAndStop, HoldFirst];
 
@@ -1352,7 +1348,6 @@ makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, p
 
 (* -- Scramble Gauss Helpers -- *)
 
-(* stĺpce, v ktorých vynucujeme pivotovanie *)
 gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
   possibleCols = Range[Max[0, pivotCount - 1]];
 
@@ -1364,7 +1359,6 @@ gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
   ]
 ];
 
-(* stĺpce so zmysluplnou výmenou pivotu *)
 gaussObservedPivotSwapColumns[trace_List] := Module[{ cols = {}, step, prev, i, k, currentPivot, newPivot},
 
   Do[
@@ -1391,7 +1385,6 @@ gaussObservedPivotSwapColumns[trace_List] := Module[{ cols = {}, step, prev, i, 
   cols
 ];
 
-(* vynútenie susednej výmeny pre pivotovanie *)
 gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[{ work = aug, rowI, rowK, factors, chosen},
 
   If[i >= Length[aug], Return[work]];
@@ -1420,7 +1413,6 @@ gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[{ work = aug
   rowApplySwap[work, i, i + 1]
 ];
 
-(* trace doprednej eliminácie pre Gaussa *)
 gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[{ workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
 
   workAug = aug;
@@ -1482,7 +1474,6 @@ gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[{ workAug, n, i
   |>
 ];
 
-(* kontrola medzí počas Gaussovej eliminácie *)
 gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[{ traceData, limit},
 
   limit = $MaxBounds;
@@ -1493,8 +1484,6 @@ gaussForwardEliminationWithinBoundsQ[aug_, pivotMode_: "ZERO"] := Module[{ trace
     matrixMaxAbs[#["Matrix"]] <= limit &
   ]
 ];
-
-(* -- Scramble Gauss Helpers -- *)
 
 
 (* ~-~-~ DATA GENERATION ~-~-~ *)
@@ -4420,10 +4409,8 @@ printTextBlock[text_] := Module[{ }, If[StringQ[text], printTextCell[text], prin
 
 printTaskBlock[data_Association, vars_List, text_] := Module[{ },
   printTextBlock[text];
-  printFormulaCell @ Grid[
-    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
-    Alignment -> Left,
-    Spacings -> {0, 0.8}]];
+  printFormulaCell @ alignedTaskEquations[data["A"], data["b"], vars]
+];
 
 solutionRow[vars_List, solution_List] := Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]];
 
