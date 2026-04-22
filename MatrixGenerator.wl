@@ -2880,24 +2880,8 @@ cramer3x3NegativeColors = {
 cramer3x3ModeColor[mode_String, pos_List] := Module[{ groups, colors},
   {groups, colors} = Switch[
     mode,
-    "Positive",
-    {
-      {
-        {{1, 1}, {2, 2}, {3, 3}},
-        {{1, 2}, {2, 3}, {3, 1}},
-        {{1, 3}, {2, 1}, {3, 2}}
-      },
-      cramer3x3PositiveColors
-    },
-    "Negative",
-    {
-      {
-        {{1, 3}, {2, 2}, {3, 1}},
-        {{1, 1}, {2, 3}, {3, 2}},
-        {{1, 2}, {2, 1}, {3, 3}}
-      },
-      cramer3x3NegativeColors
-    }
+    "Positive", {{{{1, 1}, {2, 2}, {3, 3}},  {{1, 2}, {2, 3}, {3, 1}},  {{1, 3}, {2, 1}, {3, 2}}}, cramer3x3PositiveColors},
+    "Negative", {{{{1, 3}, {2, 2}, {3, 1}},  {{1, 1}, {2, 3}, {3, 2}},  {{1, 2}, {2, 1}, {3, 3}}}, cramer3x3NegativeColors}
   ];
 
   FirstCase[
@@ -2942,21 +2926,11 @@ cramer3x3FormulaDisplay[matrix_] := Module[{ a, b, c, d, e, f, g, h, i},
 ];
 
 cramer3x3ProductValues[matrix_] := Module[{ a, b, c, d, e, f, g, h, i},
-
   {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
-
-  {
-    a*e*i,
-    b*f*g,
-    c*d*h,
-    -c*e*g,
-    -a*f*h,
-    -b*d*i
-  }
+  { a*e*i,  b*f*g,  c*d*h,  -c*e*g,  -a*f*h,  -b*d*i }
 ];
 
 cramerSignedValueSum[values_List] := Module[{ clean, first, rest},
-
   clean = Select[Together /@ values, # =!= 0 &];
 
   If[clean === {},
@@ -3009,7 +2983,6 @@ cramer3x3VisualPanel[label_, matrix_] := Grid[{{
 
 (* vykreslí determinant 3×3 štandardným vzorcom *)
 renderCramer3x3Det[matrix_, label_] := Module[{ content = {}, value, knownQ, knownMatrices, knownPos, knownData},
-
   value = Together[Det[matrix]];
 
   (* ak sa rovnaká 3x3 matica už počítala, nerozpisujeme Sarrusa znova *)
@@ -3042,40 +3015,19 @@ renderCramer3x3Det[matrix_, label_] := Module[{ content = {}, value, knownQ, kno
   }]];
 
   AppendTo[content, cramer3x3VisualPanel[label, matrix]];
-
-  AppendTo[content, Row[
-    {
-      cramerDetLabel[label],
-      " = ",
-      cramer3x3FormulaDisplay[matrix]
-    }
-  ]];
-
-  AppendTo[content, Row[
-    {
-      cramerDetLabel[label],
-      " = ",
-      cramerSignedValueSum[cramer3x3ProductValues[matrix]]
-    }
-  ]];
+  AppendTo[content, Row[{cramerDetLabel[label], " = ", cramer3x3FormulaDisplay[matrix]}]];
+  AppendTo[content, Row[{cramerDetLabel[label], " = ", cramerSignedValueSum[cramer3x3ProductValues[matrix]]}]];
 
   AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
 
   If[knownQ,
     AppendTo[
       cramerKnown3x3,
-      <|
-        "Matrix" -> matrix,
-        "Value" -> value
-      |>
+      <|"Matrix" -> matrix, "Value" -> value|>
     ];
   ];
 
-  <|
-    "Content" -> content,
-    "Value" -> value,
-    "Matrix" -> matrix
-  |>
+  <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
 
 (* nájde vhodnú laplaceovu line: najprv riadok, potom stĺpec *)
@@ -3122,14 +3074,7 @@ cramerSingletonLineData[matrix_] := Module[{ rowCounts, columnCounts, rowIndex, 
       matrix[[#, columnIndex]] =!= 0 &
     ];
 
-    If[Length[rowsInColumn] == 1,
-      Return[<|
-        "Type" -> "Column",
-        "LineIndex" -> columnIndex,
-        "PivotRow" -> First[rowsInColumn],
-        "PivotColumn" -> columnIndex
-      |>]
-    ];
+    If[Length[rowsInColumn] == 1, Return[<|"Type" -> "Column", "LineIndex" -> columnIndex, "PivotRow" -> First[rowsInColumn], "PivotColumn" -> columnIndex|>]];
   ];
 
   Missing["NotFound"]
@@ -3257,14 +3202,8 @@ renderCramerDeterminant[matrix_, label_] := Switch[
   3, renderCramer3x3Det[matrix, label],
   4, renderCramer4x4Reduction[matrix, label],
   5, renderCramer5x5Reduction[matrix, label],
-  _, <|
-    "Content" -> {
-      cramerLabeledMatrixGrid[label, matrix],
-      resultEquationLine[cramerDetLabel[label], Together[Det[matrix]]]
-    },
-    "Value" -> Together[Det[matrix]],
-    "Matrix" -> matrix
-  |>
+  _, <|"Content" -> {cramerLabeledMatrixGrid[label, matrix], resultEquationLine[cramerDetLabel[label], Together[Det[matrix]]]},
+    "Value" -> Together[Det[matrix]], "Matrix" -> matrix|>
 ];
 
 (* ~-~-~ STEP GENERATION ~-~-~ *)
@@ -3650,7 +3589,7 @@ stepsInverseMatrix[data_Association] := Module[{ content = {}, n, A, b, vars, au
   addMatrix[m_, rowNotes_List : {}, hi_Association : <||>] := AppendTo[content, alignedAugmentedMatrixInverse[m, rowNotes, hi]];
 
   addHeader["Prepis matice do tvaru (A | E)"];
-  addText[Row[{"Na ľavú stranu zapíšeme maticu A a na pravú jednotkovú maticu E. Rovnakými úpravami dostaneme z ľavej časti E a z pravej ", inverseASymbol[], "."}]];
+  addText[Row[{"Na ľavú stranu zapíšeme maticu A a na pravú jednotkovú maticu E. Spoločnými úpravami dostaneme z ľavej časti E a z pravej ", inverseASymbol[], "."}]];
 
   augInv = Join[A, IdentityMatrix[n], 2];
   addMatrix[augInv, {}, <|"LeftLabel" -> Style["A", Italic], "RightLabel" -> Style["E", Italic]|>];
@@ -4610,258 +4549,101 @@ verificationStepsInfinite[data_Association, solExprs_List] := Module[{ content =
 
 (* ~-~-~ TASK / RESULT PRINTING ~-~-~ *)
 
-printDefaultTask[data_Association, vars_List] := Module[{ },
-  printTextCell["Riešte sústavu rovníc."];
+printTextBlock[text_] := Module[{ }, If[StringQ[text], printTextCell[text], printCellStyle[BoxData @ ToBoxes[text, StandardForm], "Text"]]];
+
+printTaskBlock[data_Association, vars_List, text_] := Module[{ },
+  printTextBlock[text];
   printFormulaCell @ Grid[
     List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
     Alignment -> Left,
-    Spacings -> {0, 0.8}
-  ];
-];
+    Spacings -> {0, 0.8}]];
 
-printTaskInverse[data_Association, vars_List] := Module[{ },
-  printTextCell["Vypočítajte inverznú maticu a potom pomocou nej určte riešenie sústavy."];
-  printFormulaCell @ Grid[
-    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
-    Alignment -> Left,
-    Spacings -> {0, 0.8}
-  ];
-];
+solutionRow[vars_List, solution_List] := Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]];
 
-printTaskLU[data_Association, vars_List] := Module[{ },
-  printTextCell["Rozložte maticu sústavy pomocou LU rozkladu (Doolittle, bez pivotovania) v tvare A = L · U, kde L má jednotky na diagonále. Potom vyriešte sústavy L · y = b a U · x = y."];
-  printFormulaCell @ Grid[
-    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
-    Alignment -> Left,
-    Spacings -> {0, 0.8}
-  ];
-  printTextCell["Pracujte priamo s maticami L a U bez pivotovania."];
-];
+printResultBlock[text_, expr_] := Module[{ }, printTextBlock[text]; printFormulaCell[expr]];
 
-printTaskCholesky[data_Association, vars_List] := Module[{ },
-  printCellStyle[
-    BoxData @ ToBoxes[
-      Row[{"Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L \[CenterDot] ", transposeLSymbol[], ". Potom vyriešte sústavy L \[CenterDot] y = b a ", transposeLSymbol[], " \[CenterDot] x = y."}],
-      StandardForm
-    ], "Text"
-  ];
-  printFormulaCell @ Grid[
-    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
-    Alignment -> Left,
-    Spacings -> {0, 0.8}
-  ];
-];
+printDefaultResult[data_Association, vars_List, st_] := Module[{solExprs, paramIdxs},
+  If[st === "ONE", printResultBlock["Riešenie sústavy:", solutionRow[vars, data["x"]]]];
 
-printTaskCramer[data_Association, vars_List] := Module[{ },
-  printTextCell["Riešte sústavu rovníc pomocou Cramerovho pravidla."];
-  printFormulaCell @ Grid[
-    List /@ (tf /@ buildTaskEquations[data["A"], data["b"], vars]),
-    Alignment -> Left,
-    Spacings -> {0, 0.8}
-  ];
-  printTextCell["Najprv vypočítajte determinant matice A a potom determinanty matíc, ktoré vzniknú nahradením jednotlivých stĺpcov vektorom b."];
-];
+  If[st === "NONE", printTextCell["Sústava nemá riešenie."]];
 
-printDefaultResult[data_Association, vars_List, st_] := Module[{ },
-  If[st === "ONE",
+  If[st === "INFINITE", printTextCell["Sústava má nekonečne veľa riešení."];
+    solExprs = infiniteSolutionFromSolvedAug[data];
+    paramIdxs = Lookup[data, "ParamIdxs", {}];
+
     printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ data["x"], ", "], ")"}]]
-    ]
-  ];
+      If[Length[paramIdxs] === 1,
+        Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalT], " \[Element] ", Integers, " }"}],
+        Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalS], ", ", \[FormalT], " \[Element] ", Integers, " }"}]]]]];
 
-  If[st === "NONE",
-    printTextCell["Sústava nemá riešenie."]
-  ];
+printResultInverse[data_Association, vars_List, st_, steps_] := Module[{stepData, solution, invMatrix},
+  stepData = If[AssociationQ[steps], steps, <||>];
 
-  If[st === "INFINITE",
-    printTextCell["Sústava má nekonečne veľa riešení."];
-    Module[{ solExprs = infiniteSolutionFromSolvedAug[data], paramIdxs},
-      paramIdxs = Lookup[data, "ParamIdxs", {}];
+  solution = Lookup[stepData, "Solution", Lookup[data, "x", Missing["NotAvailable"]]];
+  invMatrix = Lookup[stepData, "InverseMatrix", Missing["NotAvailable"]];
 
-      printFormulaCell[
-        If[Length[paramIdxs] === 1,
-          Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalT], " \[Element] ", Integers, " }"}],
-          Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalS], ", ", \[FormalT], " \[Element] ", Integers, " }"}]
-        ]
-      ];
-    ];
-  ];
-];
+  If[MatrixQ[invMatrix], printResultBlock["Inverzná matica:", TraditionalForm[MatrixForm[invMatrix]]]];
 
-printResultInverse[data_Association, vars_List, st_, steps_] := Module[{ solution, invMatrix},
+  If[ListQ[solution], printResultBlock["Riešenie sústavy:", solutionRow[vars, solution]]]];
 
-  solution = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
-    KeyExistsQ[data, "x"], data["x"],
-    True, Missing["NotAvailable"]
-  ];
+printResultLU[data_Association, vars_List, st_, steps_] := Module[{stepData, solution, lMatrix, uMatrix, yVector},
+  stepData = If[AssociationQ[steps], steps, <||>];
 
-  invMatrix = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "InverseMatrix"], steps["InverseMatrix"],
-    True, Missing["NotAvailable"]
-  ];
+  solution = Lookup[stepData, "Solution", Lookup[data, "x", Missing["NotAvailable"]]];
+  lMatrix = Lookup[stepData, "L", Missing["NotAvailable"]];
+  uMatrix = Lookup[stepData, "U", Missing["NotAvailable"]];
+  yVector = Lookup[stepData, "Y", Missing["NotAvailable"]];
 
-  If[MatrixQ[invMatrix],
-    printTextCell["Inverzná matica:"];
-    printFormulaCell[TraditionalForm[MatrixForm[invMatrix]]];
-  ];
+  If[MatrixQ[lMatrix], printResultBlock["Matica L:", TraditionalForm[MatrixForm[lMatrix]]]];
 
-  If[ListQ[solution],
-    printTextCell["Riešenie sústavy:"];
-    printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
-    ];
-  ];
-];
+  If[MatrixQ[uMatrix], printResultBlock["Matica U:", TraditionalForm[MatrixForm[uMatrix]]]];
 
-printResultLU[data_Association, vars_List, st_, steps_] := Module[{ solution, lMatrix, uMatrix, yVector},
+  If[ListQ[yVector], printResultBlock["Pomocný vektor y:", TraditionalForm[MatrixForm[yVector]]]];
 
-  solution = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
-    KeyExistsQ[data, "x"], data["x"],
-    True, Missing["NotAvailable"]
-  ];
+  If[ListQ[solution], printResultBlock["Riešenie sústavy:", solutionRow[vars, solution]]]];
 
-  lMatrix = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "L"], steps["L"],
-    True, Missing["NotAvailable"]
-  ];
+printResultCholesky[data_Association, vars_List, st_, steps_] := Module[{stepData, solution, lMatrix, ltMatrix, yVector},
+  stepData = If[AssociationQ[steps], steps, <||>];
 
-  uMatrix = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "U"], steps["U"],
-    True, Missing["NotAvailable"]
-  ];
-
-  yVector = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "Y"], steps["Y"],
-    True, Missing["NotAvailable"]
-  ];
-
-  If[MatrixQ[lMatrix],
-    printTextCell["Matica L:"];
-    printFormulaCell[TraditionalForm[MatrixForm[lMatrix]]];
-  ];
-
-  If[MatrixQ[uMatrix],
-    printTextCell["Matica U:"];
-    printFormulaCell[TraditionalForm[MatrixForm[uMatrix]]];
-  ];
-
-  If[ListQ[yVector],
-    printTextCell["Pomocný vektor y:"];
-    printFormulaCell[TraditionalForm[MatrixForm[yVector]]];
-  ];
-
-  If[ListQ[solution],
-    printTextCell["Riešenie sústavy:"];
-    printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
-    ];
-  ];
-];
-
-printResultCholesky[data_Association, vars_List, st_, steps_] := Module[{ solution, lMatrix, ltMatrix, yVector},
-
-  solution = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
-    KeyExistsQ[data, "x"], data["x"],
-    True, Missing["NotAvailable"]
-  ];
-
-  lMatrix = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "L"], steps["L"],
-    True, Missing["NotAvailable"]
-  ];
-
+  solution = Lookup[stepData, "Solution", Lookup[data, "x", Missing["NotAvailable"]]];
+  lMatrix = Lookup[stepData, "L", Missing["NotAvailable"]];
   ltMatrix = If[MatrixQ[lMatrix], Transpose[lMatrix], Missing["NotAvailable"]];
+  yVector = Lookup[stepData, "Y", Missing["NotAvailable"]];
 
-  yVector = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "Y"], steps["Y"],
-    True, Missing["NotAvailable"]
-  ];
+  If[MatrixQ[lMatrix], printResultBlock["Matica L:", TraditionalForm[MatrixForm[lMatrix]]]];
 
-  If[MatrixQ[lMatrix],
-    printTextCell["Matica L:"];
-    printFormulaCell[TraditionalForm[MatrixForm[lMatrix]]];
-  ];
+  If[MatrixQ[ltMatrix], printResultBlock[Row[{"Matica ", transposeLSymbol[], ":"}], TraditionalForm[MatrixForm[ltMatrix]]]];
 
-  If[MatrixQ[ltMatrix],
-    printCellStyle[BoxData @ ToBoxes[Row[{"Matica ", transposeLSymbol[], ":"}], StandardForm], "Text"];
-    printFormulaCell[TraditionalForm[MatrixForm[ltMatrix]]];
-  ];
+  If[ListQ[yVector], printResultBlock["Pomocný vektor y:", TraditionalForm[MatrixForm[yVector]]]];
 
-  If[ListQ[yVector],
-    printTextCell["Pomocný vektor y:"];
-    printFormulaCell[TraditionalForm[MatrixForm[yVector]]];
-  ];
+  If[ListQ[solution], printResultBlock["Riešenie sústavy:", solutionRow[vars, solution]]]];
 
-  If[ListQ[solution],
-    printTextCell["Riešenie sústavy:"];
-    printFormulaCell[
-      Row[Flatten[{"(", Riffle[vars, ", "], ") = (", Riffle[TraditionalForm /@ solution, ", "], ")"}]]
-    ];
-  ];
-];
-
-printResultCramer[data_Association, vars_List, st_, steps_] := Module[{ solveData, detA, auxDeterminants, solution},
-
+printResultCramer[data_Association, vars_List, st_, steps_] := Module[{stepData, solveData, detA, auxDeterminants, solution},
+  stepData = If[AssociationQ[steps], steps, <||>];
   solveData = cramerSolveData[data["A"], data["b"]];
 
-  detA = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "DetA"], steps["DetA"],
-    True, solveData["DetA"]
-  ];
+  detA = Lookup[stepData, "DetA", solveData["DetA"]];
+  auxDeterminants = Lookup[stepData, "AuxDeterminants", solveData["AuxDeterminants"]];
+  solution = Lookup[stepData, "Solution", solveData["Solution"]];
 
-  auxDeterminants = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "AuxDeterminants"], steps["AuxDeterminants"],
-    True, solveData["AuxDeterminants"]
-  ];
+  printResultBlock["Determinant matice A:", plainEquationLine[cramerDetLabel[Style["A", Italic]], detA]];
 
-  solution = Which[
-    AssociationQ[steps] && KeyExistsQ[steps, "Solution"], steps["Solution"],
-    True, solveData["Solution"]
-  ];
-
-  printTextCell["Determinant matice A:"];
-  printFormulaCell[
-    plainEquationLine[cramerDetLabel[Style["A", Italic]], detA]
-  ];
-
-  printTextCell["Pomocné determinanty:"];
-  printFormulaCell[
+  printResultBlock["Pomocné determinanty:",
     Grid[
       Table[
-        {
-          plainEquationLine[
-            cramerDetLabel[cramerMatrixLabel[vars[[i]]]],
-            auxDeterminants[[i]]
-          ]
-        },
-        {i, 1, Length[vars]}
-      ],
+        {plainEquationLine[
+          cramerDetLabel[cramerMatrixLabel[vars[[i]]]],
+          auxDeterminants[[i]]]},
+        {i, 1, Length[vars]}],
       Alignment -> Left,
-      Spacings -> {0, 0.8}
-    ]
-  ];
+      Spacings -> {0, 0.8}]];
 
-  If[ListQ[solution],
-    printTextCell["Riešenie sústavy:"];
-    printFormulaCell[
-      Row[Flatten[{
-        "(",
-        Riffle[vars, ", "],
-        ") = (",
-        Riffle[TraditionalForm /@ solution, ", "],
-        ")"
-      }]]
-    ];
-  ];
-];
+  If[ListQ[solution], printResultBlock["Riešenie sústavy:", solutionRow[vars, solution]]]];
 
 (* ~-~-~ MAIN CONTROLLER ~-~-~ *)
 
 runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPattern[]] := Module[{ n, vars, st, tri, data, steps = Missing["NotComputed"], validateExtraQ, resolveExtra,
-  sectionTitle, stepFn, scrambleFn, taskPrinter, resultPrinter, useRetryQ, pivotMode, boundAugFn, boundCheckFn},
+  sectionTitle, stepFn, scrambleFn, taskPrinter, resultPrinter, useRetryQ, pivotMode, boundAugFn, boundCheckFn, taskText},
 
   If[!TrueQ[ValidateDifficulty[diff]],
     Message[MessageName[spec["MsgPrefix"], "baddiff"], diff];
@@ -4916,10 +4698,9 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
   printSubsectionCell["Zadanie"];
 
   taskPrinter = Lookup[spec, "TaskPrinter", Automatic];
-  If[taskPrinter === Automatic,
-    printDefaultTask[data, vars],
-    taskPrinter[data, vars]
-  ];
+  taskText = Lookup[spec, "TaskText", "Riešte sústavu rovníc."];
+
+  If[taskPrinter === Automatic, printTaskBlock[data, vars, taskText], taskPrinter[data, vars]];
 
   (*If[KeyExistsQ[data, "RetryCount"],*)
     (*printTextCell["Počet pregenerovaní: " <> ToString[data["RetryCount"]]];*)
@@ -4931,7 +4712,7 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
       stepFn = Lookup[spec, "StepsFn", None];
 
       If[stepFn === None,
-        printTextCell["Postup pre túto metódu zatiaľ nie je dopracovaný v tomto balíku."],
+        printTextCell["Postup pre túto metódu nie je vytvorený."],
         steps = stepFn[data];
         Scan[renderStepItem, steps["Content"]];
       ];
@@ -4959,8 +4740,9 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
 
 GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
-    "EntryFn" -> GenTriangular, "MsgPrefix" -> GenTriangular, "DimKey" -> "Triangular", "SectionTitle" -> "Trojuholníková metóda",
-    "ScrambleFn" -> genScrambleTriang, "StepsFn" -> stepsTriangular,
+    "EntryFn" -> GenTriangular, "MsgPrefix" -> GenTriangular,
+    "DimKey" -> "Triangular", "SectionTitle" -> "Trojuholníková metóda",
+    "ScrambleFn" -> genScrambleTriang,
     "ValidateExtra" -> Function[{specLocal, passedOpts},
       With[{triOpt = OptionValue[specLocal["EntryFn"], passedOpts, TriangularType]},
         If[!TrueQ[validateTriangularType[triOpt]],
@@ -4974,13 +4756,13 @@ GenTriangular[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spe
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-(* generátor Gaussovej eliminačnej metódy *)
 GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenGauss,
     "MsgPrefix" -> GenGauss,
     "DimKey" -> "Gauss",
     "SectionTitle" -> "Gaussova eliminačná metóda",
+    "TaskText" -> "Riešte sústavu rovníc pomocou Gaussovej eliminačnej metódy.",
     "ScrambleFn" -> genScrambleGauss,
     "StepsFn" -> stepsGauss,
     "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
@@ -4991,13 +4773,13 @@ GenGauss[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-(* generátor Gauss-Jordanovej metódy *)
 GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenGaussJordan,
     "MsgPrefix" -> GenGaussJordan,
     "DimKey" -> "GaussJordan",
     "SectionTitle" -> "Gauss-Jordanova metóda",
+    "TaskText" -> "Riešte sústavu rovníc pomocou Gauss-Jordanovej metódy.",
     "ScrambleFn" -> genScrambleGauss,
     "StepsFn" -> (stepsGaussJordanShared[#, False, False] &),
     "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
@@ -5008,13 +4790,13 @@ GenGaussJordan[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ sp
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-(* generátor pivotovaného Gauss-Jordana *)
 GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenGaussJordanPivot,
     "MsgPrefix" -> GenGaussJordanPivot,
     "DimKey" -> "GaussJordanPivot",
     "SectionTitle" -> "Gauss-Jordanova metóda s pivotovaním",
+    "TaskText" -> "Riešte sústavu rovníc pomocou Gauss-Jordanovej metódy s pivotovaním.",
     "ScrambleFn" -> genScrambleGaussJordanPivot,
     "StepsFn" -> (stepsGaussJordanShared[#, True, False] &),
     "ValidateExtra" -> Function[{specLocal, passedOpts}, True],
@@ -5025,13 +4807,13 @@ GenGaussJordanPivot[diff_String, mode_String, opts : OptionsPattern[]] := Module
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-(* generátor Gauss-Jordana s elementárnymi maticami *)
 GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenElemGJ,
     "MsgPrefix" -> GenElemGJ,
     "DimKey" -> "ElemGaussJordan",
     "SectionTitle" -> "Gauss-Jordanova metóda pomocou elementárnych matíc",
+    "TaskText" -> "Riešte sústavu rovníc pomocou Gauss-Jordanovej metódy s elementárnymi maticami.",
     "ScrambleFn" -> genScrambleGauss,
     "StepsFn" -> (stepsGaussJordanShared[#, False, True] &),
     "ValidateExtra" -> validateOnlyOneSolutionType,
@@ -5043,7 +4825,6 @@ GenElemGJ[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   runMatrixGenerator[spec, diff, mode, opts]
 ];
 
-(* generátor výpočtu inverznej matice *)
 GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
   spec = <|
     "EntryFn" -> GenInverse,
@@ -5054,7 +4835,7 @@ GenInverse[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
     "StepsFn" -> stepsInverseMatrix,
     "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
-    "TaskPrinter" -> printTaskInverse,
+    "TaskText" -> "Vypočítajte inverznú maticu a potom pomocou nej určte riešenie sústavy.",
     "ResultPrinter" -> printResultInverse,
     "UseForwardBoundRetry" -> True,
     "ForwardPivotMode" -> "MIN",
@@ -5074,7 +4855,7 @@ GenLU[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
     "StepsFn" -> stepsLU,
     "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
-    "TaskPrinter" -> printTaskLU,
+    "TaskText" -> "Rozložte maticu sústavy pomocou LU rozkladu (Doolittle, bez pivotovania) v tvare A = L · U, kde L má jednotky na diagonále. Potom vyriešte sústavy L · y = b a U · x = y.",
     "ResultPrinter" -> printResultLU,
     "UseForwardBoundRetry" -> True,
     "ForwardBoundAugFn" -> Function[data, data],
@@ -5093,7 +4874,7 @@ GenCholesky[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec}
     "StepsFn" -> stepsCholesky,
     "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
-    "TaskPrinter" -> printTaskCholesky,
+    "TaskText" -> Row[{"Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L \[CenterDot] ", transposeLSymbol[], ". Potom vyriešte sústavy L \[CenterDot] y = b a ", transposeLSymbol[], " \[CenterDot] x = y."}],
     "ResultPrinter" -> printResultCholesky,
     "UseForwardBoundRetry" -> True,
     "ForwardBoundAugFn" -> Function[data, data],
@@ -5112,7 +4893,7 @@ GenCramer[diff_String, mode_String, opts : OptionsPattern[]] := Module[{ spec},
     "StepsFn" -> stepsCramer,
     "ValidateExtra" -> validateOnlyOneSolutionType,
     "ResolveExtra" -> Function[{specLocal, passedOpts}, "U"],
-    "TaskPrinter" -> printTaskCramer,
+    "TaskText" -> "Riešte sústavu rovníc pomocou Cramerovho pravidla.",
     "ResultPrinter" -> printResultCramer
   |>;
 

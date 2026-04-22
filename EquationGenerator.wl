@@ -4,15 +4,15 @@ BeginPackage["`EquationGenerator`"];
 
 $CharacterEncoding = "UTF-8";
 
-GenElimination::usage = "GenElimination[diff, mode, opts] vygeneruje príklad riešenia sústavy lineárnych rovníc eliminačnou metódou (sčítaním rovníc).\n\n" <>
-        "diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)\n" <>
-        "mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"\n" <>
-        "opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
+GenElimination::usage = "GenElimination[diff, mode, opts] vygeneruje príklad riešenia sústavy lineárnych rovníc eliminačnou metódou (sčítaním rovníc).
+diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)
+mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"
+opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
 
-GenSubstitution::usage = "GenSubstitution[diff, mode, opts] vygeneruje príklad riešenia sústavy lineárnych rovníc dosadzovacou (substitučnou) metódou.\n\n" <>
-        "diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)\n" <>
-        "mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"\n" <>
-        "opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
+GenSubstitution::usage = "GenSubstitution[diff, mode, opts] vygeneruje príklad riešenia sústavy lineárnych rovníc dosadzovacou (substitučnou) metódou.
+diff: \"EASY\" (2x2), \"MEDIUM\" (3x3), \"HARD\" (3x3)
+mode: \"TASK\", \"TASK_RESULT\", \"TASK_STEPS_RESULT\"
+opts: Visualization -> True|False, SolutionType -> Automatic|\"ONE\"|\"NONE\"|\"INFINITE\"";
 
 GenElimination::baddiff = "Neplatná obtiažnosť `1`. Použi \"EASY\"|\"MEDIUM\"|\"HARD\".";
 GenElimination::badmode = "Neplatný režim `1`. Použi \"TASK\"|\"TASK_RESULT\"|\"TASK_STEPS_RESULT\".";
@@ -1564,6 +1564,7 @@ buildEquationRun[spec0_Association, diff_String, opts___?OptionQ] := Module[{spe
 
   <|"Spec" -> spec, "Diff" -> diff, "Dim" -> dim, "Vars" -> vars, "SolutionType" -> st, "Data" -> data, "A" -> A, "b" -> b|>
 ];
+
 buildEquationSteps[run_Association] := Module[{spec = run["Spec"], steps},
   steps = spec["StepsFn"][run["A"], run["b"], run["Vars"], run["Data"]];
   If[steps === $Failed, Message[MessageName[spec["MsgPrefix"], "fail"]]; Return[$Failed]];
