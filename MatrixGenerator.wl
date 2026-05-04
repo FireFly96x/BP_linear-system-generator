@@ -171,8 +171,11 @@ validateOnlyOneSolutionType[specLocal_, passedOpts_] := With[
 
 (* ~-~-~ CELL PRINTING ~-~-~ *)
 
-inNotebookQ[] := Head @ Quiet[EvaluationNotebook[]] === NotebookObject;
-printCellStyle[expr_, style_String] := If[inNotebookQ[], CellPrint @ Cell[expr, style, ShowStringCharacters -> False], Print[expr]];
+printCellStyle[expr_, style_String] := If[
+  Head @ Quiet[EvaluationNotebook[]] === NotebookObject,
+  CellPrint @ Cell[expr, style, ShowStringCharacters -> False],
+  Print[expr]
+];
 printTextCell[str_String] := printCellStyle[str, "Text"];
 printSectionCell[str_String] := printCellStyle[str, "Section"];
 printSubsectionCell[str_String] := printCellStyle[str, "Subsection"];
@@ -190,8 +193,7 @@ lhsStyle[expr_] := Style[expr, Bold];
 inverseASymbol[] := Superscript[Style["A", Italic], -1];
 transposeLSymbol[] := Superscript[Style["L", Italic], Style["T", Italic]];
 
-resultValueStyle[expr_] := Style[expr, Bold, Blue];
-resultEquationLine[lhs_, rhs_] := Row[{lhsStyle[lhs], " = ", resultValueStyle[tft[rhs]]}];
+resultEquationLine[lhs_, rhs_] := Row[{lhsStyle[lhs], " = ", Style[tft[rhs], Bold, Blue]}];
 plainEquationLine[lhs_, rhs_] := Row[{lhsStyle[lhs], " = ", tft[rhs]}];
 
 highlightResultEquation[lhs_, rhs_] := highlightGrid @ Grid[
@@ -261,7 +263,6 @@ infiniteSolutionFromSolvedAug[data_Association] := Module[{ n = data["n"], augS,
   solExprs
 ];
 
-buildTaskEquations[A_, b_, vars_] := MapThread[HoldForm[#1 == #2] &, {A . vars, b}];
 augFromAb[A_, b_] := Join[A, List /@ b, 2];
 
 alignedTaskEquations[A_, b_, vars_] := Grid[
@@ -283,28 +284,6 @@ alignedTaskEquations[A_, b_, vars_] := Grid[
 (* note pre delenie riadku *)
 rowNoteDivide[i_, p_] := Row[{"R", i, " \[LeftArrow] R", i, " / ", tf[p]}];
 rowApplyDivide[aug_, i_Integer, p_Integer] := ReplacePart[aug, i -> (aug[[i]]/p)];
-
-(* násobenie riadku skalárom *)
-rowNoteMultiply[i_, p_] := Row[{"R", i, " \[LeftArrow] ", tf[p], "\[CenterDot]R", i}];
-rowApplyMultiply[aug_, i_Integer, p_] := ReplacePart[aug, i -> (p aug[[i]])];
-
-(* note pre kombináciu riadkov *)
-rowNoteCombine[i_, terms_List] := Module[{ base = Row[{"R", i, " \[LeftArrow] R", i}], termDisplay},
-
-  termDisplay[row_, coeff_] := Row[{
-    If[coeff < 0, " - ", " + "],
-    If[Abs[coeff] === 1,
-      Row[{"R", row}],
-      Row[{tf[Abs[coeff]], "\[CenterDot]", "R", row}]
-    ]
-  }];
-
-  Row @ Prepend[(termDisplay @@@ terms), base]
-];
-
-rowApplyCombine[aug_, i_Integer, terms_List] := Module[{ row = aug[[i]]},
-  ReplacePart[aug,  i -> (row + Total[terms[[All, 2]] aug[[terms[[All, 1]]]]])]
-];
 
 augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[
   {{
@@ -405,10 +384,12 @@ appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer,
 
 SetAttributes[applyElemMultiplyStep, HoldFirst];
 
-applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotPos_: None] := Module[{ before, after, eMat, hi},
+applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotPos_: None] := Module[{ before, after, eMat, hi, note},
   before = aug;
-  after = rowApplyMultiply[before, rowIdx, factor];
+  after = ReplacePart[before, rowIdx -> factor before[[rowIdx]]];
   eMat = elemMatrixScale[n, rowIdx, factor];
+
+  note = Row[{"R", rowIdx, " \[LeftArrow] ", tf[factor], "\[CenterDot]R", rowIdx}];
 
   hi = If[ListQ[pivotPos],
     <|"ActiveRow" -> rowIdx, "PivotPos" -> pivotPos|>,
@@ -419,7 +400,7 @@ applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotP
   $ElemMatrixCounter++;
 
   appendElemTransition[
-    content, before, after, rowNoteMultiply[rowIdx, factor], eMat,
+    content, before, after, note, eMat,
     rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, rowIdx}, hi, hi
   ];
 
@@ -428,10 +409,37 @@ applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotP
 
 SetAttributes[applyElemCombineStep, HoldFirst];
 
-applyElemCombineStep[content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None] := Module[{ before, after, eMat, hiBefore, hiAfter},
+applyElemCombineStep[content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None] := Module[
+  {before, after, eMat, hiBefore, hiAfter, note, termDisplay},
+
   before = aug;
-  after = rowApplyCombine[before, rowIdx, terms];
-  eMat = elemMatrixCombine[n, rowIdx, terms];
+
+  after = ReplacePart[
+    before,
+    rowIdx -> (before[[rowIdx]] + Total[terms[[All, 2]] before[[terms[[All, 1]]]]])
+  ];
+
+  eMat = IdentityMatrix[n];
+
+  Scan[
+    Function[term,
+      eMat[[rowIdx, term[[1]]]] = Together[eMat[[rowIdx, term[[1]]]] + term[[2]]]
+    ],
+    terms
+  ];
+
+  termDisplay[row_, coeff_] := Row[{
+    If[coeff < 0, " - ", " + "],
+    If[Abs[coeff] === 1,
+      Row[{"R", row}],
+      Row[{tf[Abs[coeff]], "\[CenterDot]", "R", row}]
+    ]
+  }];
+
+  note = Row @ Prepend[
+    termDisplay @@@ terms,
+    Row[{"R", rowIdx, " \[LeftArrow] R", rowIdx}]
+  ];
 
   (* pred úpravou chceme vidieť menený riadok aj zdrojové riadky *)
   hiBefore = Join[
@@ -449,7 +457,7 @@ applyElemCombineStep[content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivo
   $ElemMatrixCounter++;
 
   appendElemTransition[
-    content, before, after, rowNoteCombine[rowIdx, terms], eMat,
+    content, before, after, note, eMat,
     rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, terms[[1, 1]]}, hiBefore, hiAfter
   ];
 
@@ -495,7 +503,9 @@ applyJordanSwapStep[content_, aug_, i_Integer, k_Integer, n_Integer, showElemQ_?
     Return[after];
   ];
 
-  eMat = elemMatrixSwap[n, i, k];
+  (*swap*)
+  eMat = IdentityMatrix[n];
+  eMat[[{i, k}]] = eMat[[{k, i}]];
   $ElemStepCounter++;
   $ElemMatrixCounter++;
 
@@ -649,25 +659,8 @@ rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{ p, a, g1, p2, a2, row
   ]
 ];
 
-elemMatrixSwap[n_Integer, i_Integer, k_Integer] := Module[{ e = IdentityMatrix[n]},
-  e[[{i, k}]] = e[[{k, i}]];
-  e
-];
-
 elemMatrixScale[n_Integer, i_Integer, factor_] := Module[{ e = IdentityMatrix[n]},
   e[[i, i]] = factor;
-  e
-];
-
-elemMatrixCombine[n_Integer, i_Integer, terms_List] := Module[{ e = IdentityMatrix[n]},
-  Scan[
-    Function[{term},
-      With[{src = term[[1]], coeff = term[[2]]},
-        e[[i, src]] = Together[e[[i, src]] + coeff]
-      ]
-    ],
-    terms
-  ];
   e
 ];
 
@@ -676,8 +669,6 @@ contradictionRowQ[row_List] := Module[{ lhs = Most[row], rhs = Last[row]}, (AllT
 findContradictionRow[aug_] := Module[{ idx = FirstCase[Range[Length[aug]], i_ /; contradictionRowQ[aug[[i]]], Missing["NotFound"]]}, idx];
 
 (* ~-~-~ MATRIX VISUALIZATION ~-~-~ *)
-
-matrixCellDisplay[val_] := If[MemberQ[{Tooltip, MouseAppearance, Style, Row, Grid, Pane, Framed, TraditionalForm}, Head[val]], val, TraditionalForm[val]];
 
 dotProductTooltipMatrix[left_, right_] := Module[{ makeTermDisplay, makeTooltipCell},
 
@@ -714,20 +705,6 @@ dotProductTooltipMatrix[left_, right_] := Module[{ makeTermDisplay, makeTooltipC
     {i, 1, Length[left]},
     {j, 1, Length[right[[1]]]}
   ]
-];
-
-(*pre skalárny súćin*)
-matrixProductDisplay[left_, right_] := highlightGrid @ Grid[
-  {{
-    styledPlainMatrix[left],
-    Style["\[CenterDot]", Bold, FontSize -> 16],
-    styledPlainMatrix[right],
-    Style["=", Bold, FontSize -> 16],
-    styledPlainMatrix[dotProductTooltipMatrix[left, right]]
-  }},
-  Alignment -> Center,
-  Spacings -> {1, 1},
-  BaseStyle -> {FontSize -> 14}
 ];
 
 (* zvýraznené zobrazenie obyčajnej matice s riadkom a stĺpcom *)
@@ -774,7 +751,12 @@ styledPlainMatrix[m_, hi_Association : <||>] := Module[{ nRows, nCols, activeRow
     ]
   ];
 
-  makeCell[i_, j_, val_] := Module[{ cell = matrixCellDisplay[val]},
+  makeCell[i_, j_, val_] := Module[{cell},
+    cell = If[
+      MemberQ[{Tooltip, MouseAppearance, Style, Row, Grid, Pane, Framed, TraditionalForm}, Head[val]],
+      val,
+      TraditionalForm[val]
+    ];
     If[
       MemberQ[boldPositions, {i, j}] || (MemberQ[activeRows, i] && MemberQ[activeCols, j]),
       cell = Style[cell, Bold]
@@ -815,9 +797,6 @@ labeledMatrixBlock[label_, body_] := Column[
   Alignment -> Center,
   Spacings -> {0.4}
 ];
-
-matrixBlock[label_, m_, bold_List : {}] := labeledMatrixBlock[label, styledPlainMatrix[m, <|"BoldPositions" -> bold|>]];
-vectorBlock[label_, v_List] := labeledMatrixBlock[label, styledPlainMatrix[List /@ v]];
 
 alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{ nRows, nCols, nA, notes2, pivotPos, activeRows, sourceRows, activeCols, sourceCols, ZeroCells, orangeCells, bar,
   leftLabel, rightLabel, showLabelsQ, cellBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, colSizes, labelGrid, matrixWithLabels},
@@ -1177,7 +1156,7 @@ appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False,
   ];
 
   appendStepHeader[content, "Skúška správnosti"];
-  AppendTo[content, "Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."];
+  AppendTo[content, "Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností - hodnosť chápeme ako počet nenulových riadkov po úpravách"];
   content = Join[content, verificationStepsNone[data]];
   Throw[<|"Content" -> content, "Solution" -> "NONE"|>, "StopMatrixSteps"]
 ];
@@ -1225,8 +1204,6 @@ generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, 
 
 kSetTri := nonzeroRange[-4, 7];
 kSetGauss := nonzeroRange[-2, 3];
-
-lowerNonzeroCount[m_] := Count[LowerTriangularize[m, -1], x_ /; x =!= 0, {2}];
 
 makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, paramIdxs = {}, badRow, rhsNonzero, numParams, pivotRows, coeffPool, buildParamColumn, col1, col2, tries},
 
@@ -1731,7 +1708,7 @@ genScrambleGauss[diff_String, aug0_, triType_String, solType_String : "ONE"] := 
       {pair, chosenPairs}
     ];
 
-    currentLower = lowerNonzeroCount[aug[[All, 1 ;; n]]];
+    currentLower = Count[LowerTriangularize[aug[[All, 1 ;; n]], -1], x_ /; x =!= 0, {2}];
     If[currentLower == Length[pairs], Return[aug]];
     ,
     {attempt, 1, maxAttempts}
@@ -2747,29 +2724,6 @@ luLinearCombinationDisplay[terms_List] := Module[{ clean, first, rest, formatPos
   ]
 ];
 
-luMatrixPairGrid[L_, U_, lBold_List : {}, uBold_List : {}] := Module[{styledL, styledU},
-  styledL = MapIndexed[
-    If[MemberQ[lBold, #2], Style[#1, Bold], #1] &,
-    L,
-    {2}];
-
-  styledU = MapIndexed[
-    If[MemberQ[uBold, #2], Style[#1, Bold], #1] &,
-    U,
-    {2}];
-
-  highlightGrid @ Grid[
-    {{
-      Style[Row[{"L", " ="}], Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledL]],
-      Spacer[20],
-      Style[Row[{"U", " ="}], Bold, FontSize -> 16],
-      TraditionalForm[MatrixForm[styledU]]
-    }},
-    Alignment -> Left,
-    Spacings -> {2, 1}]
-];
-
 choleskySqrtDisplay[arg_] := Row[{"\[Sqrt]", "(", arg, ")"}];
 
 choleskySymbolicSquareSum[indices_List, row_Integer] := If[
@@ -2869,11 +2823,6 @@ buildCholeskyOffDiagonalLines[j_Integer, i_Integer, A_, L_, diagValue_, value_] 
 ];
 
 (* --- Cramer HELPERS --- *)
-
-replaceColumn[matrix_, column_Integer, values_List] := Module[{ updated = matrix},
-  Do[updated[[i, column]] = values[[i]], {i, 1, Length[values]}];
-  updated
-];
 
 cramerRandomNonzeroValue[maxAbs_Integer : 4] := RandomChoice[DeleteCases[Range[-maxAbs, maxAbs], 0]];
 
@@ -3021,7 +2970,10 @@ generateCramerHardMatrix[solutionVector_List] := Module[{ core, candidate, rhsVe
 cramerSolveData[A_, b_] := Module[{ detA, auxMatrices, auxDeterminants, solution},
 
   detA = Together[Det[A]];
-  auxMatrices = Table[replaceColumn[A, i, b], {i, 1, Length[b]}];
+  auxMatrices = Table[
+    ReplacePart[A, Table[{r, i} -> b[[r]], {r, 1, Length[b]}]],
+    {i, 1, Length[b]}
+  ];
   auxDeterminants = Together /@ (Det /@ auxMatrices);
 
   solution = If[
@@ -3096,8 +3048,8 @@ cramerMatrixCard[matrix_, hi_Association : <||>] := Module[
   styledPlainMatrix[styledMatrix]
 ];
 
-cramerReductionHighlight[lineData_Association, extra_Association : <||>] := Module[{ base},
-  base = If[
+cramerLaplaceReductionPanel[matrix_, lineData_Association, minorLabel_, minorMatrix_] := Module[{highlight},
+  highlight = If[
     lineData["Type"] === "Row",
     <|
       "ActiveRow" -> lineData["LineIndex"],
@@ -3112,20 +3064,19 @@ cramerReductionHighlight[lineData_Association, extra_Association : <||>] := Modu
       "ColumnAsRow" -> True
     |>
   ];
-  Join[base, extra]
-];
 
-cramerLaplaceReductionPanel[matrix_, lineData_Association, minorLabel_, minorMatrix_] := Grid[
-  {{
-    cramerMatrixCard[matrix, cramerReductionHighlight[lineData]],
-    Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
-    labeledMatrixBlock[
-      minorLabel,
-      cramerMatrixCard[minorMatrix, <|"FontSize" -> 13, "CellWidth" -> 1.05|>]
-    ]
-  }},
-  Alignment -> {Center, Center, Center},
-  Spacings -> {1.8, 1}
+  Grid[
+    {{
+      cramerMatrixCard[matrix, highlight],
+      Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
+      labeledMatrixBlock[
+        minorLabel,
+        cramerMatrixCard[minorMatrix, <|"FontSize" -> 13, "CellWidth" -> 1.05|>]
+      ]
+    }},
+    Alignment -> {Center, Center, Center},
+    Spacings -> {1.8, 1}
+  ]
 ];
 
 cramerFactor[value_] := If[
@@ -3216,24 +3167,30 @@ cramer3x3NegativeColors = {
   RGBColor[0.00, 0.60, 0.78]
 };
 
-cramer3x3ModeColor[mode_String, pos_List] := Module[{ groups, colors},
+cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[{groups, colors, modeColor, styled},
+
   {groups, colors} = Switch[
     mode,
-    "Positive", {{{{1, 1}, {2, 2}, {3, 3}},  {{1, 2}, {2, 3}, {3, 1}},  {{1, 3}, {2, 1}, {3, 2}}}, cramer3x3PositiveColors},
-    "Negative", {{{{1, 3}, {2, 2}, {3, 1}},  {{1, 1}, {2, 3}, {3, 2}},  {{1, 2}, {2, 1}, {3, 3}}}, cramer3x3NegativeColors}
+    "Positive",
+    {
+      {{{1, 1}, {2, 2}, {3, 3}}, {{1, 2}, {2, 3}, {3, 1}}, {{1, 3}, {2, 1}, {3, 2}}},
+      cramer3x3PositiveColors
+    },
+    "Negative",
+    {
+      {{{1, 3}, {2, 2}, {3, 1}}, {{1, 1}, {2, 3}, {3, 2}}, {{1, 2}, {2, 1}, {3, 3}}},
+      cramer3x3NegativeColors
+    }
   ];
 
-  FirstCase[
+  modeColor[pos_] := FirstCase[
     Range[Length[groups]],
     k_ /; MemberQ[groups[[k]], pos] :> colors[[k]],
     Black
-  ]
-];
-
-cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[{ styled},
+  ];
 
   styled = MapIndexed[
-    Style[TraditionalForm[#1], FontColor -> cramer3x3ModeColor[mode, #2], Bold] &,
+    Style[TraditionalForm[#1], FontColor -> modeColor[#2], Bold] &,
     matrix,
     {2}
   ];
@@ -3241,32 +3198,27 @@ cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[{ styled},
   styledPlainMatrix[styled]
 ];
 
-cramer3x3TermProduct[values_List, color_] := Row @ Riffle[
-  (Style[cramerFactor[#], FontColor -> color, Bold] & /@ values),
-  Style["\[CenterDot]", FontColor -> color, Bold]
-];
-
-cramer3x3FormulaDisplay[matrix_] := Module[{ a, b, c, d, e, f, g, h, i},
+cramer3x3FormulaDisplay[matrix_] := Module[{a, b, c, d, e, f, g, h, i, termProduct},
   {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
+
+  termProduct[values_List, color_] := Row @ Riffle[
+    (Style[cramerFactor[#], FontColor -> color, Bold] & /@ values),
+    Style["\[CenterDot]", FontColor -> color, Bold]
+  ];
 
   Row[{
-    cramer3x3TermProduct[{a, e, i}, cramer3x3PositiveColors[[1]]],
+    termProduct[{a, e, i}, cramer3x3PositiveColors[[1]]],
     " + ",
-    cramer3x3TermProduct[{b, f, g}, cramer3x3PositiveColors[[2]]],
+    termProduct[{b, f, g}, cramer3x3PositiveColors[[2]]],
     " + ",
-    cramer3x3TermProduct[{c, d, h}, cramer3x3PositiveColors[[3]]],
+    termProduct[{c, d, h}, cramer3x3PositiveColors[[3]]],
     " - ",
-    cramer3x3TermProduct[{c, e, g}, cramer3x3NegativeColors[[1]]],
+    termProduct[{c, e, g}, cramer3x3NegativeColors[[1]]],
     " - ",
-    cramer3x3TermProduct[{a, f, h}, cramer3x3NegativeColors[[2]]],
+    termProduct[{a, f, h}, cramer3x3NegativeColors[[2]]],
     " - ",
-    cramer3x3TermProduct[{b, d, i}, cramer3x3NegativeColors[[3]]]
+    termProduct[{b, d, i}, cramer3x3NegativeColors[[3]]]
   }]
-];
-
-cramer3x3ProductValues[matrix_] := Module[{ a, b, c, d, e, f, g, h, i},
-  {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
-  { a*e*i,  b*f*g,  c*d*h,  -c*e*g,  -a*f*h,  -b*d*i }
 ];
 
 cramerSignedValueSum[values_List] := Module[{ clean, first, rest},
@@ -3355,7 +3307,19 @@ renderCramer3x3Det[matrix_, label_] := Module[{ content = {}, value, knownQ, kno
 
   AppendTo[content, cramer3x3VisualPanel[label, matrix]];
   AppendTo[content, Row[{cramerDetLabel[label], " = ", cramer3x3FormulaDisplay[matrix]}]];
-  AppendTo[content, Row[{cramerDetLabel[label], " = ", cramerSignedValueSum[cramer3x3ProductValues[matrix]]}]];
+  (*render 3x3 Det*)
+  AppendTo[
+    content,
+    Module[{a, b, c, d, e, f, g, h, ii},
+      {{a, b, c}, {d, e, f}, {g, h, ii}} = matrix;
+
+      Row[{
+        cramerDetLabel[label],
+        " = ",
+        cramerSignedValueSum[{a*e*ii, b*f*g, c*d*h, -c*e*g, -a*f*h, -b*d*ii}]
+      }]
+    ]
+  ];
 
   AppendTo[content, resultEquationLine[cramerDetLabel[label], value]];
 
@@ -3574,8 +3538,9 @@ renderTermsRow[terms_List, mode_ : "Numeric", highlightVar_ : None] := Module[
     {c, v} = pairs[[i]];
     If[zeroQ[c], Continue[]];
     t = If[v === None, tf[Abs[c]],
-      tf @ If[highlightVar =!= None && v === highlightVar,
-        highlightTerm[If[Abs[c] === 1, v, Abs[c] v]],
+      tf @ If[
+        highlightVar =!= None && v === highlightVar,
+        Style[If[Abs[c] === 1, v, Abs[c] v], Bold, RGBColor[0.8, 0, 0]],
         If[Abs[c] === 1, v, Abs[c] v]
       ]
     ];
@@ -3588,8 +3553,6 @@ renderTermsRow[terms_List, mode_ : "Numeric", highlightVar_ : None] := Module[
   ];
   If[out === {}, tf[0], Row[out]]
 ];
-
-highlightTerm[term_] := Style[term, Bold, RGBColor[0.8, 0, 0]];
 
 alignedEquations[data_, breaks_List : {}, gap_ : 1.25] := Module[{eq = Style["=", 16], bar = Style["|", GrayLevel[.25]], n, rowGaps, stepRow, baseGap = 0.5, bigGap = gap},
   n = Length[data];
@@ -3631,9 +3594,8 @@ addNote[k_] := Which[
   True, Row[{"+ ", tft[k]}]
 ];
 
-scalarNote[symbol_String, k_] := Which[PossibleZeroQ[k - 1], "", True, Row[{symbol, " ", wrapNegValue[k]}]];
-multNote[m_] := scalarNote["\[CenterDot]", m];
-divNote[d_] := scalarNote[":", d];
+multNote[m_] := If[PossibleZeroQ[m - 1], "", Row[{"\[CenterDot]", " ", wrapNegValue[m]}]];
+divNote[d_] := If[PossibleZeroQ[d - 1], "", Row[{":", " ", wrapNegValue[d]}]];
 
 substNote[solMap_, remVars_, row_, vars_] := Module[{rowByVar, usedVars},
 (* spárujeme premenné s koeficientmi bezpečne *)
@@ -4247,30 +4209,6 @@ chooseParametrization[A_, b_, vars_] := Module[{eqs, candidates, try, results},
   ];
   results = try /@ candidates;
   If[results === {}, $Failed, First @ MinimalBy[results, #Score &]]
-];
-
-printInfiniteResult[A_, b_, vars_] := Module[{nVars = Length[vars], best, exprs, kBox, vecBox, condBox},
-  best = chooseParametrization[A, b, vars];
-  If[best === $Failed, Return[$Failed]];
-  exprs = Together /@ best["Exprs"];
-  exprs = exprs //. {Times[Rational[1, q_Integer], e_] :> e/q, Times[Rational[-1, q_Integer], e_] :> -e/q};
-  exprs = Simplify /@ exprs;
-
-  printTextCell["Sústava má nekonečne veľa riešení. Riešenia zapíšeme parametricky."];
-  printTextCell["Zvolíme voľnú premennú a označíme ju parametrom."];
-
-  printTextCell["Parameter:"];
-  printFormulaCell @ Grid[{{\[FormalT], "\[Element]", "\[DoubleStruckR]"}}, Alignment -> {{Center, Center, Left}}];
-
-  printTextCell["Potom platí:"];
-  printFormulaCell @ Grid[Table[{vars[[k]], "=", tf[exprs[[k]]]}, {k, 1, nVars}], Alignment -> {{Right, Center, Left}}];
-
-  vecBox = RowBox[{"[", RowBox[Riffle[ToBoxes[#, TraditionalForm] & /@ exprs, "; "]], "]"}];
-  condBox = RowBox[{ToBoxes[\[FormalT], TraditionalForm], "\[Element]", "\[DoubleStruckR]"}];
-  kBox = RowBox[{StyleBox["K", FontSlant -> "Italic"], "=", RowBox[{"{", RowBox[{vecBox, " ", "\[VerticalSeparator]", " ", condBox}], "}"}]}];
-
-  CellPrint @ Cell[BoxData @ FormBox[kBox, TraditionalForm], "DisplayFormula", BaseStyle -> {FontSize -> 14}];
-  <|"Type" -> "INFINITE"|>
 ];
 
 (* ~-~-~ SYSTEM GENERATION ~-~-~ *)
@@ -4973,94 +4911,6 @@ reduce3to2[A_, b_, vars_] := Module[{content = {}, zp, substPick, elimCol, elimV
 ];
 
 (* ~-~-~ SUBSTITUTION HELPERS ~-~-~ *)
-
-makeLinearSubstitutionTraceSteps[solvedVar_, expr_, solMap_Association, varsPool_List] := Module[
-  {steps = {}, usedVars, coeffs, c0, note, rhsPretty, rhsExpanded, rhsValue, exprAfter,
-    hasAnySubstQ, needExpandQ, rhsBoxes, dedup},
-
-  usedVars = Select[varsPool, !FreeQ[expr, #] &];
-  {coeffs, c0} = If[usedVars === {}, {{}, Together[expr]}, linearDecompose[expr, usedVars]];
-
-  hasAnySubstQ = AnyTrue[usedVars, KeyExistsQ[solMap, #] &];
-  note = If[hasAnySubstQ, substNote[solMap, Keys[solMap], coeffs, usedVars], ""];
-
-  (* porovnanie riadkov cez boxy, aby sme odfiltrovali vizuálne duplicity *)
-  rhsBoxes[e_] := Quiet @ Check[ToBoxes[e, TraditionalForm], HoldForm[e]];
-  dedup[list_] := Module[{out = {}, last = None, cur},
-    Do[
-      cur = rhsBoxes[list[[i]]];
-      If[last =!= None && cur === last, Continue[]];
-      AppendTo[out, list[[i]]];
-      last = cur,
-      {i, 1, Length[list]}
-    ];
-    out
-  ];
-
-  (* po dosadení - koeficient . (hodnota) / koeficient . premenná *)
-  rhsPretty = Module[{out = {}, first = True, addTerm, c, v, term, s},
-    addTerm[content_, sign_] := (AppendTo[out, If[first, If[sign === -1, Row[{"-", content}], content], Row[{If[sign === -1, " - ", " + "], content}]]]; first = False);
-
-    Do[
-      c = coeffs[[i]]; v = usedVars[[i]];
-      If[PossibleZeroQ[c], Continue[]];
-
-      If[KeyExistsQ[solMap, v],
-        term = coeffVal[Abs[c], solMap[v]]; s = Sign[c],
-        term = tf[If[Abs[c] === 1, v, Abs[c] v]]; s = Sign[c]
-      ];
-      addTerm[term, s],
-      {i, 1, Length[usedVars]}
-    ];
-
-    If[!PossibleZeroQ[c0], addTerm[tf[Abs[c0]], Sign[c0]]];
-    If[out === {}, tf[0], Row[out]]
-  ];
-
-  (* roznásobené -  ak  |c| != 1 pri dosádzanej premennej *)
-  needExpandQ = AnyTrue[Transpose[{coeffs, usedVars}],
-    (#[[1]] =!= 1 && #[[1]] =!= -1 && KeyExistsQ[solMap, #[[2]]]) &
-  ];
-
-  rhsExpanded = Module[{out = {}, first = True, addTerm, c, v, p},
-    addTerm[val_, sign_] := (AppendTo[out, If[first, If[sign === -1, Row[{"-", tf[Abs[val]]}], tf[val]], Row[{If[sign === -1, " - ", " + "], tf[Abs[val]]}]]]; first = False);
-
-    Do[
-      c = coeffs[[i]]; v = usedVars[[i]];
-      If[PossibleZeroQ[c], Continue[]];
-      If[KeyExistsQ[solMap, v],
-        p = Together[c*solMap[v]];
-        If[!PossibleZeroQ[p], addTerm[p, Sign[p]]],
-      (* ak by zostala neznáma, nemá zmysel tvoriť \[OpenCurlyDoubleQuote]expanded\[CloseCurlyDoubleQuote] riadok *)
-        Null
-      ],
-      {i, 1, Length[usedVars]}
-    ];
-
-    If[!PossibleZeroQ[c0], addTerm[c0, Sign[c0]]];
-    If[out === {}, tf[0], Row[out]]
-  ];
-
-  (* výsledok *)
-  exprAfter = expr /. solMap;
-  rhsValue = Together[exprAfter];
-
-  (* zostavíme RHS kandidátov a vyhodíme duplicity *)
-  With[{rhsList0 = Join[
-    {tf[expr]},
-    If[hasAnySubstQ, {rhsPretty}, {}],
-    If[hasAnySubstQ && needExpandQ, {rhsExpanded}, {}],
-    {tf[rhsValue]}
-  ]},
-    With[{rhsList = dedup[rhsList0]},
-      steps = Map[{tf[solvedVar], #, ""} &, rhsList];
-      (* prvý riadok má mať note *)
-      If[steps =!= {} && note =!= "", steps[[1, 3]] = note];
-    ]
-  ];
-
-  <|"Steps" -> steps, "Value" -> rhsValue|>
-];
 
 reduceOnceBySubstitution[eqs_List, vars_List] := Module[{n = Length[vars], A, b, content = {}, rI, cI, solveData, substRule, elimVar, remVars, res, newEq, cls, lastSolve, red, A2, b2},
   A = eqs[[All, 1]]; b = eqs[[All, 2]];
@@ -5775,7 +5625,7 @@ stepsInverseMatrix[data_Association] := Module[{ content = {}, n, A, b, vars, au
         labeledMatrixBlock[Row[{Style["A", Italic], " \[CenterDot] ", inverseASymbol[]}], styledPlainMatrix[dotProductTooltipMatrix[A, invMatrix]]],
         Style["=", Bold, FontSize -> 18],
         labeledMatrixBlock[Style["E", Italic], styledPlainMatrix[IdentityMatrix[n]]],
-        If[isIdentity, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
+        If[isIdentity, Style["Správne", Darker[Green], Bold], Style["Nesprávne", Red, Bold]]
       }},
       Alignment -> {Center, Center, Center, Center},
       Spacings -> {1.2, 0},
@@ -6467,9 +6317,9 @@ stepsCramer[data_Association] := Block[{cramerKnown3x3 = {}}, Module[{ content =
   addText["Sústavu zapíšeme v tvare A \[CenterDot] x = b. Potom vypočítame determinant matice A a determinanty pomocných matíc."];
   AppendTo[content, Grid[
     {{
-      matrixBlock[Style["A", Italic], A],
+      labeledMatrixBlock[Style["A", Italic], styledPlainMatrix[A]],
       Spacer[20],
-      vectorBlock[Style["b", Italic], b]
+      labeledMatrixBlock[Style["b", Italic], styledPlainMatrix[List /@ b]]
     }},
     Alignment -> {Center, Center, Center},
     Spacings -> {1.2, 0}
@@ -6590,7 +6440,13 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
           verificationStepsEquationInfinite[A, b, origVars, infData["Solution"]]
         ];
 
-        Return[<|"Content" -> content, "Solution" -> "INFINITE"|>]
+        Return[
+          <|
+            "Content" -> content,
+            "Solution" -> "INFINITE",
+            "ParametricSolution" -> infData["Solution"]
+          |>
+        ]
       ]
     ];
 
@@ -6687,7 +6543,13 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
           ]
         ];
 
-        Return[<|"Content" -> content, "Solution" -> "INFINITE"|>]
+        Return[
+          <|
+            "Content" -> content,
+            "Solution" -> "INFINITE",
+            "ParametricSolution" -> solExprs
+          |>
+        ]
       ]
     ];
 
@@ -6875,19 +6737,33 @@ solutionRow[vars_List, solution_List] := Row[Flatten[{"(", Riffle[vars, ", "], "
 
 printResultBlock[text_, expr_] := Module[{ }, printTextBlock[text]; printFormulaCell[expr]];
 
-printDefaultResult[data_Association, vars_List, st_] := Module[{solExprs, paramIdxs},
-  If[st === "ONE", printResultBlock["Riešenie sústavy:", solutionRow[vars, data["x"]]]];
+printDefaultResult[result_, vars_, paramSol_: Missing["NotAvailable"]] := Which[
+  ListQ[result],
+  printResultBlock["Riešenie sústavy:", solutionRow[vars, result]],
 
-  If[st === "NONE", printTextCell["Sústava nemá riešenie."]];
+  result === "NONE",
+  printTextCell["Sústava nemá riešenie."];
+  printFormulaCell[Row[{"K = ", "\[EmptySet]"}]],
 
-  If[st === "INFINITE", printTextCell["Sústava má nekonečne veľa riešení."];
-    solExprs = infiniteSolutionFromSolvedAug[data];
-    paramIdxs = Lookup[data, "ParamIdxs", {}];
-
+  result === "INFINITE",
+  printTextCell["Sústava má nekonečne veľa riešení."];
+  If[ListQ[paramSol],
     printFormulaCell[
-      If[Length[paramIdxs] === 1,
-        Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalT], " \[Element] ", Integers, " }"}],
-        Row[{"K = { [", Row @ Riffle[TraditionalForm /@ solExprs, ", "], "], ", \[FormalS], ", ", \[FormalT], " \[Element] ", Integers, " }"}]]]]];
+      Row[{
+        "K = { [",
+        Row @ Riffle[TraditionalForm /@ paramSol, ", "],
+        "], ",
+        \[FormalT],
+        " \[Element] ",
+        Integers,
+        " }"
+      }]
+    ]
+  ],
+
+  True,
+  printTextCell["Výsledok sa nepodarilo jednoznačne určiť."]
+];
 
 printResultInverse[data_Association, vars_List, st_, steps_] := Module[{stepData, solution, invMatrix},
   stepData = If[AssociationQ[steps], steps, <||>];
@@ -7059,7 +6935,11 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
 
       resultPrinter = Lookup[spec, "ResultPrinter", Automatic];
       If[resultPrinter === Automatic,
-        printDefaultResult[data, vars, st],
+        printDefaultResult[
+          If[st === "ONE", data["x"], st],
+          vars,
+          If[st === "INFINITE", infiniteSolutionFromSolvedAug[data], Missing["NotAvailable"]]
+        ],
         If[steps === Missing["NotComputed"] && mode === "TASK_RESULT",
           stepFn = Lookup[spec, "StepsFn", None];
           If[stepFn =!= None,
@@ -7145,18 +7025,8 @@ runEquationGenerator[spec_Association, diff_String, mode_String, opts___?OptionQ
 
     result = steps["Solution"];
 
-    Which[
-      ListQ[result],
-      printResultBlock["Riešenie sústavy:", solutionRow[vars, result]],
-
-      result === "NONE",
-      printTextCell["Sústava nemá riešenie."],
-
-      result === "INFINITE",
-      printTextCell["Sústava má nekonečne veľa riešení."],
-
-      True,
-      printTextCell["Výsledok sa nepodarilo jednoznačne určiť."]
+    printDefaultResult[
+      result, vars, Lookup[steps, "ParametricSolution", Missing["NotAvailable"]]
     ];
 
     visQ = TrueQ @ With[{fn = entryFn}, OptionValue[fn, {opts}, Visualization]];
