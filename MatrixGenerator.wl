@@ -319,7 +319,11 @@ namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] :=
 
 SetAttributes[appendElemTransition, HoldFirst];
 
-appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer, eIndex_Integer, mIndex_Integer, boldPos_: Automatic, hiBefore_Association : <||>, hiAfter_Association : <||>] := Module[{ notes, eLabel, prevLabel, nextLabel, eHi, eBoldPositions, eActiveCol},
+appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer, eIndex_Integer,
+  mIndex_Integer, boldPos_: Automatic, hiBefore_Association : <||>, hiAfter_Association : <||>, eOrangePos_: {}
+] := Module[
+  {notes, eLabel, prevLabel, nextLabel, eHi, eBoldPositions, eActiveCol,
+    eOrangeCells, afterWithTooltips},
 
   notes = ConstantArray["", n];
   notes[[targetRow]] = note;
@@ -329,26 +333,27 @@ appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer,
   nextLabel = Subscript[Style["M", Italic], mIndex];
 
   eBoldPositions = Which[
-    MatchQ[boldPos, {_Integer, _Integer}],
-    {boldPos},
-    ListQ[boldPos] && AllTrue[boldPos, MatchQ[#, {_Integer, _Integer}] &],
-    boldPos,
-    True,
-    {}
+    MatchQ[boldPos, {_Integer, _Integer}], {boldPos},
+    ListQ[boldPos] && AllTrue[boldPos, MatchQ[#, {_Integer, _Integer}] &], boldPos,
+    True, {}
   ];
 
-  eActiveCol = Which[
-    MatchQ[boldPos, {_Integer, _Integer}],
-    boldPos[[2]],
-    True,
-    targetRow
+  eOrangeCells = Which[
+    MatchQ[eOrangePos, {_Integer, _Integer}], {eOrangePos},
+    ListQ[eOrangePos] && AllTrue[eOrangePos, MatchQ[#, {_Integer, _Integer}] &], eOrangePos,
+    True, {}
   ];
+
+  eActiveCol = If[MatchQ[boldPos, {_Integer, _Integer}], boldPos[[2]], targetRow];
 
   eHi = <|
     "ActiveRow" -> targetRow,
     "ActiveCol" -> eActiveCol,
-    "BoldPositions" -> eBoldPositions
+    "BoldPositions" -> eBoldPositions,
+    "OrangeCells" -> eOrangeCells
   |>;
+
+  afterWithTooltips = dotProductTooltipMatrix[eMat, before];
 
   addGap[content, 1];
 
@@ -358,23 +363,9 @@ appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer,
       {{
         labeledMatrixBlock[eLabel, styledPlainMatrix[eMat, eHi]],
         Style["\[CenterDot]", Bold, FontSize -> 18],
-        labeledMatrixBlock[
-          prevLabel,
-          alignedAugmentedMatrix[
-            before,
-            notes,
-            hiBefore
-          ]
-        ],
+        labeledMatrixBlock[prevLabel, alignedAugmentedMatrix[before, notes, hiBefore]],
         Style["=", Bold, FontSize -> 18],
-        labeledMatrixBlock[
-          nextLabel,
-          alignedAugmentedMatrix[
-            after,
-            {},
-            hiAfter
-          ]
-        ]
+        labeledMatrixBlock[nextLabel, alignedAugmentedMatrix[afterWithTooltips, {}, hiAfter]]
       }},
       Alignment -> {Left, Center, Left, Center, Left},
       Spacings -> {1.2, 0.8}
@@ -410,47 +401,40 @@ applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotP
 SetAttributes[applyElemCombineStep, HoldFirst];
 
 applyElemCombineStep[content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None] := Module[
-  {before, after, eMat, hiBefore, hiAfter, note, termDisplay},
+  {before, after, eMat, hiBefore, hiAfter, note, termDisplay, zeroCell},
 
   before = aug;
-
   after = ReplacePart[
     before,
-    rowIdx -> (before[[rowIdx]] + Total[terms[[All, 2]] before[[terms[[All, 1]]]]])
+    rowIdx -> before[[rowIdx]] + Total[terms[[All, 2]] before[[terms[[All, 1]]]]]
   ];
 
   eMat = IdentityMatrix[n];
 
   Scan[
-    Function[term,
-      eMat[[rowIdx, term[[1]]]] = Together[eMat[[rowIdx, term[[1]]]] + term[[2]]]
-    ],
+    Function[term, eMat[[rowIdx, term[[1]]]] = Together[eMat[[rowIdx, term[[1]]]] + term[[2]]]],
     terms
   ];
 
   termDisplay[row_, coeff_] := Row[{
     If[coeff < 0, " - ", " + "],
-    If[Abs[coeff] === 1,
-      Row[{"R", row}],
-      Row[{tf[Abs[coeff]], "\[CenterDot]", "R", row}]
-    ]
+    If[Abs[coeff] === 1, Row[{"R", row}], Row[{tf[Abs[coeff]], "\[CenterDot]", "R", row}]]
   }];
 
-  note = Row @ Prepend[
-    termDisplay @@@ terms,
-    Row[{"R", rowIdx, " \[LeftArrow] R", rowIdx}]
-  ];
+  note = Row @ Prepend[termDisplay @@@ terms, Row[{"R", rowIdx, " \[LeftArrow] R", rowIdx}]];
 
-  (* pred úpravou chceme vidieť menený riadok aj zdrojové riadky *)
+  zeroCell = If[ListQ[pivotPos], {{rowIdx, pivotPos[[2]]}}, {}];
+
+  (* pred úpravou zvýrazníme menený riadok, zdrojový riadok a nulovaný prvok *)
   hiBefore = Join[
     <|"ActiveRow" -> rowIdx, "SourceRows" -> terms[[All, 1]]|>,
-    If[ListQ[pivotPos], <|"PivotPos" -> pivotPos|>, <||>]
+    If[ListQ[pivotPos], <|"PivotPos" -> pivotPos, "OrangeCells" -> zeroCell|>, <||>]
   ];
 
-  (* po úprave chceme zvýrazniť už iba výsledný menený riadok *)
+  (* po úprave zvýrazníme výslednú nulu červenou *)
   hiAfter = Join[
     <|"ActiveRow" -> rowIdx|>,
-    If[ListQ[pivotPos], <|"PivotPos" -> pivotPos|>, <||>]
+    If[ListQ[pivotPos], <|"PivotPos" -> pivotPos, "ZeroCells" -> zeroCell|>, <||>]
   ];
 
   $ElemStepCounter++;
@@ -458,7 +442,11 @@ applyElemCombineStep[content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivo
 
   appendElemTransition[
     content, before, after, note, eMat,
-    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter, {rowIdx, terms[[1, 1]]}, hiBefore, hiAfter
+    rowIdx, n, $ElemStepCounter, $ElemMatrixCounter,
+    {rowIdx, terms[[1, 1]]},
+    hiBefore,
+    hiAfter,
+    {{rowIdx, terms[[1, 1]]}}
   ];
 
   after
@@ -519,36 +507,39 @@ applyJordanSwapStep[content_, aug_, i_Integer, k_Integer, n_Integer, showElemQ_?
 
 SetAttributes[applyJordanElimStep, HoldFirst];
 
-applyJordanElimStep[content_, aug_, r_Integer, i_Integer, n_Integer, hiBase_Association, showElemQ_?BooleanQ] := Module[{ workAug, before, elimRes, p, a, g, p2, a2, g2},
+applyJordanElimStep[content_, aug_, r_Integer, i_Integer, n_Integer, hiBase_Association, showElemQ_?BooleanQ] := Module[
+  {workAug, before, elimRes, p, a, directCoeff, g, p2, a2, g2},
 
   If[!showElemQ,
     before = aug;
     elimRes = rowApplyElimStable[before, r, i];
-    Return[rowAppendElimStep[content, before, elimRes, r, i, n, hiBase]];
+    Return[rowAppendElimStep[content, before, elimRes, r, i, n, hiBase]]
   ];
 
   workAug = aug;
-
   a = workAug[[r, i]];
   If[a === 0, Return[workAug]];
 
   p = workAug[[i, i]];
+  If[p === 0, Return[workAug]];
+
+  (* ak sa dá nulovať jednou celočíselnou kombináciou, nerobíme zbytočné násobenie riadku *)
+  directCoeff = Together[-a/p];
+
+  If[IntegerQ[directCoeff],
+    Return[applyElemCombineStep[content, workAug, r, {{i, directCoeff}}, n, {i, i}]]
+  ];
+
+  (* inak použijeme stabilnú celočíselnú úpravu bez zlomkov *)
   g = GCD[p, a];
   p2 = p/g;
   a2 = a/g;
 
-  If[p2 =!= 1,
-    workAug = applyElemMultiplyStep[content, workAug, r, p2, n, {i, i}]
-  ];
-
-  If[a2 =!= 0,
-    workAug = applyElemCombineStep[content, workAug, r, {{i, -a2}}, n, {i, i}]
-  ];
+  If[p2 =!= 1, workAug = applyElemMultiplyStep[content, workAug, r, p2, n, {i, i}]];
+  If[a2 =!= 0, workAug = applyElemCombineStep[content, workAug, r, {{i, -a2}}, n, {i, i}]];
 
   g2 = rowAbsGCD[workAug[[r]]];
-  If[g2 =!= 1,
-    workAug = applyElemDivideStep[content, workAug, r, g2, n, {i, i}]
-  ];
+  If[g2 =!= 1, workAug = applyElemDivideStep[content, workAug, r, g2, n, {i, i}]];
 
   workAug
 ];
@@ -708,35 +699,26 @@ dotProductTooltipMatrix[left_, right_] := Module[{ makeTermDisplay, makeTooltipC
 ];
 
 (* zvýraznené zobrazenie obyčajnej matice s riadkom a stĺpcom *)
-styledPlainMatrix[m_, hi_Association : <||>] := Module[{ nRows, nCols, activeRows, sourceRows, activeCols, sourceCols,
-    boldPositions, cellBg, makeCell, leftBracketCell, rightBracketCell,
-    rows
-  },
+styledPlainMatrix[m_, hi_Association : <||>] := Module[
+  {nRows, nCols, activeRows, sourceRows, activeCols, sourceCols, boldPositions,
+    zeroCells, orangeCells, cellBg, makeCell, leftBracketCell, rightBracketCell, rows},
 
   {nRows, nCols} = Dimensions[m];
 
-  activeRows = DeleteCases[
-    Flatten @ {Lookup[hi, "ActiveRows", {}], Lookup[hi, "ActiveRow", None]},
-    None
-  ];
+  activeRows = DeleteCases[Flatten @ {Lookup[hi, "ActiveRows", {}], Lookup[hi, "ActiveRow", None]}, None];
   sourceRows = Flatten @ {Lookup[hi, "SourceRows", {}]};
-
-  activeCols = DeleteCases[
-    Flatten @ {Lookup[hi, "ActiveCols", {}], Lookup[hi, "ActiveCol", None]},
-    None
-  ];
+  activeCols = DeleteCases[Flatten @ {Lookup[hi, "ActiveCols", {}], Lookup[hi, "ActiveCol", None]}, None];
   sourceCols = Flatten @ {Lookup[hi, "SourceCols", {}]};
 
   boldPositions = Lookup[hi, "BoldPositions", {}];
-  If[MatchQ[boldPositions, {_Integer, _Integer}],
-    boldPositions = {boldPositions}
-  ];
+  If[MatchQ[boldPositions, {_Integer, _Integer}], boldPositions = {boldPositions}];
 
-  cellBg[i_, j_] := Module[{ aRowQ, sRowQ, aColQ, sColQ},
-    aRowQ = MemberQ[activeRows, i];
-    sRowQ = MemberQ[sourceRows, i];
-    aColQ = MemberQ[activeCols, j];
-    sColQ = MemberQ[sourceCols, j];
+  zeroCells = Lookup[hi, "ZeroCells", {}];
+  orangeCells = Lookup[hi, "OrangeCells", {}];
+
+  cellBg[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
+    aRowQ = MemberQ[activeRows, i]; sRowQ = MemberQ[sourceRows, i];
+    aColQ = MemberQ[activeCols, j]; sColQ = MemberQ[sourceCols, j];
 
     Which[
       aRowQ && aColQ, RGBColor[0.86, 0.93, 1.00],
@@ -757,9 +739,11 @@ styledPlainMatrix[m_, hi_Association : <||>] := Module[{ nRows, nCols, activeRow
       val,
       TraditionalForm[val]
     ];
-    If[
-      MemberQ[boldPositions, {i, j}] || (MemberQ[activeRows, i] && MemberQ[activeCols, j]),
-      cell = Style[cell, Bold]
+
+    Which[
+      MemberQ[zeroCells, {i, j}], cell = Style[cell, Red, Bold],
+      MemberQ[orangeCells, {i, j}], cell = Style[cell, Orange, Bold],
+      MemberQ[boldPositions, {i, j}] || (MemberQ[activeRows, i] && MemberQ[activeCols, j]), cell = Style[cell, Bold]
     ];
 
     Item[
@@ -847,21 +831,28 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{
     ]
   ];
 
-  makeCell[i_, j_, val_] := Module[{ cell = TraditionalForm[val], isGreen, isOrange, isDiag, isPivot},
+  makeCell[i_, j_, val_] := Module[{cell, isGreen, isOrange, isDiag, isPivot},
+    cell = If[
+      MemberQ[{Tooltip, MouseAppearance, Style, Row, Grid, Pane, Framed, TraditionalForm}, Head[val]],
+      val,
+      TraditionalForm[val]
+    ];
+
     isGreen = MemberQ[ZeroCells, {i, j}];
     isOrange = MemberQ[orangeCells, {i, j}];
     isDiag = j <= nA && i === j;
     isPivot = ListQ[pivotPos] && pivotPos === {i, j};
 
-    If[isGreen,
-      cell = Style[cell, Red, Bold],
-      If[isOrange,
-        cell = Style[cell, Orange, Bold],
-        If[isPivot || isDiag, cell = Style[cell, Bold]]
-      ]
+    Which[
+      isGreen, cell = Style[cell, Red, Bold],
+      isOrange, cell = Style[cell, Orange, Bold],
+      isPivot || isDiag, cell = Style[cell, Bold]
     ];
 
-    Item[Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}], Background -> cellBg[i, j]]
+    Item[
+      Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}],
+      Background -> cellBg[i, j]
+    ]
   ];
 
   makeBar[i_] := Item[
@@ -952,8 +943,11 @@ alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{
 ];
 
 (* renderovanie pre tvar (A|E)                                            *)
-alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[{ nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, ZeroCells, bar, rowColor, sourceColor, wrapBg,
-  makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, showPivotQ, boldDiagQ, leftLabel, rightLabel, showLabelsQ, colSizes, labelGrid, matrixWithLabels},
+alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[
+  {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, zeroCells, orangeCells,
+    bar, rowColor, sourceColor, wrapBg, makeCell, makeBar, leftBracketCell,
+    rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, showPivotQ,
+    leftLabel, rightLabel, showLabelsQ, colSizes, labelGrid, matrixWithLabels},
 
   {nRows, nCols} = Dimensions[aug];
   nA = Quotient[nCols, 2];
@@ -962,7 +956,8 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
   pivotPos = Lookup[hi, "PivotPos", None];
   activeRow = Lookup[hi, "ActiveRow", None];
   sourceRows = Lookup[hi, "SourceRows", {}];
-  ZeroCells = Lookup[hi, "ZeroCells", {}];
+  zeroCells = Lookup[hi, "ZeroCells", {}];
+  orangeCells = Lookup[hi, "OrangeCells", {}];
 
   leftLabel = Lookup[hi, "LeftLabel", None];
   rightLabel = Lookup[hi, "RightLabel", None];
@@ -972,30 +967,27 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
   rowColor = RGBColor[0.90, 0.95, 1];
   sourceColor = RGBColor[0.95, 0.92, 1.00];
 
-  wrapBg[i_, expr_] := Module[{ bg = None},
-    If[IntegerQ[activeRow] && i === activeRow, bg = rowColor,
-      If[MemberQ[sourceRows, i], bg = sourceColor]
-    ];
+  wrapBg[i_, expr_] := Module[{bg = None},
+    If[IntegerQ[activeRow] && i === activeRow, bg = rowColor];
+    If[MemberQ[sourceRows, i], bg = sourceColor];
     Item[expr, Background -> bg]
   ];
 
   showPivotQ = ListQ[pivotPos] &&
       ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
 
-  makeCell[i_, j_, val_] := Module[
-    {cell = TraditionalForm[val], isGreen, isDiagLeft, isDiagRight, isDiag},
+  makeCell[i_, j_, val_] := Module[{cell, isDiagLeft, isDiagRight, isDiag},
+    cell = TraditionalForm[val];
 
-    isGreen = MemberQ[ZeroCells, {i, j}];
     isDiagLeft = j <= nA && i === j;
-    isDiagRight = j > nA && i === (j - nA);
+    isDiagRight = j > nA && i === j - nA;
     isDiag = isDiagLeft || isDiagRight;
 
-    If[isGreen,
-      cell = Style[cell, Darker[Green], Bold],
-      If[showPivotQ && pivotPos === {i, j},
-        cell = Style[cell, Bold],
-        If[isDiag, cell = Style[cell, Bold]]
-      ]
+    Which[
+      MemberQ[zeroCells, {i, j}], cell = Style[cell, Red, Bold],
+      MemberQ[orangeCells, {i, j}], cell = Style[cell, Orange, Bold],
+      showPivotQ && pivotPos === {i, j}, cell = Style[cell, Bold],
+      isDiag, cell = Style[cell, Bold]
     ];
 
     wrapBg[i, Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}]]
@@ -1021,37 +1013,30 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
 
   matrixGrid = Grid[
     rows,
-    Alignment -> Join[
-      {Center},
-      ConstantArray[Right, nA],
-      {Center},
-      ConstantArray[Right, nA],
-      {Center}
-    ],
+    Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center}, ConstantArray[Right, nA], {Center}],
     Spacings -> {1, 1},
     BaseStyle -> {FontSize -> 14},
     ItemSize -> {colSizes, Automatic}
   ];
 
   labelGrid = Grid[
-    {
-      Join[
-        {""},
-        {Item[If[leftLabel === None, "", Style[leftLabel, Bold, FontSize -> 15]], Alignment -> Center]},
-        ConstantArray[SpanFromLeft, nA - 1],
-        {""},
-        {Item[If[rightLabel === None, "", Style[rightLabel, Bold, FontSize -> 15]], Alignment -> Center]},
-        ConstantArray[SpanFromLeft, nA - 1],
-        {""}
-      ]
-    },
+    {Join[
+      {""},
+      {Item[If[leftLabel === None, "", Style[leftLabel, Bold, FontSize -> 15]], Alignment -> Center]},
+      ConstantArray[SpanFromLeft, nA - 1],
+      {""},
+      {Item[If[rightLabel === None, "", Style[rightLabel, Bold, FontSize -> 15]], Alignment -> Center]},
+      ConstantArray[SpanFromLeft, nA - 1],
+      {""}
+    ]},
     Alignment -> Center,
     Spacings -> {1, 0},
     BaseStyle -> {FontSize -> 14},
     ItemSize -> {colSizes, Automatic}
   ];
 
-  matrixWithLabels = If[showLabelsQ,
+  matrixWithLabels = If[
+    showLabelsQ,
     Column[{labelGrid, matrixGrid}, Alignment -> Center, Spacings -> {0.15}],
     matrixGrid
   ];
@@ -1060,10 +1045,7 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
     List /@ (
       Item[
         Pane[
-          If[StringQ[#],
-            Style[#, GrayLevel[.35], FontSize -> 13],
-            #
-          ],
+          If[StringQ[#], Style[#, GrayLevel[.35], FontSize -> 13], #],
           {Automatic, Automatic},
           Alignment -> Left
         ],
@@ -1077,14 +1059,7 @@ alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := M
 
   notesWithLabels = If[
     showLabelsQ,
-    Column[
-      {
-        Style["\[InvisibleSpace]", Bold, FontSize -> 15],
-        notesGrid
-      },
-      Alignment -> Left,
-      Spacings -> {0.15}
-    ],
+    Column[{Style["\[InvisibleSpace]", Bold, FontSize -> 15], notesGrid}, Alignment -> Left, Spacings -> {0.15}],
     notesGrid
   ];
 
@@ -3579,6 +3554,7 @@ coeffVal[coeff_, val_] := Which[
   coeff === 0, 0,
   coeff === 1, wrapNegValue[val],
   coeff === -1, Row[{"-", wrapNegValue[val]}],
+  NumberQ[val], Row[{tft[coeff], "\[CenterDot]", wrapNegValue[val]}],
   True, Row[{tft[coeff], wrapNegValue[val]}]
 ];
 
@@ -4004,55 +3980,26 @@ appendEquationInfiniteParametrization[content_, config_Association, A_, b_, orig
   |>
 ];
 
-verificationStepsEquationNone[A_, b_, vars_] := Module[{content = {}, aug, rankA, rankAug},
-
-  aug = augFromAb[A, b];
-  rankA = MatrixRank[A];
-  rankAug = MatrixRank[aug];
-
-  AppendTo[content,
-    Grid[
-      {
-        {Row[{"hodnosť(A) = ", rankA}]},
-        {Row[{"hodnosť([A|b]) = ", rankAug}]},
-        {If[rankA < rankAug,
-          Style["hodnosť(A) < hodnosť([A|b])  \[Rule]  sústava nemá riešenie (OK)", Darker[Green]],
-          Style["hodnosti sa nerovnajú tak, ako majú pre spor - over postup (CHYBA)", Red]
-        ]}
-      },
-      Alignment -> Left,
-      Spacings -> {0, 0.4},
-      BaseStyle -> {FontSize -> 13}
-    ]
-  ];
-
-  content
-];
-
 SetAttributes[appendEquationVerification, HoldFirst];
 
 appendEquationVerification[content_, A_, b_, vars_, result_] := Module[{items},
 
+  If[result === "NONE",
+    Return[Null]
+  ];
+
   appendStepHeader[content, "Skúška správnosti"];
 
-  Which[
-    ListQ[result],
-    AppendTo[
-      content,
-      "Správnosť overíme dosadením nájdeného riešenia do pôvodnej sústavy rovníc a porovnáme ľavú a pravú stranu v každom riadku:"
-    ];
-    items = verificationStepsEquation[A, b, vars, result],
-
-    result === "NONE",
-    AppendTo[
-      content,
-      "Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."
-    ];
-    items = verificationStepsEquationNone[A, b, vars],
-
-    True,
+  If[!ListQ[result],
     Return[$Failed]
   ];
+
+  AppendTo[
+    content,
+    "Správnosť overíme dosadením nájdeného riešenia do pôvodnej sústavy rovníc a porovnáme ľavú a pravú stranu v každom riadku:"
+  ];
+
+  items = verificationStepsEquation[A, b, vars, result];
 
   Scan[AppendTo[content, #] &, items]
 ];
@@ -4227,11 +4174,22 @@ normalizeEquationRow[row_List] := Module[{g, first},
 ];
 
 
-validEquationDataQ[data_Association, diff_String] := Module[{aug},
-  If[data === $Failed, Return[False]];
-  aug = Lookup[data, "Aug", augFromAb[data["A"], data["b"]]];
+validEquationDataQ[data_Association, diff_String] := Module[{aug, n, coefficientRows, noZeroEquationRowsQ},
 
-  matrixMaxAbs[aug] <= $MaxBounds
+  If[data === $Failed, Return[False]];
+
+  aug = Lookup[data, "Aug", augFromAb[data["A"], data["b"]]];
+  n = Length[First[aug]] - 1;
+
+  coefficientRows = aug[[All, 1 ;; n]];
+
+  (* v zadaní nechceme riadky typu 0 = 0 ani 0 = k *)
+  noZeroEquationRowsQ = AllTrue[
+    coefficientRows,
+    !AllTrue[#, PossibleZeroQ] &
+  ];
+
+  matrixMaxAbs[aug] <= $MaxBounds && noZeroEquationRowsQ
 ];
 
 addHardDisplayIfNeeded[data_Association, dim_Integer, diff_String, vars_List] := Module[{out = data},
@@ -4414,7 +4372,7 @@ backSubstituteVariableSteps[{row_List, rhs_}, vars_List, solMap_Association, sol
     unknownCoeff, knownTerms, knownSum, rhsShift, noteShift, valueExpanded, valueFactored, valueFinal,
     formalParams, displayVars, c, v, expr, summands, termVar, termCoeff, keyOrder = {}, coeffByKey = <||>,
     addCombinedTerm, renderMovedRHS, moveTerms, movedRHS, finalRows, rowKey, lastKey = None, dedupRows = {},
-showSubstitutionRowQ},
+showSubstitutionRowQ = False},
 
 (* pôvodná rovnica a dosadenie *)
   currentLHS = renderTermsRow[Transpose[{row, vars}]];
@@ -4439,7 +4397,10 @@ showSubstitutionRowQ},
       AppendTo[expandedTerms, {c, v}],
 
       If[KeyExistsQ[solMap, v],
-        If[!TrueQ[Expand[c solMap[v]] === c solMap[v]],
+
+      (* pri dosadení najprv zobrazíme nahradený výraz, až potom ho upravíme *)
+        If[
+          Abs[c] =!= 1 || !TrueQ[Expand[c solMap[v]] === c solMap[v]],
           showSubstitutionRowQ = True
         ];
 
@@ -4557,29 +4518,38 @@ showSubstitutionRowQ},
     AppendTo[finalRows, {renderTermsRow[expandedTerms, "Symbolic"], rhs, ""}]
   ];
 
-  AppendTo[finalRows, {combinedLHS, rhs, noteShift}];
+  If[
+    unknownCoeff === 1 && PossibleZeroQ[knownSum],
 
-  finalRows = Join[
-    finalRows,
-    Which[
-      unknownCoeff === 1,
-      {
-        {tf[solvedVar], movedRHS, ""},
-        {tf[solvedVar], tf[valueExpanded], ""}
-      },
+  (* ak sme už po dosadení vypísali zjednodušený riadok, ďalší rovnaký nepridávame *)
+    If[!TrueQ[showSubstitutionRowQ],
+      AppendTo[finalRows, {tf[solvedVar], tf[valueExpanded], ""}]
+    ],
 
-      unknownCoeff === -1,
-      {
-        {tf[-solvedVar], movedRHS, multNote[-1]},
-        {tf[solvedVar], tf[valueExpanded], ""}
-      },
+    AppendTo[finalRows, {combinedLHS, rhs, noteShift}];
 
-      True,
-      {
-        {tf[unknownCoeff solvedVar], movedRHS, divNote[unknownCoeff]},
-        {tf[solvedVar], tf[valueExpanded], ""}
-      }
-    ]
+    finalRows = Join[
+      finalRows,
+      Which[
+        unknownCoeff === 1,
+        {
+          {tf[solvedVar], movedRHS, ""},
+          {tf[solvedVar], tf[valueExpanded], ""}
+        },
+
+        unknownCoeff === -1,
+        {
+          {tf[-solvedVar], movedRHS, multNote[-1]},
+          {tf[solvedVar], tf[valueExpanded], ""}
+        },
+
+        True,
+        {
+          {tf[unknownCoeff solvedVar], movedRHS, divNote[unknownCoeff]},
+          {tf[solvedVar], tf[valueExpanded], ""}
+        }
+      ]
+    ];
   ];
 
   If[valueFinal =!= valueExpanded,
@@ -4691,14 +4661,20 @@ reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, 
 
       appendStepHeader[content, "Sčítanie rovníc"];
       AppendTo[content, "Sčítame rovnice, aby sme vyrušili premennú " <> ToString[elimVar] <> "."];
-      AppendTo[content, renderAddition2[data2["A_mod"], data2["b_mod"], vars]];
-
-      If[PossibleZeroQ[sumRow[[keepIdx]]],
-        AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{sumRow, vars}]], sumRHS, ""}}]];
-      ];
-
       newEq = {{{sumRow[[keepIdx]]}, sumRHS}};
       cls = equationClass[{sumRow[[keepIdx]]}, sumRHS];
+
+      lastSolve = solveOneVarEquationSteps[First[newEq], {keepVar}];
+
+      AppendTo[
+        content,
+        alignedEquations[
+          Join[
+            {additionEquationRow2[data2["A_mod"], data2["b_mod"], vars]},
+            lastSolve["Content"]
+          ]
+        ]
+      ];
 
       pivotEq = {A[[1]], b[[1]]};
 
@@ -4846,12 +4822,19 @@ reducePair3[rowA_, rhsA_, rowB_, rhsB_, elimCol_, vars_] := Module[{content = {}
   <|"Row" -> newRow, "RHS" -> newRHS, "Content" -> content|>
 ];
 
-renderAddition2[rowMod_, rhsMod_, vars_] := alignedEquations[{{
-  Row[{tf[rowMod[[1, 1]] vars[[1]]], signBtwTerms[rowMod[[2, 1]]], tf[Abs[rowMod[[2, 1]]] vars[[1]]],
-    signBtwTerms[rowMod[[1, 2]]], tf[Abs[rowMod[[1, 2]]] vars[[2]]], signBtwTerms[rowMod[[2, 2]]], tf[Abs[rowMod[[2, 2]]] vars[[2]]]}],
+additionEquationRow2[rowMod_, rhsMod_, vars_] := {
+  Row[{
+    tf[rowMod[[1, 1]] vars[[1]]],
+    signBtwTerms[rowMod[[2, 1]]],
+    tf[Abs[rowMod[[2, 1]]] vars[[1]]],
+    signBtwTerms[rowMod[[1, 2]]],
+    tf[Abs[rowMod[[1, 2]]] vars[[2]]],
+    signBtwTerms[rowMod[[2, 2]]],
+    tf[Abs[rowMod[[2, 2]]] vars[[2]]]
+  }],
   Row[{rhsMod[[1]], signBtwTerms[rhsMod[[2]]], Abs[rhsMod[[2]]]}],
   ""
-}}];
+};
 
 reduce3to2[A_, b_, vars_] := Module[{content = {}, zp, substPick, elimCol, elimVar, zeroRows, nonZeroRows, iKeep, rowIV, rhsIV, rowV, rhsV, remCols, remVars, A2, b2, twoCombosQ, pair, i1, i2},
   appendStepHeader[content, "Redukcia sústavy 3x3 na 2x2"];
@@ -4938,7 +4921,6 @@ reduceOnceBySubstitution[eqs_List, vars_List] := Module[{n = Length[vars], A, b,
       cls = equationClass[newEq[[1]], newEq[[2]]];
 
       lastSolve = solveOneVarEquationSteps[newEq, remVars];
-      If[lastSolve["Type"] === "ONE", AppendTo[content, highlightGrid[alignedEquations[{{remVars[[1]], tf[lastSolve["Value"]], ""}}]]]];
 
       Return[<|"Content" -> content, "NewEqs" -> {newEq}, "NewVars" -> remVars, "SolvedVar" -> elimVar, "RuleExpr" -> substRule[[2]], "Classes" -> {cls}|>];
     )
@@ -5287,6 +5269,7 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
       ];
 
       addHeader["Dopredná eliminácia (nulovanie pod diagonálou)"];
+
       addText[
         If[showElemQ,
           If[pivotQ,
@@ -5299,6 +5282,8 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
           ]
         ]
       ];
+
+      If[showElemQ, addText["Tip: Keď prejdete kurzorom nad prvky výslednej matice, zobrazí sa vám príslušný skalárny súčin."]];
 
       Do[
         Module[{ kPivot},
@@ -5337,11 +5322,16 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
       ];
 
       addHeader["Spätná eliminácia (nulovanie nad diagonálou)"];
+
       addText[
         If[showElemQ,
           "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi. Každú úpravu zapíšeme aj pomocou elementárnej matice.",
           "Rovnakým spôsobom vynulujeme aj prvky nad pivotmi."
         ]
+      ];
+
+      If[showElemQ,
+        addText["Tip: Keď prejdete kurzorom nad prvky výslednej matice, zobrazí sa vám príslušný skalárny súčin."]
       ];
 
       Do[
@@ -5350,50 +5340,46 @@ stepsGaussJordanShared[data_Association, pivotQ_?BooleanQ, showElemQ_?BooleanQ] 
 
         Do[
           If[aug[[r, i]] =!= 0,
-            aug = applyJordanElimStep[content, aug, r, i, n, <||>, showElemQ];
+            aug = applyJordanElimStep[content, aug, r, i, n, <||>, showElemQ]
           ],
           {r, 1, i - 1}
-        ];
-
-        pNow = aug[[i, i]];
-        If[pNow =!= 0 && pNow =!= 1,
-          If[showElemQ,
-            aug = applyElemDivideStep[content, aug, i, pNow, n, {i, i}],
-            Module[{ before, after},
-              before = aug;
-              after = rowApplyDivide[before, i, pNow];
-              notes = ConstantArray["", n];
-              notes[[i]] = rowNoteDivide[i, pNow];
-              AppendTo[content, augRender2[
-                before, after, notes,
-                <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
-                <|"ActiveRow" -> i, "PivotPos" -> {i, i}, "ZeroCells" -> {{i, i}, {i, n + 1}}|>
-              ]];
-              aug = after;
-            ]
-          ]
-        ];
-        ,
+        ],
         {i, n, 2, -1}
       ];
 
-      pNow = aug[[1, 1]];
-      If[pNow =!= 0 && pNow =!= 1,
-        If[showElemQ,
-          aug = applyElemDivideStep[content, aug, 1, pNow, n, {1, 1}],
-          Module[{ before, after},
-            before = aug;
-            after = rowApplyDivide[before, 1, pNow];
-            notes = ConstantArray["", n];
-            notes[[1]] = rowNoteDivide[1, pNow];
-            AppendTo[content, augRender2[
-              before, after, notes,
-              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}|>,
-              <|"ActiveRow" -> 1, "PivotPos" -> {1, 1}, "ZeroCells" -> {{1, 1}, {1, n + 1}}|>
-            ]];
-            aug = after;
+      addHeader["Normalizácia pivotov"];
+      addText["Nakoniec vydelíme pivotové riadky tak, aby boli všetky pivoty rovné 1."];
+
+      Do[
+        pNow = aug[[i, i]];
+
+        If[pNow =!= 0 && pNow =!= 1,
+          If[showElemQ,
+            aug = applyElemDivideStep[content, aug, i, pNow, n, {i, i}],
+
+            Module[{before, after},
+              before = aug;
+              after = rowApplyDivide[before, i, pNow];
+
+              notes = ConstantArray["", n];
+              notes[[i]] = rowNoteDivide[i, pNow];
+
+              AppendTo[
+                content,
+                augRender2[
+                  before,
+                  after,
+                  notes,
+                  <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>,
+                  <|"ActiveRow" -> i, "PivotPos" -> {i, i}|>
+                ]
+              ];
+
+              aug = after;
+            ]
           ]
-        ]
+        ],
+        {i, 1, n}
       ];
 
       addHeader["Hotový tvar (I | x)"];
@@ -6556,9 +6542,10 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
     appendEquationVerification[content, A, b, origVars, result];
     Return[<|"Content" -> content, "Solution" -> result|>]
   ];
-  If[TrueQ @ Lookup[config, "ShowLastSolveQ", False],
-    AppendTo[content, alignedEquations[lastSolve["Content"]]];
-    AppendTo[content, highlightGrid[alignedEquations[{{varsNow[[1]], tf[lastSolve["Value"]], ""}}]]]
+
+  AppendTo[
+    content,
+    highlightResultEquation[varsNow[[1]], lastSolve["Value"]]
   ];
 
   solMap = <|varsNow[[1]] -> lastSolve["Value"]|>;
@@ -6582,7 +6569,10 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
     ];
 
     AppendTo[content, alignedEquations[back["Steps"]]];
-    AppendTo[content, highlightGrid[alignedEquations[{{config["BackVarFn"][item], tf[back["Value"]], ""}}]]];
+    AppendTo[
+      content,
+      highlightResultEquation[config["BackVarFn"][item], back["Value"]]
+    ];
     solMap[config["BackVarFn"][item]] = back["Value"],
     {k, Length[stack], 1, -1}
   ];
@@ -6613,7 +6603,6 @@ stepsElimination[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
     "ReduceInfiniteText" -> "Pri eliminácii nám vyšla identita (pravdivá rovnosť). Jedna neznáma zostáva voľná, preto má sústava nekonečne veľa riešení.",
     "FinalNoneText" -> "Pri riešení poslednej rovnice dostaneme spor, takže sústava nemá riešenie.",
     "FinalInfiniteText" -> "Pri riešení poslednej rovnice dostaneme identitu, takže sústava má nekonečne veľa riešení.",
-    "ShowLastSolveQ" -> True,
     "BackHeader" -> "Spätné dosadenie do pivotnej rovnice (určenie ďalšej neznámej)",
     "StackItemFn" -> Function[{step, varsNow},
       <|"PivotEq" -> step["PivotEq"], "VarsBefore" -> varsNow, "ElimVar" -> step["ElimVar"]|>
@@ -6631,7 +6620,6 @@ stepsSubstitution[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
     "ReduceInfiniteText" -> "Pri úpravách nám vyšla identita (pravdivá rovnosť). Jedna neznáma zostáva voľná, preto má sústava nekonečne veľa riešení.",
     "FinalNoneText" -> "Pri riešení poslednej rovnice dostaneme spor, takže sústava nemá riešenie.",
     "FinalInfiniteText" -> "Pri riešení poslednej rovnice dostaneme identitu, takže sústava má nekonečne veľa riešení.",
-    "ShowLastSolveQ" -> False,
     "BackHeader" -> "Spätné dosadenie (dopočítanie neznámej)",
     "StackItemFn" -> Function[{step, varsNow},
       <|
