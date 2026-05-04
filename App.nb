@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      7583,        158]
-NotebookOptionsPosition[      7082,        141]
-NotebookOutlinePosition[      7531,        159]
-CellTagsIndexPosition[      7488,        156]
+NotebookDataLength[      8570,        170]
+NotebookOptionsPosition[      7978,        152]
+NotebookOutlinePosition[      8425,        170]
+CellTagsIndexPosition[      8382,        167]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -23,9 +23,11 @@ Cell[BoxData[{
   RowBox[{"SetDirectory", "[", 
    RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
  RowBox[{
+  RowBox[{"$CharacterEncoding", "=", "\"\<UTF-8\>\""}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
   RowBox[{
-   RowBox[{"$CharacterEncoding", "=", "\"\<UTF-8\>\""}], ";"}], 
-  "\[IndentingNewLine]", "\[IndentingNewLine]", 
+   RowBox[{"<<", "\"\<MatrixGenerator.wl\>\""}], ";"}], "\n", 
+  "\[IndentingNewLine]", 
   RowBox[{"(*", " ", 
    RowBox[{
     RowBox[{
@@ -38,32 +40,35 @@ Cell[BoxData[{
      "_RESULT"}]}], " ", "*)"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
   RowBox[{"(*", " ", 
    RowBox[{
+    RowBox[{"Gaussov\[EAcute]", " ", "maj\[UAcute]", " ", "SolutionType"}], "->", 
     RowBox[{
      RowBox[{
-     "\[DownArrow]", " ", "Gaussove", " ", "\[DownArrow]", " ", 
-      "maj\[UAcute]"}], " ", "SolutionType"}], "->", 
-    RowBox[{
+      RowBox[{
+       RowBox[{"\"\<ONE\>\"", "/", "\"\<NONE\>\""}], "/", 
+       RowBox[{"\"\<INFINITE\>\"", ".", " ", "Rovnicov\[EAcute]"}]}], " ", 
+      "maj\[UAcute]", " ", "aj", " ", "Visualization"}], "->", 
      RowBox[{
-      RowBox[{"\"\<ONE\>\"", "/", "\"\<NONE\>\""}], "/", "\"\<INFINITE\>\""}],
-      " ", "\[IndentingNewLine]", "\[IndentingNewLine]", 
-     RowBox[{"GenGauss", "[", 
-      RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
-     RowBox[{"GenGaussJordan", "[", 
-      RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
-     RowBox[{"GenGaussJordanPivot", "[", 
-      RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-       RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}]}]}], 
-   "\[IndentingNewLine]", "*)"}], "\[IndentingNewLine]", "\n", 
-  RowBox[{"(*", " ", 
-   RowBox[{
-    RowBox[{
-    "gener\[AAcute]tory", " ", "GenElimination", " ", "a", " ", 
-     "GenSubstitution", " ", "maj\[UAcute]", " ", "aj", " ", 
-     "Visualization"}], "->", 
-    RowBox[{"True", "/", "False"}]}], " ", "*)"}], "\[IndentingNewLine]", 
-  "\[IndentingNewLine]", 
+      RowBox[{"True", "/", "False"}], " ", " ", "\[IndentingNewLine]", "\[IndentingNewLine]", 
+      RowBox[{"GenGauss", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenGaussJordan", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenGaussJordanPivot", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}], 
+      "\[IndentingNewLine]", "\[IndentingNewLine]", 
+      RowBox[{"GenElimination", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"Visualization", "->", "True"}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenSubstitution", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"Visualization", "->", "True"}]}], "]"}]}]}]}], 
+   "\[IndentingNewLine]", "*)"}], "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{
   RowBox[{"(*", " ", 
    RowBox[{
     RowBox[{
@@ -86,9 +91,7 @@ Cell[BoxData[{
      RowBox[{"GenCramer", "[", 
       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}]}], "]"}]}]}], 
-   "\[IndentingNewLine]", "*)"}]}], "\[IndentingNewLine]", 
- RowBox[{
-  RowBox[{"<<", "\"\<MatrixGenerator.wl\>\""}], ";"}]}], "Input",
+   "\[IndentingNewLine]", "*)"}]}]}], "Input",
  CellChangeTimes->{{3.9850775989463177`*^9, 3.9850775989463177`*^9}, 
    3.985077650895849*^9, 3.985080825766567*^9, 3.985080910707653*^9, {
    3.9851819331122913`*^9, 3.9851821684071445`*^9}, {3.9851821990606937`*^9, 
@@ -99,15 +102,15 @@ Cell[BoxData[{
    3.9858564282527657`*^9, 3.985856431768759*^9}, 3.9858636942612877`*^9, {
    3.9858644188532143`*^9, 3.985864420135147*^9}, {3.98586638570994*^9, 
    3.9858663876522675`*^9}, {3.9858771610064907`*^9, 
-   3.9858771621992855`*^9}, {3.9858857850215034`*^9, 3.985885845387598*^9}},
- CellLabel->
-  "In[317]:=",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"],
+   3.9858771621992855`*^9}, {3.9858857850215034`*^9, 3.985885845387598*^9}, {
+   3.986387297587473*^9, 3.9863873426171303`*^9}, {3.9867327686835785`*^9, 
+   3.986732868058571*^9}},ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-\
+87da073537c1"],
 
 Cell[BoxData[
- RowBox[{"GenElimination", "[", 
-  RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-   RowBox[{"SolutionType", "->", "\"\<INFINITE\>\""}], ",", 
-   RowBox[{"Visualization", "->", "True"}]}], "]"}]], "Input",
+ RowBox[{"GenGauss", "[", 
+  RowBox[{"\"\<HARD\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+   RowBox[{"SolutionType", "->", "\"\<INFINITE\>\""}]}], "]"}]], "Input",
  CellChangeTimes->{{3.985848364247404*^9, 3.9858483897343845`*^9}, {
    3.985851256615713*^9, 3.985851259809723*^9}, {3.9858513339293213`*^9, 
    3.985851334926832*^9}, {3.9858518555550976`*^9, 3.9858518781353264`*^9}, {
@@ -136,11 +139,19 @@ Cell[BoxData[
    3.985883873194168*^9}, {3.985884023118641*^9, 3.9858840314247303`*^9}, {
    3.985885346601513*^9, 3.985885435343876*^9}, {3.9858855019043255`*^9, 
    3.985885502643408*^9}, {3.985885533319498*^9, 3.9858855429091377`*^9}, {
-   3.9858856867273483`*^9, 3.9858857196633587`*^9}},
- CellLabel->"",ExpressionUUID->"ad81df68-5785-2147-8d97-93eaf1462b89"]
+   3.9858856867273483`*^9, 3.9858857196633587`*^9}, {3.9863872800018253`*^9, 
+   3.9863872899692745`*^9}, {3.986387351712858*^9, 3.9863874407073097`*^9}, {
+   3.986387996567047*^9, 3.9863880054031124`*^9}, {3.986388041230629*^9, 
+   3.9863880518245335`*^9}, {3.986730616808695*^9, 3.9867306642876396`*^9}, {
+   3.9867306960550823`*^9, 3.98673077728063*^9}, 3.9867328731248245`*^9},
+ CellLabel->"",ExpressionUUID->"ad81df68-5785-2147-8d97-93eaf1462b89"],
+
+Cell[BoxData[""], "Input",
+ CellChangeTimes->{{3.9863872869998093`*^9, 3.9863872878590546`*^9}},
+ CellLabel->"",ExpressionUUID->"63eb5b59-5bdf-2e42-9963-cc988b6fc49c"]
 },
-WindowSize->{1141.2, 573.6},
-WindowMargins->{{0, Automatic}, {Automatic, 0}},
+WindowSize->{1134, 568.8},
+WindowMargins->{{Automatic, 0}, {Automatic, 0}},
 LightDark->"Light",
 Magnification:>1. Inherited,
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
@@ -158,8 +169,9 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 4107, 83, 446, "Input",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"],
-Cell[4664, 105, 2414, 34, 28, "Input",ExpressionUUID->"ad81df68-5785-2147-8d97-93eaf1462b89"]
+Cell[554, 20, 4560, 87, 465, "Input",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"],
+Cell[5117, 109, 2687, 37, 28, "Input",ExpressionUUID->"ad81df68-5785-2147-8d97-93eaf1462b89"],
+Cell[7807, 148, 167, 2, 28, "Input",ExpressionUUID->"63eb5b59-5bdf-2e42-9963-cc988b6fc49c"]
 }
 ]
 *)

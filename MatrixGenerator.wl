@@ -3616,7 +3616,7 @@ coeffVal[coeff_, val_] := Which[
   coeff === 0, 0,
   coeff === 1, wrapNegValue[val],
   coeff === -1, Row[{"-", wrapNegValue[val]}],
-  True, Row[{tft[coeff], " \[CenterDot] ", wrapNegValue[val]}]
+  True, Row[{tft[coeff], wrapNegValue[val]}]
 ];
 
 signBtwTerms[c_] := If[c < 0, " - ", " + "];
@@ -3741,6 +3741,359 @@ verificationStepsEquation[A_, b_, vars_, sol_] := Module[
   content
 ];
 
+verificationStepsEquationInfinite[A_, b_, vars_, solExprs_List] := Module[
+  {content = {}, lhs, diff, okQ},
+
+  Do[
+    lhs = Together[A[[i]] . solExprs];
+    diff = Together[lhs - b[[i]]];
+    okQ = TrueQ[diff === 0] || TrueQ[Simplify[diff == 0]];
+
+    AppendTo[
+      content,
+      Grid[
+        {
+          {
+            Row[{
+              "Riadok ", i, ":  ",
+              tf[A[[i]]],
+              " \[CenterDot] ",
+              TraditionalForm[solExprs],
+              " = ",
+              TraditionalForm[lhs]
+            }]
+          },
+          {Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}]},
+          {Row[{"LS - PS = ", TraditionalForm[diff]}]},
+          {
+            If[
+              okQ,
+              Style["LS = PS (OK)", Darker[Green]],
+              Style["LS \[NotEqual] PS (CHYBA)", Red]
+            ]
+          }
+        },
+        Alignment -> Left,
+        Spacings -> {0, 0.4},
+        BaseStyle -> {FontSize -> 13}
+      ]
+    ],
+    {i, 1, Length[b]}
+  ];
+
+  content
+];
+
+chooseInfiniteEquationRelation[eqs_List, varsNow_List] := Module[
+  {paramSymbol = \[FormalT], candidates = {}, normalized, row, rhs, solveIdx, paramIdx,
+    exprWithVars, exprWithParam, coeffParam, constParam, denScore, score},
+
+  Do[
+    normalized = normalizeEquationRow[Join[eq[[1]], {eq[[2]]}]];
+    row = Most[normalized];
+    rhs = Last[normalized];
+
+    If[equationClass[row, rhs] =!= "NORMAL", Continue[]];
+
+    Do[
+      If[PossibleZeroQ[row[[solveIdx]]], Continue[]];
+
+      Do[
+        If[paramIdx === solveIdx, Continue[]];
+
+        exprWithVars = Together[
+          (rhs - Total@Table[
+            If[j === solveIdx, 0, row[[j]] varsNow[[j]]],
+            {j, 1, Length[varsNow]}
+          ]) / row[[solveIdx]]
+        ];
+
+        If[
+          !FreeQ[
+            exprWithVars,
+            Alternatives @@ Delete[varsNow, {{solveIdx}, {paramIdx}}]
+          ],
+          Continue[]
+        ];
+
+        exprWithParam = Together[exprWithVars /. varsNow[[paramIdx]] -> paramSymbol];
+
+        coeffParam = Together[Coefficient[exprWithParam, paramSymbol]];
+        constParam = Together[exprWithParam /. paramSymbol -> 0];
+        denScore = Max[Denominator /@ {coeffParam, constParam}];
+
+        score = {
+          denScore,
+          LeafCount[exprWithParam],
+          Total[Abs[row]],
+          Abs[row[[solveIdx]]]
+        };
+
+        AppendTo[
+          candidates,
+          <|
+            "Row" -> row,
+            "RHS" -> rhs,
+            "SolveIndex" -> solveIdx,
+            "SolveVar" -> varsNow[[solveIdx]],
+            "ParamIndex" -> paramIdx,
+            "ParamVar" -> varsNow[[paramIdx]],
+            "ParamSymbol" -> paramSymbol,
+            "ExprWithVars" -> exprWithVars,
+            "ExprWithParam" -> exprWithParam,
+            "Score" -> score
+          |>
+        ],
+        {paramIdx, 1, Length[varsNow]}
+      ],
+      {solveIdx, 1, Length[varsNow]}
+    ],
+    {eq, eqs}
+  ];
+
+  If[candidates === {}, $Failed, First @ MinimalBy[candidates, #Score &]]
+];
+
+SetAttributes[appendEquationInfiniteParametrization, HoldFirst];
+
+appendEquationInfiniteParametrization[content_, config_Association, A_, b_, origVars_, eqs_, varsNow_, stack_] := Module[
+  {relation, solMap, solExprs, paramVar, paramSymbol, solveVar, row, rhs, solveIdx,
+    unknownCoeff, knownSum, rhsAfterMove, valueExpanded, valueExpandedDisplay,
+    valueFactored, valueFinal, substLHS, noteShift, equationRows,
+    item, back, backVar},
+
+  relation = chooseInfiniteEquationRelation[eqs, varsNow];
+
+  If[relation === $Failed,
+    Return[$Failed]
+  ];
+
+  paramVar = relation["ParamVar"];
+  paramSymbol = relation["ParamSymbol"];
+  solveVar = relation["SolveVar"];
+
+  row = relation["Row"];
+  rhs = relation["RHS"];
+  solveIdx = relation["SolveIndex"];
+  unknownCoeff = row[[solveIdx]];
+
+  appendStepHeader[content, "Vyjadrenie riešenia pomocou parametra"];
+
+  AppendTo[
+    content,
+    "Keďže sústava má nekonečne veľa riešení, jednu neznámu zvolíme ako parameter. Vyberieme takú voľnú premennú, aby pri vyjadrení nevznikali zbytočné zlomky."
+  ];
+
+  AppendTo[
+    content,
+    "Použijeme jednoduchú rovnicu, ktorá vznikla v redukovanej sústave:"
+  ];
+
+  AppendTo[
+    content,
+    alignedEquations[
+      {{
+        renderTermsRow[Transpose[{row, varsNow}]],
+        rhs,
+        ""
+      }}
+    ]
+  ];
+
+  AppendTo[
+    content,
+    Row[{
+      "Voľnú premennú zvolíme ",
+      tf[paramVar],
+      " = ",
+      TraditionalForm[paramSymbol],
+      "."
+    }]
+  ];
+
+  AppendTo[
+    content,
+    highlightResultEquation[paramVar, paramSymbol]
+  ];
+
+  (* znovu prepíšeme rovnicu už s parametrom *)
+  substLHS = formatSubstLHS[
+    row,
+    varsNow,
+    <|paramVar -> paramSymbol|>,
+    solveVar,
+    False
+  ];
+
+  knownSum = Together @ Total @ Table[
+    If[
+      j === solveIdx,
+      0,
+      row[[j]] * If[varsNow[[j]] === paramVar, paramSymbol, varsNow[[j]]]
+    ],
+    {j, 1, Length[varsNow]}
+  ];
+
+  noteShift = addNote[-knownSum];
+
+  (* najprv necháme rozpísaný tvar, nezlučujeme ho cez Together *)
+  rhsAfterMove = Expand[rhs - knownSum];
+  valueExpanded = Expand[rhsAfterMove / unknownCoeff];
+
+  valueExpandedDisplay = renderTermsRow[
+    DeleteCases[
+      {
+        {Expand[valueExpanded /. paramSymbol -> 0], None},
+        {Expand[Coefficient[valueExpanded, paramSymbol]], paramSymbol}
+      },
+      {coef_ /; PossibleZeroQ[coef], _}
+    ],
+    "Symbolic"
+  ];
+
+  (* až tu robíme pekný faktorizovaný výsledok *)
+  valueFactored = Factor[Together[valueExpanded]];
+
+  valueFinal = If[
+    valueFactored =!= valueExpanded && LeafCount[valueFactored] <= LeafCount[valueExpanded],
+    valueFactored,
+    valueExpanded
+  ];
+
+  equationRows = {
+    {substLHS, rhs, noteShift}
+  };
+
+  equationRows = Join[
+    equationRows,
+    Which[
+      unknownCoeff === 1,
+      {
+        {tf[solveVar], valueExpandedDisplay, ""}
+      },
+
+      unknownCoeff === -1,
+      {
+        {tf[-solveVar], tf[rhsAfterMove], multNote[-1]},
+        {tf[solveVar], valueExpandedDisplay, ""}
+      },
+
+      True,
+      {
+        {tf[unknownCoeff solveVar], tf[rhsAfterMove], divNote[unknownCoeff]},
+        {tf[solveVar], valueExpandedDisplay, ""}
+      }
+    ]
+  ];
+
+  If[valueFinal =!= valueExpanded,
+    AppendTo[equationRows, {tf[solveVar], tf[valueFinal], ""}]
+  ];
+
+  AppendTo[
+    content,
+    alignedEquations[equationRows]
+  ];
+
+  AppendTo[
+    content,
+    highlightResultEquation[solveVar, valueFinal]
+  ];
+
+  solMap = <|
+    paramVar -> paramSymbol,
+    solveVar -> valueFinal
+  |>;
+
+  Do[
+    item = stack[[k]];
+    backVar = config["BackVarFn"][item];
+
+    AppendTo[
+      content,
+      Style[
+        "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej pivotnej rovnice:",
+        Italic
+      ]
+    ];
+
+    back = config["BackFn"][item, solMap];
+
+    If[Lookup[back, "Type", "ONE"] =!= "ONE",
+      Return[$Failed]
+    ];
+
+    AppendTo[content, alignedEquations[back["Steps"]]];
+
+    AppendTo[
+      content,
+      highlightResultEquation[backVar, back["Value"]]
+    ];
+
+    solMap[backVar] = back["Value"],
+    {k, Length[stack], 1, -1}
+  ];
+
+  solExprs = Together /@ (solMap /@ origVars);
+
+  <|
+    "Content" -> content,
+    "Solution" -> solExprs
+  |>
+];
+
+verificationStepsEquationNone[A_, b_, vars_] := Module[{content = {}, aug, rankA, rankAug},
+
+  aug = augFromAb[A, b];
+  rankA = MatrixRank[A];
+  rankAug = MatrixRank[aug];
+
+  AppendTo[content,
+    Grid[
+      {
+        {Row[{"hodnosť(A) = ", rankA}]},
+        {Row[{"hodnosť([A|b]) = ", rankAug}]},
+        {If[rankA < rankAug,
+          Style["hodnosť(A) < hodnosť([A|b])  \[Rule]  sústava nemá riešenie (OK)", Darker[Green]],
+          Style["hodnosti sa nerovnajú tak, ako majú pre spor - over postup (CHYBA)", Red]
+        ]}
+      },
+      Alignment -> Left,
+      Spacings -> {0, 0.4},
+      BaseStyle -> {FontSize -> 13}
+    ]
+  ];
+
+  content
+];
+
+SetAttributes[appendEquationVerification, HoldFirst];
+
+appendEquationVerification[content_, A_, b_, vars_, result_] := Module[{items},
+
+  appendStepHeader[content, "Skúška správnosti"];
+
+  Which[
+    ListQ[result],
+    AppendTo[
+      content,
+      "Správnosť overíme dosadením nájdeného riešenia do pôvodnej sústavy rovníc a porovnáme ľavú a pravú stranu v každom riadku:"
+    ];
+    items = verificationStepsEquation[A, b, vars, result],
+
+    result === "NONE",
+    AppendTo[
+      content,
+      "Skontrolujeme to pomocou Frobeniovej vety porovnaním hodností."
+    ];
+    items = verificationStepsEquationNone[A, b, vars],
+
+    True,
+    Return[$Failed]
+  ];
+
+  Scan[AppendTo[content, #] &, items]
+];
 
 (* ~-~-~ HARD DISPLAY HELPERS ~-~-~ *)
 
@@ -4118,30 +4471,219 @@ solveOneVarEquationSteps[{row_List, rhs_}, {var_}] := Module[{c = row[[1]], cls,
   ]
 ];
 
-backSubstituteElimVarSteps[{row_List, rhs_}, vars_List, solMap_Association, elimVar_] := Module[{pos, coeffU, knownSum, rhsShift, noteShift, steps = {}},
-  pos = First @ First @ Position[vars, elimVar];
-  coeffU = row[[pos]];
+backSubstituteVariableSteps[{row_List, rhs_}, vars_List, solMap_Association, solvedVar_] := Module[
+  {steps = {}, currentLHS, substLHS, expandedTerms = {}, combinedTerms, combinedLHS,
+    unknownCoeff, knownTerms, knownSum, rhsShift, noteShift, valueExpanded, valueFactored, valueFinal,
+    formalParams, displayVars, c, v, expr, summands, termVar, termCoeff, keyOrder = {}, coeffByKey = <||>,
+    addCombinedTerm, renderMovedRHS, moveTerms, movedRHS, finalRows, rowKey, lastKey = None, dedupRows = {},
+showSubstitutionRowQ},
 
-  AppendTo[steps, {renderTermsRow[Transpose[{row, vars}]], rhs, substNote[solMap, Keys[solMap], row, vars]}];
-  AppendTo[steps, {formatSubstLHS[row, vars, solMap, elimVar, False], rhs, ""}];
+(* pôvodná rovnica a dosadenie *)
+  currentLHS = renderTermsRow[Transpose[{row, vars}]];
+  substLHS = formatSubstLHS[row, vars, solMap, solvedVar, False];
 
-  knownSum = Together @ Total @ Table[
-    If[i === pos, 0, If[KeyExistsQ[solMap, vars[[i]]], row[[i]] * solMap[vars[[i]]], 0]],
+  formalParams = DeleteDuplicates @ Cases[
+    Values[solMap],
+    Alternatives @@ {\[FormalT], \[FormalS], \[FormalR]},
+    Infinity
+  ];
+
+  displayVars = DeleteDuplicates@Join[formalParams, vars];
+
+  (* roznásobenie po dosadení *)
+  Do[
+    c = row[[i]];
+    v = vars[[i]];
+
+    If[PossibleZeroQ[c], Continue[]];
+
+    If[v === solvedVar,
+      AppendTo[expandedTerms, {c, v}],
+
+      If[KeyExistsQ[solMap, v],
+        If[!TrueQ[Expand[c solMap[v]] === c solMap[v]],
+          showSubstitutionRowQ = True
+        ];
+
+        expr = Expand[c solMap[v]];
+        summands = If[Head[expr] === Plus, List @@ expr, {expr}];
+
+        Do[
+          termVar = SelectFirst[displayVars, !FreeQ[term, #] &, None];
+
+          termCoeff = If[
+            termVar === None,
+            Together[term],
+            Together[term/termVar]
+          ];
+
+          AppendTo[expandedTerms, {termCoeff, termVar}],
+          {term, summands}
+        ],
+
+        AppendTo[expandedTerms, {c, v}]
+      ]
+    ],
     {i, 1, Length[vars]}
   ];
-  rhsShift = Together[rhs - knownSum];
+
+  (* sčítanie podobných členov *)
+  addCombinedTerm[{coef_, symbol_}] := (
+    If[!KeyExistsQ[coeffByKey, symbol],
+      AppendTo[keyOrder, symbol];
+      coeffByKey[symbol] = 0
+    ];
+
+    coeffByKey[symbol] = Together[coeffByKey[symbol] + coef]
+  );
+
+  Scan[addCombinedTerm, expandedTerms];
+
+  combinedTerms = Select[
+    Table[{Together[coeffByKey[key]], key}, {key, keyOrder}],
+    !PossibleZeroQ[#[[1]]] &
+  ];
+
+  combinedLHS = renderTermsRow[combinedTerms, "Symbolic"];
+
+  unknownCoeff = Total @ Cases[
+    combinedTerms,
+    {coef_, symbol_} /; symbol === solvedVar :> coef
+  ];
+
+  knownTerms = Select[combinedTerms, #[[2]] =!= solvedVar &];
+
+  knownSum = Total @ Map[
+    If[#[[2]] === None, #[[1]], #[[1]] #[[2]]] &,
+    knownTerms
+  ];
+
+  If[PossibleZeroQ[unknownCoeff],
+    Return[
+      <|
+        "Type" -> If[PossibleZeroQ[rhs - knownSum], "INFINITE", "NONE"],
+        "Steps" -> steps
+      |>
+    ]
+  ];
+
   noteShift = addNote[-knownSum];
 
-  AppendTo[steps, {formatSubstLHS[row, vars, solMap, elimVar, True], rhs, noteShift}];
+  (* najprv necháme rozpísanú pravú stranu *)
+  rhsShift = Expand[rhs - knownSum];
 
-  If[PossibleZeroQ[coeffU], Return[<|"Type" -> If[PossibleZeroQ[rhsShift], "INFINITE", "NONE"], "Steps" -> steps|>]];
+  (* pravá strana po presunutí známych členov *)
+  moveTerms = {-#[[1]], #[[2]]} & /@ knownTerms;
 
-  Module[{iso},
-    iso = isolateVarFromCoeffEqSteps[coeffU, elimVar, rhsShift];
-    steps = Join[steps, iso["Steps"]];
-    <|"Type" -> "ONE", "Value" -> iso["Value"], "Steps" -> steps|>
+  renderMovedRHS[] := Row @ Flatten@Join[
+    {tf[rhs]},
+    Table[
+      With[
+        {coef = moveTerms[[i, 1]], symbol = moveTerms[[i, 2]]},
+        If[PossibleZeroQ[coef],
+          Nothing,
+          If[TrueQ[coef < 0],
+            {
+              " - ",
+              tf[If[symbol === None, Abs[coef], If[Abs[coef] === 1, symbol, Abs[coef] symbol]]]
+            },
+            {
+              " + ",
+              tf[If[symbol === None, Abs[coef], If[Abs[coef] === 1, symbol, Abs[coef] symbol]]]
+            }
+          ]
+        ]
+      ],
+      {i, 1, Length[moveTerms]}
+    ]
+  ];
+
+  movedRHS = renderMovedRHS[];
+
+  (* najprv rozpísaný tvar, až potom faktorizovaný výsledok *)
+  valueExpanded = Expand[rhsShift/unknownCoeff];
+  valueFactored = Factor[Together[valueExpanded]];
+
+  valueFinal = If[
+    valueFactored =!= valueExpanded && LeafCount[valueFactored] <= LeafCount[valueExpanded],
+    valueFactored,
+    valueExpanded
+  ];
+
+  finalRows = {
+    {currentLHS, rhs, substNote[solMap, Keys[solMap], row, vars]}
+  };
+
+  If[TrueQ[showSubstitutionRowQ],
+    AppendTo[finalRows, {substLHS, rhs, ""}];
+    AppendTo[finalRows, {renderTermsRow[expandedTerms, "Symbolic"], rhs, ""}]
+  ];
+
+  AppendTo[finalRows, {combinedLHS, rhs, noteShift}];
+
+  finalRows = Join[
+    finalRows,
+    Which[
+      unknownCoeff === 1,
+      {
+        {tf[solvedVar], movedRHS, ""},
+        {tf[solvedVar], tf[valueExpanded], ""}
+      },
+
+      unknownCoeff === -1,
+      {
+        {tf[-solvedVar], movedRHS, multNote[-1]},
+        {tf[solvedVar], tf[valueExpanded], ""}
+      },
+
+      True,
+      {
+        {tf[unknownCoeff solvedVar], movedRHS, divNote[unknownCoeff]},
+        {tf[solvedVar], tf[valueExpanded], ""}
+      }
+    ]
+  ];
+
+  If[valueFinal =!= valueExpanded,
+    AppendTo[finalRows, {tf[solvedVar], tf[valueFinal], ""}]
+  ];
+
+  (* odstránenie duplicitných susedných riadkov *)
+  Do[
+    rowKey = ToString[{finalRows[[i, 1]], finalRows[[i, 2]]}, InputForm];
+
+    If[rowKey === lastKey,
+      If[finalRows[[i, 3]] =!= "" && dedupRows =!= {},
+        dedupRows[[-1, 3]] = finalRows[[i, 3]]
+      ],
+      AppendTo[dedupRows, finalRows[[i]]];
+      lastKey = rowKey
+    ],
+    {i, 1, Length[finalRows]}
+  ];
+
+  <|
+    "Type" -> "ONE",
+    "Value" -> valueFinal,
+    "Steps" -> dedupRows
+  |>
+];
+
+backSubstituteVariableSteps[solvedVar_, expr_, vars_List, solMap_Association] := Module[
+  {eqExpr, row, rhs},
+
+(* výraz solvedVar = expr prepíšeme na rovnicu solvedVar - expr = 0 *)
+  eqExpr = Expand[solvedVar - expr];
+
+  row = Together /@ (Coefficient[eqExpr, #] & /@ vars);
+  rhs = Together[-(eqExpr /. (Rule[#, 0] & /@ vars))];
+
+  backSubstituteVariableSteps[
+    {row, rhs},
+    vars,
+    solMap,
+    solvedVar
   ]
-
 ];
 
 reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, content = {}, data2, sumRow, sumRHS, elimIdx, keepIdx, keepVar, elimVar, pivotEq, newEq, cls,
@@ -4518,11 +5060,6 @@ makeLinearSubstitutionTraceSteps[solvedVar_, expr_, solMap_Association, varsPool
   ];
 
   <|"Steps" -> steps, "Value" -> rhsValue|>
-];
-
-backSubstituteSubstVarSteps[solvedVar_, expr_, solMap_Association] := Module[{res},
-  res = makeLinearSubstitutionTraceSteps[solvedVar, expr, solMap, {x, y, z}];
-  <|"Value" -> res["Value"], "Steps" -> res["Steps"]|>
 ];
 
 reduceOnceBySubstitution[eqs_List, vars_List] := Module[{n = Length[vars], A, b, content = {}, rI, cI, solveData, substRule, elimVar, remVars, res, newEq, cls, lastSolve, red, A2, b2},
@@ -6005,7 +6542,7 @@ stepsCramer[data_Association] := Block[{cramerKnown3x3 = {}}, Module[{ content =
 ]];
 
 stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
-  {content = {}, kind, eqs, varsNow, stack = {}, step, lastSolve, solMap, back, solVec, origVars = vars, item},
+  {content = {}, kind, eqs, varsNow, stack = {}, step, lastSolve, solMap, back, solVec, origVars = vars, item, result},
 
   kind = Lookup[data, "type", "ONE"];
 
@@ -6027,12 +6564,34 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
 
     If[AnyTrue[step["Classes"], # === "CONTRADICTION" &],
       AppendTo[content, config["ReduceNoneText"]];
+      appendEquationVerification[content, A, b, origVars, "NONE"];
       Return[<|"Content" -> content, "Solution" -> "NONE"|>]
     ];
 
     If[AllTrue[step["Classes"], # === "IDENTITY" &],
-      AppendTo[content, config["ReduceInfiniteText"]];
-      Return[<|"Content" -> content, "Solution" -> "INFINITE"|>]
+      Module[{infData},
+
+        AppendTo[content, config["ReduceInfiniteText"]];
+
+        infData = appendEquationInfiniteParametrization[content, config, A, b, origVars, eqs, varsNow, stack];
+
+        If[infData === $Failed,
+          Return[$Failed]
+        ];
+
+        appendStepHeader[content, "Skúška správnosti"];
+        AppendTo[
+          content,
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
+        ];
+
+        content = Join[
+          content,
+          verificationStepsEquationInfinite[A, b, origVars, infData["Solution"]]
+        ];
+
+        Return[<|"Content" -> content, "Solution" -> "INFINITE"|>]
+      ]
     ];
 
     AppendTo[stack, config["StackItemFn"][step, varsNow]];
@@ -6044,10 +6603,97 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
   lastSolve = solveOneVarEquationSteps[First[eqs], varsNow];
 
   If[lastSolve["Type"] =!= "ONE",
-    AppendTo[content, If[lastSolve["Type"] === "NONE", config["FinalNoneText"], config["FinalInfiniteText"]]];
-    Return[<|"Content" -> content, "Solution" -> If[lastSolve["Type"] === "NONE", "NONE", "INFINITE"]|>]
-  ];
+    result = If[lastSolve["Type"] === "NONE", "NONE", "INFINITE"];
 
+    AppendTo[
+      content,
+      If[result === "NONE", config["FinalNoneText"], config["FinalInfiniteText"]]
+    ];
+
+    If[result === "INFINITE",
+      Module[{paramSymbol = \[FormalT], solMap, solExprs, item, back, backVar},
+
+        appendStepHeader[content, "Vyjadrenie riešenia pomocou parametra"];
+
+        AppendTo[
+          content,
+          Row[{
+            "Voľnú premennú zvolíme ",
+            tf[varsNow[[1]]],
+            " = ",
+            TraditionalForm[paramSymbol],
+            "."
+          }]
+        ];
+
+        AppendTo[
+          content,
+          highlightResultEquation[varsNow[[1]], paramSymbol]
+        ];
+
+        solMap = <|varsNow[[1]] -> paramSymbol|>;
+
+        Do[
+          item = stack[[k]];
+          backVar = config["BackVarFn"][item];
+
+          AppendTo[
+            content,
+            Style[
+              "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej pivotnej rovnice:",
+              Italic
+            ]
+          ];
+
+          back = config["BackFn"][item, solMap];
+
+          If[Lookup[back, "Type", "ONE"] =!= "ONE",
+            Return[$Failed]
+          ];
+
+          AppendTo[content, alignedEquations[back["Steps"]]];
+          AppendTo[
+            content,
+            highlightGrid[
+              alignedEquations[
+                {{
+                  backVar,
+                  tf[back["Value"]],
+                  ""
+                }}
+              ]
+            ]
+          ];
+
+          solMap[backVar] = back["Value"],
+          {k, Length[stack], 1, -1}
+        ];
+
+        solExprs = Together /@ (solMap /@ origVars);
+
+        appendStepHeader[content, "Skúška správnosti"];
+        AppendTo[
+          content,
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalZ]."
+        ];
+
+        content = Join[
+          content,
+          verificationStepsEquationInfinite[
+            A,
+            b,
+            origVars,
+            solExprs
+          ]
+        ];
+
+        Return[<|"Content" -> content, "Solution" -> "INFINITE"|>]
+      ]
+    ];
+
+    appendEquationVerification[content, A, b, origVars, result];
+    Return[<|"Content" -> content, "Solution" -> result|>]
+  ];
   If[TrueQ @ Lookup[config, "ShowLastSolveQ", False],
     AppendTo[content, alignedEquations[lastSolve["Content"]]];
     AppendTo[content, highlightGrid[alignedEquations[{{varsNow[[1]], tf[lastSolve["Value"]], ""}}]]]
@@ -6061,8 +6707,16 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
     appendStepHeader[content, config["BackHeader"]];
 
     back = config["BackFn"][item, solMap];
+
     If[Lookup[back, "Type", "ONE"] =!= "ONE",
-      Return[<|"Content" -> content, "Solution" -> If[back["Type"] === "NONE", "NONE", "INFINITE"]|>]
+      result = If[back["Type"] === "NONE", "NONE", "INFINITE"];
+
+      If[result === "INFINITE",
+        Return[$Failed]
+      ];
+
+      appendEquationVerification[content, A, b, origVars, result];
+      Return[<|"Content" -> content, "Solution" -> result|>]
     ];
 
     AppendTo[content, alignedEquations[back["Steps"]]];
@@ -6073,15 +6727,21 @@ stepsEquationCore[config_Association, A_, b_, vars_, data_ : <||>] := Module[
 
   solVec = solMap /@ origVars;
 
-  (* skúška len pre jedno riešenie *)
   If[kind === "ONE",
-    appendStepHeader[content, "Skúška správnosti"];
-    AppendTo[content, "Správnosť overíme dosadením nájdeného riešenia do pôvodnej sústavy rovníc a porovnáme ľavú a pravú stranu v každom riadku:"];
-    content = Join[content, verificationStepsEquation[A, b, origVars, solVec]];
+    appendEquationVerification[content, A, b, origVars, solVec];
     Return[<|"Content" -> content, "Solution" -> solVec|>]
   ];
 
-  <|"Content" -> content, "Solution" -> If[kind === "NONE", "NONE", "INFINITE"]|>
+  If[kind === "NONE",
+    appendEquationVerification[content, A, b, origVars, "NONE"];
+    Return[<|"Content" -> content, "Solution" -> "NONE"|>]
+  ];
+
+  If[kind === "INFINITE",
+    Return[$Failed]
+  ];
+
+  <|"Content" -> content, "Solution" -> solVec|>
 ];
 
 stepsElimination[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
@@ -6098,7 +6758,7 @@ stepsElimination[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
     ],
     "BackVarFn" -> Function[item, item["ElimVar"]],
     "BackFn" -> Function[{item, solMap},
-      backSubstituteElimVarSteps[item["PivotEq"], item["VarsBefore"], solMap, item["ElimVar"]]
+      backSubstituteVariableSteps[item["PivotEq"], item["VarsBefore"], solMap, item["ElimVar"]]
     ]
   |>, A, b, vars, data
 ];
@@ -6112,11 +6772,15 @@ stepsSubstitution[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
     "ShowLastSolveQ" -> False,
     "BackHeader" -> "Spätné dosadenie (dopočítanie neznámej)",
     "StackItemFn" -> Function[{step, varsNow},
-      <|"SolvedVar" -> step["SolvedVar"], "Expr" -> step["RuleExpr"]|>
+      <|
+        "SolvedVar" -> step["SolvedVar"],
+        "Expr" -> step["RuleExpr"],
+        "VarsBefore" -> varsNow
+      |>
     ],
     "BackVarFn" -> Function[item, item["SolvedVar"]],
     "BackFn" -> Function[{item, solMap},
-      backSubstituteSubstVarSteps[item["SolvedVar"], item["Expr"], solMap]
+      backSubstituteVariableSteps[item["SolvedVar"], item["Expr"], item["VarsBefore"], solMap]
     ]
   |>, A, b, vars, data
 ];
