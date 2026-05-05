@@ -131,8 +131,8 @@ Options[GenLU] = $CommonGeneratorOptions;
 Options[GenCholesky] = $CommonGeneratorOptions;
 Options[GenCramer] = $CommonGeneratorOptions;
 
-Options[GenElimination] = {SolutionType -> "ONE", Visualization -> True};
-Options[GenSubstitution] = {SolutionType -> "ONE", Visualization -> True};
+Options[GenElimination] = {SolutionType -> "ONE", Visualization -> False};
+Options[GenSubstitution] = {SolutionType -> "ONE", Visualization -> False};
 
 $ElemStepCounter = 0;
 $ElemMatrixCounter = 0;

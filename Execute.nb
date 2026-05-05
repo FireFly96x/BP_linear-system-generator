@@ -10,165 +10,137 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[      8509,        183]
-NotebookOptionsPosition[      8101,        167]
-NotebookOutlinePosition[      8551,        185]
-CellTagsIndexPosition[      8508,        182]
+NotebookDataLength[      7121,        155]
+NotebookOptionsPosition[      6678,        138]
+NotebookOutlinePosition[      7163,        157]
+CellTagsIndexPosition[      7120,        154]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
-Cell[BoxData[
+Cell[BoxData[{
  RowBox[{
-  RowBox[{"(*", "\n", 
-   StyleBox[
-    RowBox[{
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"diff", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"EASY", "/", "MEDIUM"}], "/", "HARD"}]}]}], "\n", 
-     RowBox[{
-      RowBox[{"\[Bullet]", " ", 
-       RowBox[{"mode", " ", ":", " ", "TASK"}]}], ";", "  ", "TASK_RESULT", ";",
-       " ", 
-      RowBox[{"TASK_STEPS", " ", "_RESULT"}]}], "\n", 
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"SolutionType", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"ONE", "/", "NONE"}], "/", "INFINITE"}]}]}], "\n", 
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"Visualization", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"True", "/", "False"}], " ", 
-        RowBox[{"(", 
-         RowBox[{
-         "iba", " ", "pre", " ", "GenElimination", " ", "a", " ", 
-          "GenSubstitution"}], ")"}]}]}]}], "\n", 
-     RowBox[{"\[Bullet]", " ", 
-      RowBox[{"TriangularType", " ", ":", " ", 
-       RowBox[{
-        RowBox[{"U", "/", "L"}], " ", 
-        RowBox[{"(", 
-         RowBox[{"iba", " ", "pre", " ", "GenTriangular"}], ")"}]}]}]}]}], 
-    "Item"], 
-   StyleBox["\[IndentingNewLine]", "Item"], "*)"}], "\n", "\n", 
+  RowBox[{"SetDirectory", "[", 
+   RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"$CharacterEncoding", "=", "\"\<UTF-8\>\""}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
   RowBox[{
-   StyleBox[
-    RowBox[{
-     RowBox[{"SetDirectory", "[", 
-      RowBox[{"NotebookDirectory", "[", "]"}], "]"}], ";"}], "Input"], 
-   StyleBox["\[IndentingNewLine]", "Input"], 
+   RowBox[{"<<", "\"\<MatrixGenerator.wl\>\""}], ";"}], "\[IndentingNewLine]",
+   "\[IndentingNewLine]", 
+  RowBox[{"(*", " ", 
    RowBox[{
-    RowBox[{"$CharacterEncoding", "=", "\"\<UTF-8\>\""}], ";"}], 
-   StyleBox["\n", "Input"], "\n", 
-   StyleBox[
     RowBox[{
-     RowBox[{"<<", " ", "\"\<EquationGenerator.wl\>\""}], ";"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenElimination", "[", 
-     RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}], ",", " ", 
-      RowBox[{"Visualization", " ", "->", " ", "True"}]}], "]"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenSubstitution", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<INFINITE\>\""}], ",", " ", 
-      RowBox[{"Visualization", " ", "->", " ", "True"}]}], "]"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
+    "V\[SHacek]etky", " ", "gener\[AAcute]tory", " ", "maj\[UAcute]", " ", 
+     RowBox[{
+      RowBox[{"EASY", "/", "MEDIUM"}], "/", "HARD"}]}], ";", " ", 
     RowBox[{
-     RowBox[{"<<", " ", "\"\<MatrixGenerator.wl\>\""}], ";"}], "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenTriangular", "[", 
-     RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<NONE\>\""}], ",", " ", 
-      RowBox[{"TriangularType", " ", "->", " ", "\"\<L\>\""}]}], "]"}], 
-    "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenGauss", "[", 
-     RowBox[{"\"\<MEDIUM\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", 
-      " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}], 
-    "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenGaussJordan", "[", 
-     RowBox[{"\"\<EASY\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}], 
-    "Input"], 
-   StyleBox["\n", "Input"], 
-   StyleBox[
-    RowBox[{"GenGaussJordanPivot", "[", 
-     RowBox[{"\"\<HARD\>\"", ",", " ", "\"\<TASK_STEPS_RESULT\>\"", ",", " ", 
-      RowBox[{"SolutionType", " ", "->", " ", "\"\<ONE\>\""}]}], "]"}], 
-    "Input"]}]}]], "Input",
- CellChangeTimes->{{3.9757009438068523`*^9, 3.9757009438068523`*^9}, 
-   3.975701017016773*^9, {3.975701093725874*^9, 3.975701102330042*^9}, {
-   3.975771815716791*^9, 3.975771922639988*^9}, {3.975830313234062*^9, 
-   3.975830343370287*^9}, {3.9758305062425785`*^9, 3.975830508527134*^9}, {
-   3.975834289453476*^9, 3.975834307227375*^9}, {3.975834582065201*^9, 
-   3.9758345836872215`*^9}, {3.9759209489172096`*^9, 3.975920957035612*^9}, {
-   3.975921593828228*^9, 3.975921644445099*^9}, {3.9759246385992584`*^9, 
-   3.975924640661928*^9}, {3.975925484613888*^9, 3.9759254945912056`*^9}, {
-   3.9759263798511105`*^9, 3.975926380817972*^9}, {3.9759264268526573`*^9, 
-   3.975926427771429*^9}, 3.975926918754404*^9, {3.975927370766123*^9, 
-   3.975927374821209*^9}, {3.9759274495246525`*^9, 3.9759274613032475`*^9}, {
-   3.975927491739668*^9, 3.9759275009714947`*^9}, {3.9759275329482136`*^9, 
-   3.9759275455791054`*^9}, {3.975927723788225*^9, 3.9759277247325687`*^9}, {
-   3.975929006653473*^9, 3.9759290071762733`*^9}, {3.975929038916626*^9, 
-   3.9759290392181225`*^9}, 3.9759291171248016`*^9, {3.975929508852812*^9, 
-   3.975929533800997*^9}, {3.9759299594676647`*^9, 3.9759300061096745`*^9}, {
-   3.9759312450073566`*^9, 3.9759312716195087`*^9}, {3.9759315501406536`*^9, 
-   3.975931563616228*^9}, {3.9759316281753654`*^9, 3.975931628441889*^9}, {
-   3.975931663448654*^9, 3.975931670485468*^9}, {3.9759321026122875`*^9, 
-   3.975932102947777*^9}, {3.975932247781845*^9, 3.9759322616983223`*^9}, {
-   3.9759323094618816`*^9, 3.9759323101193447`*^9}, {3.9759323943648453`*^9, 
-   3.9759324212667465`*^9}, 3.975932495729851*^9, {3.975933411190979*^9, 
-   3.9759334517541733`*^9}, {3.9759335868259735`*^9, 3.975933597855049*^9}, {
-   3.9759355677723904`*^9, 3.9759355718426495`*^9}, {3.975998085687788*^9, 
-   3.975998086256237*^9}, {3.9760002914156055`*^9, 3.9760002987063484`*^9}, {
-   3.976000902282398*^9, 3.976000909584158*^9}, {3.9760023377332954`*^9, 
-   3.9760023382837334`*^9}, {3.976002758770273*^9, 3.9760027601144295`*^9}, {
-   3.976004156047682*^9, 3.9760041674699707`*^9}, {3.976009617647854*^9, 
-   3.9760096185133038`*^9}, {3.976024467261814*^9, 3.976024492750145*^9}, {
-   3.976024688289871*^9, 3.976024688915674*^9}, {3.9760247464857445`*^9, 
-   3.9760247470616264`*^9}, {3.9760251939933224`*^9, 
-   3.9760251997706356`*^9}, {3.976026280414402*^9, 3.976026280922407*^9}, 
-   3.9760272699076595`*^9, {3.9760388435934353`*^9, 3.976038892223587*^9}, {
-   3.9760393663397865`*^9, 3.976039370321497*^9}, 3.9760401751669483`*^9, {
-   3.9760419434389057`*^9, 3.976041974628332*^9}, {3.9760427973994713`*^9, 
-   3.976042799076668*^9}, {3.9760430530133877`*^9, 3.9760430788472958`*^9}, {
-   3.976043302728441*^9, 3.9760433197181225`*^9}, {3.97604368554434*^9, 
-   3.9760436857906647`*^9}, {3.9760439715977707`*^9, 3.976043985041378*^9}, {
-   3.976044150348757*^9, 3.976044206588558*^9}, {3.9760443240848083`*^9, 
-   3.976044325005375*^9}, {3.97604491235334*^9, 3.976044912647646*^9}, {
-   3.976045009204111*^9, 3.9760450101651325`*^9}, {3.976045192150999*^9, 
-   3.976045192409233*^9}, {3.9760454089459534`*^9, 3.976045410933651*^9}, {
-   3.976045520206499*^9, 3.976045520466774*^9}, {3.9760456044787884`*^9, 
-   3.9760456178173637`*^9}, {3.9760456621036777`*^9, 3.976045686682804*^9}, {
-   3.976047628744089*^9, 3.9760476352494717`*^9}, {3.976048373321886*^9, 
-   3.9760484329173584`*^9}, {3.9760484702880955`*^9, 3.9760484945200214`*^9}, 
-   3.9763539189878426`*^9, {3.9763539566116447`*^9, 3.976354044268593*^9}, {
-   3.9763540887667503`*^9, 3.9763541966841927`*^9}, {3.9763542280559273`*^9, 
-   3.9763544148589497`*^9}, {3.9763545179447937`*^9, 3.976354559421652*^9}, {
-   3.97635459050169*^9, 3.9763546484524784`*^9}, 3.976354726987854*^9, {
-   3.9763547600024357`*^9, 3.9763549256346245`*^9}, {3.9763550316962795`*^9, 
-   3.9763550683319263`*^9}, {3.9763551058905544`*^9, 
-   3.9763551100561123`*^9}, {3.976356067034313*^9, 3.9763560694868317`*^9}, {
-   3.976356106433647*^9, 
-   3.9763561070256233`*^9}},ExpressionUUID->"ea76dedc-d940-d548-8915-\
-5556628c3d25"]
+     RowBox[{
+      RowBox[{"TASK", "/", "TASK_RESULT"}], "/", "TASK_STEPS"}], 
+     "_RESULT"}]}], " ", "*)"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ";", " ", 
+    RowBox[{"TaskFormat", "->", 
+     RowBox[{
+      RowBox[{"\"\<MATRIX\>\"", "/", "\"\<EQUATIONS\>\""}], 
+      "\[IndentingNewLine]", "\[IndentingNewLine]", 
+      RowBox[{"GenElemGJ", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenInverse", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenCramer", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenLU", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenCholesky", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}]}]}]}], "*)"}],
+   "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{"SolutionType", "->", 
+     RowBox[{
+      RowBox[{"\"\<ONE\>\"", "/", "\"\<NONE\>\""}], 
+      "/", "\"\<INFINITE\>\""}]}], ";", " ", 
+    RowBox[{"TaskFormat", "->", 
+     RowBox[{
+      RowBox[{"\"\<MATRIX\>\"", "/", "\"\<EQUATIONS\>\""}], 
+      "\[IndentingNewLine]", "\[IndentingNewLine]", 
+      RowBox[{"GenGauss", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenGaussJordan", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenGaussJordanPivot", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], "]"}]}]}]}], "*)"}],
+   "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{"SolutionType", "->", 
+     RowBox[{
+      RowBox[{"\"\<ONE\>\"", "/", "\"\<NONE\>\""}], 
+      "/", "\"\<INFINITE\>\""}]}], ";", " ", 
+    RowBox[{"Visualization", "->", 
+     RowBox[{
+      RowBox[{"True", "/", "False"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+      RowBox[{"GenElimination", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"Visualization", "->", "True"}]}], "]"}], "\[IndentingNewLine]", 
+      RowBox[{"GenSubstitution", "[", 
+       RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+        RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+        RowBox[{"Visualization", "->", "True"}]}], "]"}]}]}]}], "*)"}], 
+  "\[IndentingNewLine]"}], "\n", 
+ RowBox[{"GenGauss", "[", 
+  RowBox[{"\"\<EASY\>\"", ",", "\"\<TASK_STEPS_RESULT\>\"", ",", 
+   RowBox[{"SolutionType", "->", "\"\<ONE\>\""}], ",", 
+   RowBox[{"TaskFormat", "->", "\"\<MATRIX\>\""}]}], 
+  "]"}], "\[IndentingNewLine]"}], "Input",
+ CellChangeTimes->{{3.9850775989463177`*^9, 3.9850775989463177`*^9}, 
+   3.985077650895849*^9, 3.985080825766567*^9, 3.985080910707653*^9, {
+   3.9851819331122913`*^9, 3.9851821684071445`*^9}, {3.9851821990606937`*^9, 
+   3.9851822417537785`*^9}, {3.985791603638054*^9, 3.985791606723255*^9}, {
+   3.9858447680289135`*^9, 3.985844773016657*^9}, {3.985848336039736*^9, 
+   3.9858483543753223`*^9}, {3.9858518582475433`*^9, 
+   3.9858518639064713`*^9}, {3.9858539034130383`*^9, 3.985853904494543*^9}, {
+   3.9858564282527657`*^9, 3.985856431768759*^9}, 3.9858636942612877`*^9, {
+   3.9858644188532143`*^9, 3.985864420135147*^9}, {3.98586638570994*^9, 
+   3.9858663876522675`*^9}, {3.9858771610064907`*^9, 
+   3.9858771621992855`*^9}, {3.9858857850215034`*^9, 3.985885845387598*^9}, {
+   3.986387297587473*^9, 3.9863873426171303`*^9}, {3.9867327686835785`*^9, 
+   3.986732868058571*^9}, {3.986913977161253*^9, 3.986913977635639*^9}, {
+   3.9869141744091816`*^9, 3.986914177734749*^9}, {3.98691757309659*^9, 
+   3.9869176030404034`*^9}, {3.986919053589161*^9, 3.9869190754234257`*^9}, {
+   3.9869191984637527`*^9, 3.9869195349948425`*^9}, {3.9869616377565117`*^9, 
+   3.9869616500703735`*^9}, {3.9869620243862267`*^9, 3.986962026395172*^9}, {
+   3.986963470389551*^9, 3.986963517864008*^9}, {3.9869635652966003`*^9, 
+   3.9869635957934456`*^9}, {3.9869636533491783`*^9, 
+   3.9869636592007504`*^9}, {3.98696383827314*^9, 3.9869638461555557`*^9}, {
+   3.9869639165563736`*^9, 3.9869639363205338`*^9}, 
+   3.986980354139305*^9},ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-\
+87da073537c1"]
 },
-WindowSize->{1141.2, 568.8},
-WindowMargins->{{0, Automatic}, {Automatic, 0}},
+WindowSize->{1152, 579.6},
+WindowMargins->{{
+  Automatic, -5.399999999999864}, {-5.399999999999977, Automatic}},
 LightDark->"Light",
-Magnification:>0.9 Inherited,
+Magnification:>0.7 Inherited,
 FrontEndVersion->"14.3 for Microsoft Windows (64-bit) (July 8, 2025)",
 StyleDefinitions->"Default.nb",
 ExpressionUUID->"384ef020-a7a5-a248-a44a-6c63d58a9978"
@@ -184,7 +156,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[554, 20, 7543, 145, 350, "Input",ExpressionUUID->"ea76dedc-d940-d548-8915-5556628c3d25"]
+Cell[554, 20, 6120, 116, 366, "Input",ExpressionUUID->"5f5d9d3f-1bea-ac41-a87d-87da073537c1"]
 }
 ]
 *)
