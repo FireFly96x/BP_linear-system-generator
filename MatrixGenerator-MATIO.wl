@@ -2475,19 +2475,15 @@ Module[
   ];
 
   (* vysvetlenie výmeny pivotových riadkov *)
-  gaussPivotSwapExplanation[aug_, i_Integer, k_Integer] := Module[{ currentPivot, newPivot},
+  gaussPivotSwapExplanation[aug_, i_Integer, k_Integer] := Module[{currentPivot, newPivot},
     currentPivot = aug[[i, i]];
     newPivot = aug[[k, i]];
 
     If[currentPivot === 0,
-      Row[{
-        "V ", i, ". stĺpci je aktuálny pivot nulový, preto si nižšie vyberieme nenulový pivot ",
-        newPivot, " z riadku R", k, "."
-      }],
-      Row[{
-        "V ", i, ". stĺpci sa nižšie nachádza menší pivot v absolútnej hodnote. Preto namiesto ",
-        currentPivot, " zvolíme ", newPivot, " a prehodíme R", i, " a R", k, "."
-      }]
+      "V " <> ToString[i] <> ". stĺpci je aktuálny pivot nulový, preto si nižšie vyberieme nenulový pivot " <>
+          ToString[newPivot] <> " z riadku R" <> ToString[k] <> ".",
+      "V " <> ToString[i] <> ". stĺpci sa nižšie nachádza menší pivot v absolútnej hodnote. Preto namiesto " <>
+          ToString[currentPivot] <> " zvolíme " <> ToString[newPivot] <> " a prehodíme R" <> ToString[i] <> " a R" <> ToString[k] <> "."
     ]
   ];
 
@@ -3059,8 +3055,8 @@ Module[
   (* text pre laplaceov rozvoj *)
   cramerLaplaceExplanation[lineData_Association] := If[
     lineData["Type"] === "Row",
-    Row[{"Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"], ". riadku, lebo obsahuje jeden nenulový prvok."}],
-    Row[{"Použijeme Laplaceov rozvoj podľa ", lineData["LineIndex"], ". stĺpca, lebo obsahuje jeden nenulový prvok."}]
+    "Použijeme Laplaceov rozvoj podľa " <> ToString[lineData["LineIndex"]] <> ". riadku, lebo obsahuje jeden nenulový prvok.",
+    "Použijeme Laplaceov rozvoj podľa " <> ToString[lineData["LineIndex"]] <> ". stĺpca, lebo obsahuje jeden nenulový prvok."
   ];
 
   cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
@@ -3365,11 +3361,7 @@ Module[
       ];
     ];
 
-    AppendTo[content, Row[{
-      "Determinant matice 3×3 vypočítame pomocou ",
-      Style["Sarrusovho pravidla", Bold],
-      "."
-    }]];
+    AppendTo[content, "Determinant matice 3×3 vypočítame pomocou Sarrusovho pravidla."];
 
     AppendTo[content, cramer3x3VisualPanel[label, matrix]];
     AppendTo[content, Row[{cramerDetLabel[label], " = ", cramer3x3FormulaDisplay[matrix]}]];
@@ -3925,13 +3917,7 @@ Module[
 
     AppendTo[
       content,
-      Row[{
-        "Voľnú premennú zvolíme ",
-        paramVar,
-        " = ",
-        TraditionalForm[paramSymbol],
-        "."
-      }]
+      "Voľnú premennú zvolíme " <> ToString[paramVar] <> " = " <> ToString[paramSymbol] <> "."
     ];
 
     AppendTo[
@@ -4938,29 +4924,29 @@ Module[
         pair = pickBestElimPair[nonZeroRows, elimCol, A];
         {i1, i2} = pair;
 
-        AppendTo[content, Style["a) Kombinácia " <> ToString[i1] <> ". a " <> ToString[i2] <> ". rovnice:", Italic]];
+        AppendTo[content, "a) Kombinácia " <> ToString[i1] <> ". a " <> ToString[i2] <> ". rovnice:"];
         With[{res = reducePair3[A[[i1]], b[[i1]], A[[i2]], b[[i2]], elimCol, vars]},
           content = Join[content, res["Content"]]; rowIV = res["Row"]; rhsIV = res["RHS"];
         ];
 
         rowV = A[[iKeep]]; rhsV = b[[iKeep]];
-        AppendTo[content, Style["b) Rovnica bez vyrušovanej premennej (použijeme ju priamo):", Italic]];
+        AppendTo[content, "b) Rovnica bez vyrušovanej premennej (použijeme ju priamo):"];
         AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{rowV, vars}]], rhsV, ""}}]],
         {i1, i2} = zeroRows[[1 ;; 2]];
         rowIV = A[[i1]]; rhsIV = b[[i1]];
         rowV = A[[i2]]; rhsV = b[[i2]];
 
-        AppendTo[content, Style["a) Rovnice bez vyrušovanej premennej (použijeme ich priamo):", Italic]];
+        AppendTo[content, "a) Rovnice bez vyrušovanej premennej (použijeme ich priamo):"];
         AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{rowIV, vars}]], rhsIV, ""}, {renderTermsRow[Transpose[{rowV, vars}]], rhsV, ""}}]];
       ],
       twoCombosQ = True;
 
-      AppendTo[content, Style["a) Kombinácia 1. a 2. rovnice:", Italic]];
+      AppendTo[content, "a) Kombinácia 1. a 2. rovnice:"];
       With[{res = reducePair3[A[[1]], b[[1]], A[[2]], b[[2]], elimCol, vars]},
         content = Join[content, res["Content"]]; rowIV = res["Row"]; rhsIV = res["RHS"];
       ];
 
-      AppendTo[content, Style["b) Kombinácia 1. a 3. rovnice:", Italic]];
+      AppendTo[content, "b) Kombinácia 1. a 3. rovnice:"];
       With[{res = reducePair3[A[[1]], b[[1]], A[[3]], b[[3]], elimCol, vars]},
         content = Join[content, res["Content"]]; rowV = res["Row"]; rhsV = res["RHS"];
       ];
@@ -5184,7 +5170,7 @@ Module[
 
     Do[
       idx = otherRowsIdx[[k]];
-      AppendTo[content, Style["Dosadenie do " <> ToString[idx] <> ". rovnice:", Italic]];
+      AppendTo[content, "Dosadenie do " <> ToString[idx] <> ". rovnice:"];
       With[{res = substituteIntoEquationSteps[A[[idx]], b[[idx]], vars, substRule, remVars]},
         AppendTo[content, alignedEquations[res["Content"]]];
         AppendTo[A2, res["NewEq"][[1]]];
@@ -5750,7 +5736,7 @@ Module[
     vars = data["Vars"];
 
     appendStepHeader[content, "Prepis matice do tvaru (A | E)"];
-    AppendTo[content, Row[{"K matici A pripíšeme jednotkovú maticu E. Na oboch stranách budeme robiť rovnaké riadkové úpravy. Cieľom je dostať vľavo E, vpravo potom vznikne ", inverseASymbol[], "."}]];
+    AppendTo[content, "K matici A pripíšeme jednotkovú maticu E. Na oboch stranách budeme robiť rovnaké riadkové úpravy. Cieľom je dostať vľavo E, vpravo potom vznikne A^-1."];
 
     augInv = Join[A, IdentityMatrix[n], 2];
     AppendTo[content, alignedAugmentedMatrixInverse[augInv, {}, <|"LeftLabel" -> Style["A", Italic], "RightLabel" -> Style["E", Italic]|>]];
@@ -5808,14 +5794,14 @@ Module[
       {i, n, 2, -1}
     ];
 
-    appendStepHeader[content, Row[{"Hotový tvar"}]];
-    AppendTo[content, Row[{"Po úpravách je vľavo jednotková matica E. Pravá časť je preto inverzná matica ", inverseASymbol[], "."}]];
+    appendStepHeader[content, "Hotový tvar"];
+    AppendTo[content, "Po úpravách je vľavo jednotková matica E. Pravá časť je preto inverzná matica A^-1."];
     AppendTo[content, alignedAugmentedMatrixInverse[augInv, {}, <|"LeftLabel" -> Style["E", Italic], "RightLabel" -> inverseASymbol[]|>]];
 
     invMatrix = augInv[[All, n + 1 ;; 2 n]];
 
-    appendStepHeader[content, Row[{"Výpočet riešenia"}]];
-    AppendTo[content, Row[{"Keď už poznáme inverznú maticu, riešenie sústavy vypočítame zo vzťahu x = ", inverseASymbol[], " \[CenterDot] b."}]];
+    appendStepHeader[content, "Výpočet riešenia"];
+    AppendTo[content, "Keď už poznáme inverznú maticu, riešenie sústavy vypočítame zo vzťahu x = A^-1 · b."];
     AppendTo[content, "Tip: Keď prejdete kurzorom nad prvky výsledného vektora x, zobrazí sa skalárny súčin, z ktorého dané číslo vzniklo."];
 
     xResult = invMatrix . b;
@@ -5849,7 +5835,7 @@ Module[
     ]];
 
     appendStepHeader[content, "Skúška správnosti"];
-    AppendTo[content, Row[{"Najprv overíme, že A \[CenterDot] ", inverseASymbol[], " = E. Potom ešte skontrolujeme, že vypočítané riešenie spĺňa A \[CenterDot] x = b."}]];
+    AppendTo[content, "Najprv overíme, že A · A^-1 = E. Potom ešte skontrolujeme, že vypočítané riešenie spĺňa A · x = b."];
 
     Module[{ product, isIdentity},
       product = Together[A . invMatrix];
@@ -5886,7 +5872,7 @@ Module[
     xSymbols = vars;
     taskFormat = Lookup[data, "TaskFormat", "EQUATIONS"];
 
-    addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
+    addSubHeader[text_] := AppendTo[content, text];
     addFormula[expr_] := AppendTo[content, expr];
     resultStyle[expr_] := Style[expr, Bold, Blue];
 
@@ -6321,7 +6307,7 @@ Module[
     ySymbols = Table[luScalarSymbol["y", k], {k, 1, n}];
     taskFormat = Lookup[data, "TaskFormat", "EQUATIONS"];
 
-    addSubHeader[text_] := AppendTo[content, Style[text, Bold, FontSize -> 15]];
+    addSubHeader[text_] := AppendTo[content, text];
     addFormula[expr_] := AppendTo[content, expr];
 
     prettyMatrix[label_, mat_, bold_List : {}] := labeledMatrixBlock[label, styledPlainMatrix[mat, <|"BoldPositions" -> bold|>]];
@@ -6422,7 +6408,7 @@ Module[
 
     If[choleskyData === $Failed,
       appendStepHeader[content, "Výsledok"];
-      AppendTo[content, Row[{"Pre túto maticu sa nepodarilo zostrojiť Choleského rozklad A = L \[CenterDot] ", transposeLSymbol[], "."}]];
+      AppendTo[content, "Pre túto maticu sa nepodarilo zostrojiť Choleského rozklad A = L · L^T."];
       Return[<|"Content" -> content, "Solution" -> Missing["NotAvailable"]|>]
     ];
 
@@ -6430,7 +6416,7 @@ Module[
     LT = ConstantArray[0, {n, n}];
 
     appendStepHeader[content, "Inicializácia matice L"];
-    AppendTo[content, Row[{"Maticu L budeme vypĺňať postupne po stĺpcoch. Z nej potom automaticky dostaneme transponovanú maticu ", transposeLSymbol[], "."}]];
+    AppendTo[content, "Maticu L budeme vypĺňať postupne po stĺpcoch. Z nej potom automaticky dostaneme transponovanú maticu L^T."];
     addMatrixPair[L, LT];
 
     Do[
@@ -6462,12 +6448,12 @@ Module[
     y = choleskyData["Y"];
     x = choleskyData["X"];
 
-    appendStepHeader[content, Row[{"Hotový rozklad A = L \[CenterDot] ", transposeLSymbol[]}]];
-    AppendTo[content, Row[{"Po výpočte máme dolnú trojuholníkovú maticu L a jej transponovanú maticu ", transposeLSymbol[], "."}]];
+    appendStepHeader[content, "Hotový rozklad A = L · L^T"];
+    AppendTo[content, "Po výpočte máme dolnú trojuholníkovú maticu L a jej transponovanú maticu L^T."];
     addMatrixPair[L, LT, currentLBoldPositions[n], currentLTBoldPositions[n]];
 
-    appendStepHeader[content, Row[{"Overenie rozkladu L \[CenterDot] ", transposeLSymbol[], " = A"}]];
-    AppendTo[content, Row[{"Skontrolujeme, že súčin L \[CenterDot] ", transposeLSymbol[], " sa rovná matici A."}]];
+    appendStepHeader[content, "Overenie rozkladu L · L^T = A"];
+    AppendTo[content, "Skontrolujeme, že súčin L · L^T sa rovná matici A."];
     AppendTo[content, "Tip: Keď prejdete kurzorom nad prvky výslednej matice, zobrazí sa výpočet, z ktorého dané číslo vzniklo."];
 
     productCheck = Together[L . LT];
@@ -6493,8 +6479,8 @@ Module[
 
     addVector["y", y];
 
-    appendStepHeader[content, Row[{"Riešenie sústavy ", transposeLSymbol[], " \[CenterDot] x = y"}]];
-    AppendTo[content, Row[{"Potom vyriešime sústavu ", transposeLSymbol[], " \[CenterDot] x = y. Keďže ", transposeLSymbol[], " je horná trojuholníková matica, použijeme spätné dosadzovanie."}]];
+    appendStepHeader[content, "Riešenie sústavy L^T · x = y"];
+    AppendTo[content, "Potom vyriešime sústavu L^T · x = y. Keďže L^T je horná trojuholníková matica, použijeme spätné dosadzovanie."];
     AppendTo[content, alignedAugmentedMatrix[augFromAb[LT, y], {}, <|"LeftLabel" -> transposeLSymbol[], "RightLabel" -> Style["y", Italic]|>]];
 
     tmp = appendTriangularSubstitutionSteps[
@@ -6510,7 +6496,7 @@ Module[
     content = tmp[[2]];
 
     appendStepHeader[content, "Skúška správnosti"];
-    AppendTo[content, Row[{"Skontrolujeme rozklad A = L \[CenterDot] ", transposeLSymbol[], ", pomocnú sústavu L \[CenterDot] y = b, sústavu ", transposeLSymbol[], " \[CenterDot] x = y aj pôvodnú sústavu A \[CenterDot] x = b."}]];
+    AppendTo[content, "Skontrolujeme rozklad A = L · L^T, pomocnú sústavu L · y = b, sústavu L^T · x = y aj pôvodnú sústavu A · x = b."];
 
     lowerCheck = Together[L . y];
     upperCheck = Together[LT . x];
@@ -6704,13 +6690,7 @@ Module[
 
           AppendTo[
             content,
-            Row[{
-              "Voľnú premennú zvolíme ",
-              varsNow[[1]],
-              " = ",
-              TraditionalForm[paramSymbol],
-              "."
-            }]
+            "Voľnú premennú zvolíme " <> ToString[varsNow[[1]]] <> " = " <> ToString[paramSymbol] <> "."
           ];
 
           AppendTo[
@@ -6726,10 +6706,7 @@ Module[
 
             AppendTo[
               content,
-              Style[
-                "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej pivotnej rovnice:",
-                Italic
-              ]
+              "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej pivotnej rovnice:"
             ];
 
             back = config["BackFn"][item, solMap];
@@ -7368,7 +7345,7 @@ Module[
       "ScrambleFn" -> genScrambleCholesky,
       "StepsFn" -> stepsCholesky,
       "OnlyOneSolutionQ" -> True,
-      "TaskText" -> Row[{"Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L \[CenterDot] ", transposeLSymbol[], ". Potom vyriešte sústavy L \[CenterDot] y = b a ", transposeLSymbol[], " \[CenterDot] x = y."}],
+      "TaskText" -> "Rozložte maticu sústavy pomocou Choleského rozkladu v tvare A = L · L^T. Potom vyriešte sústavy L · y = b a L^T · x = y.",
       "ResultPrinter" -> printResultCholesky,
       "UseForwardBoundRetry" -> True,
       "ForwardBoundAugFn" -> Function[data, data],
