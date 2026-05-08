@@ -1,10 +1,10 @@
 Module[{
-  difficulty = "MEDIUM",
-  method = "GaussJordan",
-  solutionType = "INFINITE",
-  taskFormat = "EQUATIONS",
-  visualization = False,
-  
+  difficulty = "MEDIUM", (* EASY/MEDIUM/HARD *)
+  method = "ElemGJ", (* Triangular/Gauss/GaussJordan/GaussJordanPivot/ ElemGJ/Inverse/LU/Cholesky/Cramer/Elimination/Substitution *)
+  solutionType = "ONE", (* ONE/NONE/INFINITE *)
+  taskFormat = "MATRIX", (* EQUATIONS/MATRIX *)
+  visualization = False, (* True/False *)
+
   text, latex, img, emit, tex, makeSvgUnique, toBlock, collectBlocks, stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
   vectorToLaTeX, systemToLaTeX, matrixEquationToLaTeX, imageExprQ, bRange, maxBounds, bounds, maxRetryCount, equationMaxRetryCount,
   elemStepCounter = 0, elemMatrixCounter = 0, DimensionByMethodDifficulty,
