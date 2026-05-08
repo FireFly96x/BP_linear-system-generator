@@ -2,7 +2,7 @@
 Module[{
   difficulty = "MEDIUM", method = "GaussJordan",
   solutionType = "ONE", taskFormat = "EQUATIONS",
-  visualization = False, text, latex, img, emit, tex, toBlock, collectBlocks, stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
+  visualization = False, text, latex, img, emit, tex, makeSvgUnique, toBlock, collectBlocks, stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
   vectorToLaTeX, systemToLaTeX, matrixEquationToLaTeX, imageExprQ, bRange, maxBounds, bounds, maxRetryCount, equationMaxRetryCount,
   elemStepCounter = 0, elemMatrixCounter = 0, DimensionByMethodDifficulty,
   GenCholesky, GenCramer, GenElemGJ, GenElimination, GenGauss, GenGaussJordan, GenGaussJordanPivot, GenInverse, GenLU, GenSubstitution, GenTriangular,
@@ -42,10 +42,33 @@ Module[{
   text[s_] := <|"type" -> "text", "content" -> ToString[s]|>;
   latex[s_] := <|"type" -> "latex", "content" -> ToString[s]|>;
 
+  makeSvgUnique[svg_String] := Module[{prefix, ids, rules},
+    prefix = "m" <> StringReplace[CreateUUID[], "-" -> ""] <> "_";
+
+    ids = DeleteDuplicates @ StringCases[
+      svg,
+      "id=\"" ~~ id : Shortest[__] ~~ "\"" :> id
+    ];
+
+    rules = Flatten @ Table[
+      {
+        "id=\"" <> id <> "\"" -> "id=\"" <> prefix <> id <> "\"",
+        "href=\"#" <> id <> "\"" -> "href=\"#" <> prefix <> id <> "\"",
+        "xlink:href=\"#" <> id <> "\"" -> "xlink:href=\"#" <> prefix <> id <> "\"",
+        "url(#" <> id <> ")" -> "url(#" <> prefix <> id <> ")",
+        "'#" <> id <> "'" -> "'#" <> prefix <> id <> "'",
+        "\"#" <> id <> "\"" -> "\"#" <> prefix <> id <> "\""
+      },
+      {id, ids}
+    ];
+
+    StringReplace[svg, rules]
+  ];
+
   img[e_] := Module[{svg},
     svg = Quiet @ Check[ExportString[e, "SVG"], $Failed];
     If[StringQ[svg] && StringContainsQ[svg, "<svg"],
-      <|"type" -> "svg", "content" -> svg|>,
+      <|"type" -> "svg", "content" -> makeSvgUnique[svg]|>,
       latex[tex[e]]
     ]
   ];
@@ -72,7 +95,7 @@ Module[{
       "\\end{pmatrix}";
 
   systemToLaTeX[A_List, b_List, vars_List] := Module[
-    {varNames, coeffTeX, varTeX, formatTerm, formatRow, rows},
+    {varNames, coeffTeX, varTeX, termTeX, rowTeX, rows},
 
     coeffTeX[c_] := ToString[TeXForm[c]];
 
@@ -87,7 +110,7 @@ Module[{
 
     varNames = varTeX /@ vars;
 
-    formatTerm[c_, varName_String, firstQ_] := Module[
+    termTeX[c_, varName_, firstQ_] := Module[
       {absC, sign, coeffPart},
 
       If[TrueQ[c == 0], Return[""]];
@@ -95,39 +118,40 @@ Module[{
       absC = Abs[c];
 
       sign = Which[
-        firstQ && TrueQ[c < 0], "-",
-        firstQ, "",
+        TrueQ[firstQ] && TrueQ[c < 0], "-",
+        TrueQ[firstQ], "",
         TrueQ[c < 0], " - ",
         True, " + "
       ];
 
       coeffPart = If[TrueQ[absC == 1], "", coeffTeX[absC]];
 
-      sign <> coeffPart <> varName
+      sign <> coeffPart <> ToString[varName]
     ];
 
-    formatRow[row_List, rhs_] := Module[
-      {positions, terms},
+    rowTeX[row_List, rhs_] := Module[
+      {terms = {}, firstQ = True, term},
 
-      positions = Flatten @ Position[row, c_ /; !TrueQ[c == 0]];
+      Do[
+        term = termTeX[row[[j]], varNames[[j]], firstQ];
 
-      terms = Table[
-        formatTerm[
-          row[[positions[[k]]]],
-          varNames[[positions[[k]]]],
-          k == 1
+        If[term =!= "",
+          AppendTo[terms, term];
+          firstQ = False
         ],
-        {k, 1, Length[positions]}
+        {j, 1, Length[row]}
       ];
 
-      terms = Select[terms, StringQ[#] && # =!= "" &];
-
-      If[terms === {}, "0", StringJoin[terms]] <>
-          " &= " <>
-          coeffTeX[rhs]
+      If[terms === {},
+        "0 &= " <> coeffTeX[rhs],
+        StringJoin[terms] <> " &= " <> coeffTeX[rhs]
+      ]
     ];
 
-    rows = MapThread[formatRow, {A, b}];
+    rows = Table[
+      rowTeX[A[[i]], b[[i]]],
+      {i, 1, Length[A]}
+    ];
 
     "\\begin{aligned}" <>
         StringRiffle[rows, " \\\\ "] <>
@@ -331,7 +355,7 @@ Module[{
   (* ~-~-~ ROW OPERATIONS - delenie, kombinácia ~-~-~ *)
 
   (* note pre delenie riadku *)
-  rowNoteDivide[i_, p_] := Row[{"R", i, " \[LeftArrow] R", i, " / ", p}];
+  rowNoteDivide[i_, p_] := "R" <> ToString[i] <> " \[LeftArrow] R" <> ToString[i] <> " / " <> ToString[p];
   rowApplyDivide[aug_, i_Integer, p_Integer] := ReplacePart[aug, i -> (aug[[i]]/p)];
 
   augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := svgRowBlock[
@@ -641,16 +665,28 @@ Module[{
     If[g > 1, row/g, If[first === -1, -row, row]]
   ];
 
-  rowNoteSwap[i_, k_] := Row[{"R", i, " \[LeftRightArrow] R", k}];
+  rowNoteSwap[i_, k_] := "R" <> ToString[i] <> " \[LeftRightArrow] R" <> ToString[k];
 
   rowApplySwap[aug_, i_Integer, k_Integer] := ReplacePart[aug, {i -> aug[[k]], k -> aug[[i]]}];
 
-  rowNoteElim[r_, i_, p2_, a2_] := Module[{ leftPart, rightPart, op},
-    leftPart = If[p2 === 1, Row[{"R", r}], Row[{p2, "\[CenterDot]", "R", r}]];
-    rightPart = If[Abs[a2] === 1, Row[{"R", i}], Row[{Abs[a2], "\[CenterDot]", "R", i}]];
+  rowNoteElim[r_, i_, p2_, a2_] := Module[
+    {leftPart, rightPart, op},
+
+    leftPart = If[
+      p2 === 1,
+      "R" <> ToString[r],
+      ToString[p2] <> "\[CenterDot]R" <> ToString[r]
+    ];
+
+    rightPart = If[
+      Abs[a2] === 1,
+      "R" <> ToString[i],
+      ToString[Abs[a2]] <> "\[CenterDot]R" <> ToString[i]
+    ];
+
     op = If[a2 < 0, " + ", " - "];
 
-    Row[{"R", r, " \[LeftArrow] ", leftPart, op, rightPart}]
+    "R" <> ToString[r] <> " \[LeftArrow] " <> leftPart <> op <> rightPart
   ];
 
   rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{ p, a, g1, p2, a2, rowRaw, g2, div, rowFinal, augRaw, augFinal},
@@ -737,7 +773,13 @@ Module[{
       Item[x_, ___] :> x,
       Framed[x_, ___] :> x
     };
-    TraditionalForm[v]
+
+    v = Chop[v];
+
+    If[TrueQ[v == 0],
+      0,
+      TraditionalForm[v]
+    ]
   ];
 
   matrixLabelExpr[value_] := Module[{v = value},
@@ -800,8 +842,11 @@ Module[{
     cellW = Lookup[opts, "CellWidth", 1.05];
     cellH = Lookup[opts, "CellHeight", 0.68];
     labelH = If[labelsQ, 0.48, 0];
-    noteW = If[notes === {}, 0, 2.2];
-    w = nCols cellW + noteW + 0.75;
+    noteW = If[
+      notes === {},
+      0,
+      Max[2.8, 0.18 Max[StringLength /@ (ToString /@ notes2)]]
+    ];    w = nCols cellW + noteW + 0.75;
     h = nRows cellH + labelH + 0.22;
 
     bgFor[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
@@ -888,7 +933,7 @@ Module[{
     ];
     svg = Quiet @ Check[ExportString[graphics, "SVG"], $Failed];
     If[StringQ[svg] && StringContainsQ[svg, "<svg"],
-      <|"type" -> "svg", "content" -> svg, "svgSpec" -> spec|>,
+      <|"type" -> "svg", "content" -> makeSvgUnique[svg], "svgSpec" -> spec|>,
       latex[tex[graphics]]
     ]
   ];
