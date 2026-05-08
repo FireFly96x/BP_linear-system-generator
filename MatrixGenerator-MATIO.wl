@@ -1,68 +1,43 @@
 (* Change difficulty to "EASY", "MEDIUM", or "HARD" *)
 Module[{
-    difficulty = "MEDIUM", method = "GaussJordan",
+  difficulty = "MEDIUM", method = "GaussJordan",
   solutionType = "ONE", taskFormat = "EQUATIONS",
-    visualization = False, text, latex, img,
-    emit, tex, toBlock, collectBlocks,
-    stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
-    vectorToLaTeX, systemToLaTeX, matrixEquationToLaTeX, imageExprQ,
-    bRange, maxBounds, bounds, maxRetryCount,
-    equationMaxRetryCount, elemStepCounter = 0, elemMatrixCounter = 0, DimensionByMethodDifficulty,
-    GenCholesky, GenCramer, GenElemGJ, GenElimination,
-    GenGauss, GenGaussJordan, GenGaussJordanPivot, GenInverse,
-    GenLU, GenSubstitution, GenTriangular, ResolveSolutionType,
-    ValidateDifficulty, ValidateSolutionType, ValidateTaskFormat, abFromAug,
-    addHardDisplayIfNeeded, addNote, additionEquationRow2, alignedAugmentedMatrix,
-    alignedAugmentedMatrixInverse, alignedEquations, appendElemTransition, appendEquationInfiniteParametrization,
-    appendEquationVerification, appendNoneConclusionAndStop, appendStepHeader, appendTriangularSubstitutionSteps,
-    applyElemCombineStep, applyElemDivideStep, applyElemMultiplyStep, applyJordanElimStep,
-    applyJordanSwapStep, augFromAb, augRender2, augRender2Inverse,
-    augRender3, augRender3Inverse, backSubstituteVariableSteps, buildCholeskyDiagonalLines,
-    buildCholeskyOffDiagonalLines, buildEquationVars, buildHardDisplay, buildHardEq,
-    buildMatrixVars, choleskyDecompositionWithinBoundsQ, choleskyNumericSquareSum, choleskySolveData,
-    choleskySqrtDisplay, choleskySymbolicProductSum, choleskySymbolicSquareSum, chooseInfiniteEquationRelation,
-    chooseParametrization, coeffVal, contradictionRowQ, cramer3x3FormulaDisplay,
-    cramer3x3NegativeColors, cramer3x3PositiveColors, cramer3x3StyledMatrixByMode, cramer3x3VisualPanel,
-    cramerAuxiliaryMatrixPanel, cramerDetLabel, cramerDeterminantsWithinBoundsQ, cramerFactor,
-    cramerLabeledMatrixGrid, cramerLaplaceExplanation, cramerLaplaceReductionPanel, cramerMatrixCard,
-    cramerMatrixLabel, cramerMinor, cramerRandomInvertible3x3, cramerRandomNonzeroValue,
-    cramerSignedValueSum, cramerSingletonLineData, cramerSolveData, cramerZeroRowIndex,
-    divNote, dotProductTooltipMatrix, matrixCellExpr, matrixCellStyle, matrixLabelExpr, matrixSpec,
-    svgBlockFromSpec, svgRowBlock, svgColumnBlock, elemMatrixScale, eliminationStart2,
-    equationClass, equationOperationCount, equationSolutionTypeMatchesQ, findContradictionRow,
-    formatLinearExpr, formatSubstLHS, formatSubstOnceLHS, gaussForceAdjacentPivotSwap,
-    gaussForwardEliminationTrace, gaussForwardEliminationWithinBoundsQ, gaussJordanEliminationTrace, gaussJordanEliminationWithinBoundsQ,
-    gaussObservedPivotSwapColumns, gaussPivotRowByMinAbs, gaussPivotRowByNonzero, gaussPivotSwapExplanation,
-    gaussPlannedPivotSwapColumns, genScrambleCholesky, genScrambleCramer, genScrambleElimination,
-    genScrambleGauss, genScrambleGaussJordanPivot, genScrambleLU, genScrambleSubstitution,
-    genScrambleTriang, generateCramerEasyMatrix, generateCramerHardMatrix, generateCramerMediumMatrix,
-    generateData, generateDataWithBounds, generateEquationDataWithBounds, hardNormalizationSteps3,
-    infiniteSolutionFromSolvedAug, inverseASymbol, isolateVarFromCoeffEqSteps, kSet,
-    kSetGauss, kSetTri, labeledMatrixBlock, linearDecompose,
-    luCoeffTimes, luDecompositionWithinBoundsQ, luEntrySymbol, luFactorDisplay,
-    luLinearCombinationDisplay, luScalarSymbol, luSolveData, luSumDisplay,
-    luWrappedSumDisplay, makeDiagonalAug, makeDiagonalEquationSystem, makeDirect2x2OneEquationSystem,
-    makeDirect2x2OneEquationSystemForSolution, makeDirect3x3OneEquationSystem, makeStepHeader, matrixMaxAbs,
-    multNote, namedAugmentedStateCard, nonzeroRange, normalizeEquationRow,
-    normalizeRow, orderTermsByVars, pickBestElimPair, pickElimVar2,
-    pickElimVar3, pickHardMultipliers15, pickSubstRow3, pickSubstSolve2,
-    pickSubstSolve3, printDefaultResult, printEquationTaskBlock, printFormulaCell,
-    printResultBlock, printResultCholesky, printResultCramer, printResultInverse,
-    printResultLU, printTaskBlock, printTextBlock, printTextCell,
-    reduce3to2, reduce3to2BySubstitution, reduceOnceByElimination, reduceOnceBySubstitution,
-    reducePair3, renderCramer3x3Det, renderCramer4x4Reduction, renderCramer5x5Reduction,
-    renderCramerDeterminant, renderTermsRow, resultEquationLine, rowAbsGCD,
-    rowAppendElimStep, rowAppendElimStepInverse, rowApplyDivide, rowApplyElimStable,
-    rowApplySwap, rowNoteDivide, rowNoteElim, rowNoteSwap,
-    runEquationGenerator, runMatrixGenerator, scaleTerms, scrambleEquationRows,
-    signBtwTerms, solutionRow, solveForVarSteps, solveOneVarEquationSteps,
-    stepsCholesky, stepsCramer, stepsElimination, stepsEquationCore,
-    stepsGauss, stepsGaussJordanShared, stepsInverseMatrix, stepsLU,
-    stepsSubstitution, stepsTriangular, strongKSet, styledPlainMatrix,
-    substNote, substituteIntoEquationSteps, systemIntersection3, tft,
-    transposeLSymbol, validEquationDataQ, verificationSteps, verificationStepsEquation,
-    verificationStepsEquationInfinite, verificationStepsInfinite, verificationStepsNone, visualize2,
-    visualize3, withStepCounter, wrapNegValue, zeroCoeff3},
+  visualization = False, text, latex, img, emit, tex, toBlock, collectBlocks, stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
+  vectorToLaTeX, systemToLaTeX, matrixEquationToLaTeX, imageExprQ, bRange, maxBounds, bounds, maxRetryCount, equationMaxRetryCount,
+  elemStepCounter = 0, elemMatrixCounter = 0, DimensionByMethodDifficulty,
+  GenCholesky, GenCramer, GenElemGJ, GenElimination, GenGauss, GenGaussJordan, GenGaussJordanPivot, GenInverse, GenLU, GenSubstitution, GenTriangular,
+  ResolveSolutionType, ValidateDifficulty, ValidateSolutionType, ValidateTaskFormat, abFromAug, addHardDisplayIfNeeded, addNote, additionEquationRow2,
+  alignedAugmentedMatrix, alignedAugmentedMatrixInverse, alignedEquations, appendElemTransition, appendEquationInfiniteParametrization,
+  appendEquationVerification, appendNoneConclusionAndStop, appendStepHeader, appendTriangularSubstitutionSteps, applyElemCombineStep,
+  applyElemDivideStep, applyElemMultiplyStep, applyJordanElimStep, applyJordanSwapStep, augFromAb, augRender2, augRender2Inverse,
+  augRender3, augRender3Inverse, backSubstituteVariableSteps, buildCholeskyDiagonalLines, buildCholeskyOffDiagonalLines, buildEquationVars,
+  buildHardDisplay, buildHardEq, buildMatrixVars, choleskyDecompositionWithinBoundsQ, choleskyNumericSquareSum, choleskySolveData,
+  choleskySqrtDisplay, choleskySymbolicProductSum, choleskySymbolicSquareSum, chooseInfiniteEquationRelation, chooseParametrization, coeffVal,
+  contradictionRowQ, cramer3x3FormulaDisplay, cramer3x3NegativeColors, cramer3x3PositiveColors, cramer3x3StyledMatrixByMode, cramer3x3VisualPanel,
+  cramerAuxiliaryMatrixPanel, cramerDetLabel, cramerDeterminantsWithinBoundsQ, cramerFactor, cramerLabeledMatrixGrid, cramerLaplaceExplanation,
+  cramerLaplaceReductionPanel, cramerMatrixCard, cramerMatrixLabel, cramerMinor, cramerRandomInvertible3x3, cramerRandomNonzeroValue,
+  cramerSignedValueSum, cramerSingletonLineData, cramerSolveData, cramerZeroRowIndex, divNote, dotProductTooltipMatrix, matrixCellExpr,
+  matrixCellStyle, matrixLabelExpr, matrixSpec, svgBlockFromSpec, svgRowBlock, svgColumnBlock, elemMatrixScale, eliminationStart2,
+  equationClass, equationOperationCount, equationSolutionTypeMatchesQ, findContradictionRow, formatLinearExpr, formatSubstLHS, formatSubstOnceLHS,
+  gaussForceAdjacentPivotSwap, gaussForwardEliminationTrace, gaussForwardEliminationWithinBoundsQ, gaussJordanEliminationTrace,
+  gaussJordanEliminationWithinBoundsQ, gaussObservedPivotSwapColumns, gaussPivotRowByMinAbs, gaussPivotRowByNonzero, gaussPivotSwapExplanation,
+  gaussPlannedPivotSwapColumns, genScrambleCholesky, genScrambleCramer, genScrambleElimination, genScrambleGauss, genScrambleGaussJordanPivot,
+  genScrambleLU, genScrambleSubstitution, genScrambleTriang, generateCramerEasyMatrix, generateCramerHardMatrix, generateCramerMediumMatrix,
+  generateData, generateDataWithBounds, generateEquationDataWithBounds, hardNormalizationSteps3, infiniteSolutionFromSolvedAug, inverseASymbol,
+  isolateVarFromCoeffEqSteps, kSet, kSetGauss, kSetTri, labeledMatrixBlock, linearDecompose, luCoeffTimes, luDecompositionWithinBoundsQ,
+  luEntrySymbol, luFactorDisplay, luLinearCombinationDisplay, luScalarSymbol, luSolveData, luSumDisplay, luWrappedSumDisplay, makeDiagonalAug,
+  makeDiagonalEquationSystem, makeDirect2x2OneEquationSystem, makeDirect2x2OneEquationSystemForSolution, makeDirect3x3OneEquationSystem,
+  makeStepHeader, matrixMaxAbs, multNote, namedAugmentedStateCard, nonzeroRange, normalizeEquationRow, normalizeRow, orderTermsByVars,
+  pickBestElimPair, pickElimVar2, pickElimVar3, pickHardMultipliers15, pickSubstRow3, pickSubstSolve2, pickSubstSolve3, printDefaultResult,
+  printEquationTaskBlock, printFormulaCell, printResultBlock, printResultCholesky, printResultCramer, printResultInverse, printResultLU,
+  printTaskBlock, printTextBlock, printTextCell, reduce3to2, reduce3to2BySubstitution, reduceOnceByElimination, reduceOnceBySubstitution,
+  reducePair3, renderCramer3x3Det, renderCramer4x4Reduction, renderCramer5x5Reduction, renderCramerDeterminant, renderTermsRow, resultEquationLine,
+  rowAbsGCD, rowAppendElimStep, rowAppendElimStepInverse, rowApplyDivide, rowApplyElimStable, rowApplySwap, rowNoteDivide, rowNoteElim, rowNoteSwap,
+  runEquationGenerator, runMatrixGenerator, scaleTerms, scrambleEquationRows, signBtwTerms, solutionRow, solveForVarSteps, solveOneVarEquationSteps,
+  stepsCholesky, stepsCramer, stepsElimination, stepsEquationCore, stepsGauss, stepsGaussJordanShared, stepsInverseMatrix, stepsLU,
+  stepsSubstitution, stepsTriangular, strongKSet, styledPlainMatrix, substNote, substituteIntoEquationSteps, systemIntersection3, tft,
+  transposeLSymbol, validEquationDataQ, verificationSteps, verificationStepsEquation, verificationStepsEquationInfinite, verificationStepsInfinite,
+  verificationStepsNone, visualize2, visualize3, withStepCounter, wrapNegValue, zeroCoeff3},
 
   text[s_] := <|"type" -> "text", "content" -> ToString[s]|>;
   latex[s_] := <|"type" -> "latex", "content" -> ToString[s]|>;
@@ -3062,7 +3037,7 @@ Module[{
     0.45
   ];
 
-    (* vykreslí determinant 3×3 štandardným vzorcom *)
+  (* vykreslí determinant 3×3 štandardným vzorcom *)
   renderCramer3x3Det[matrix_, label_] := Module[{ content = {}, value, knownQ, knownMatrices, knownPos, knownData},
     value = Together[Det[matrix]];
 
@@ -5344,10 +5319,10 @@ Module[{
             ]
           ],
           AppendTo[content, alignedAugmentedMatrix[aug, notes, If[
-              st === "ONE",
-              <|"LeftLabel" -> Style["I", Italic], "RightLabel" -> Style["x", Italic]|>,
-              <|"LeftLabel" -> Style["A", Italic], "RightLabel" -> Style["b", Italic]|>
-            ]]]
+            st === "ONE",
+            <|"LeftLabel" -> Style["I", Italic], "RightLabel" -> Style["x", Italic]|>,
+            <|"LeftLabel" -> Style["A", Italic], "RightLabel" -> Style["b", Italic]|>
+          ]]]
         ];
 
         If[st === "INFINITE",
@@ -6447,19 +6422,64 @@ Module[{
   ];
   (* ~-~-~ VERIFICATION STEPS ~-~-~ *)
 
-  verificationSteps[data_Association, sol_List] := Module[{ content = {}, A = data["A"], b = data["b"], n = data["n"], lhs},
+  verificationSteps[data_Association, sol_List] := Module[
+    {content = {}, A = data["A"], b = data["b"], vars = data["Vars"], n = data["n"],
+      solN, lhs, okQ, prodRow, sumRow},
+
+    solN = Together /@ sol;
+
     Do[
-      lhs = A[[i]] . sol;
-      AppendTo[content,
-        svgColumnBlock[
+      prodRow = Row @ Riffle[
+        DeleteCases[
+          MapThread[
+            If[#1 === 0,
+              Nothing,
+              Row[{#1, "\[CenterDot]", Style[wrapNegValue[#2], Bold]}]
+            ] &,
+            {A[[i]], solN}
+          ],
+          Nothing
+        ],
+        " + "
+      ];
+
+      sumRow = Row @ Riffle[
+        DeleteCases[
+          MapThread[
+            If[#1 === 0,
+              Nothing,
+              Together[#1 #2]
+            ] &,
+            {A[[i]], solN}
+          ],
+          Nothing
+        ],
+        " + "
+      ];
+
+      lhs = Together[A[[i]] . solN];
+      okQ = TrueQ[Simplify[lhs == b[[i]]]];
+
+      AppendTo[
+        content,
+        Grid[
           {
-            svgRowBlock[{Row[{"LS", i, ":  "}], styledPlainMatrix[{A[[i]]}], Style["\[CenterDot]", Bold], styledPlainMatrix[List /@ sol], Row[{" = ", tft[lhs]}]}, 0.18],
-            Row[{"PS", i, " = ", tft[b[[i]]]}],
-            If[lhs === b[[i]], Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]
+            {Row[{"LS", i, " = ", prodRow, " = ", sumRow, " = ", Style[tft[lhs], Bold]}]},
+            {Row[{"PS", i, " = ", Style[tft[b[[i]]], Bold]}]},
+            {
+              If[
+                okQ,
+                Style[Row[{"LS", i, " = PS", i, " (OK)"}], Darker[Green]],
+                Style[Row[{"LS", i, " \[NotEqual] PS", i, " (CHYBA)"}], Red]
+              ]
+            }
           },
-          0.16
+          Alignment -> Center,
+          Spacings -> {0, 0.4},
+          BaseStyle -> {FontSize -> 13}
         ]
-      ], {i, 1, n}
+      ],
+      {i, 1, n}
     ];
 
     content
