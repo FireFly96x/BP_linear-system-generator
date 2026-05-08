@@ -1,8 +1,11 @@
-(* Change difficulty to "EASY", "MEDIUM", or "HARD" *)
 Module[{
-  difficulty = "MEDIUM", method = "GaussJordan",
-  solutionType = "ONE", taskFormat = "EQUATIONS",
-  visualization = False, text, latex, img, emit, tex, makeSvgUnique, toBlock, collectBlocks, stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
+  difficulty = "MEDIUM",
+  method = "GaussJordan",
+  solutionType = "INFINITE",
+  taskFormat = "EQUATIONS",
+  visualization = False,
+  
+  text, latex, img, emit, tex, makeSvgUnique, toBlock, collectBlocks, stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
   vectorToLaTeX, systemToLaTeX, matrixEquationToLaTeX, imageExprQ, bRange, maxBounds, bounds, maxRetryCount, equationMaxRetryCount,
   elemStepCounter = 0, elemMatrixCounter = 0, DimensionByMethodDifficulty,
   GenCholesky, GenCramer, GenElemGJ, GenElimination, GenGauss, GenGaussJordan, GenGaussJordanPivot, GenInverse, GenLU, GenSubstitution, GenTriangular,
@@ -324,7 +327,7 @@ Module[{
     b = augS[[All, n + 1]];
 
     idxs = Lookup[data, "ParamIdxs", {data["ParamIdx"]}];
-    params = If[Length[idxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+    params = If[Length[idxs] === 1, {t}, {s, t}];
 
     solExprs = ConstantArray[0, n];
 
@@ -1789,7 +1792,7 @@ Module[{
         "b" -> b,
         "type" -> "INFINITE",
         "ParamIdx" -> dim,
-        "ParamSymbol" -> \[FormalT]
+        "ParamSymbol" -> t
       |>,
 
       "NONE",
@@ -3535,7 +3538,7 @@ Module[{
   ];
 
   chooseInfiniteEquationRelation[eqs_List, varsNow_List] := Module[
-    {paramSymbol = \[FormalT], candidates = {}, normalized, row, rhs, solveIdx, paramIdx,
+    {paramSymbol = t, candidates = {}, normalized, row, rhs, solveIdx, paramIdx,
       exprWithVars, exprWithParam, coeffParam, constParam, denScore, score},
 
     Do[
@@ -3953,9 +3956,9 @@ Module[{
     eqs = Thread[A . vars == b];
     candidates = List /@ vars;
     try[{v_}] := Module[{sol, rules, exprs, dens},
-      sol = Quiet @ Solve[eqs /. v -> \[FormalT], Complement[vars, {v}], Reals];
+      sol = Quiet @ Solve[eqs /. v -> t, Complement[vars, {v}], Reals];
       If[sol === {} || sol === $Failed, Return[Nothing]];
-      rules = Join[{v -> \[FormalT]}, sol[[1]]];
+      rules = Join[{v -> t}, sol[[1]]];
       exprs = Together /@ (vars /. rules);
       dens = Denominator /@ Rationalize[exprs, 0];
       <|"Var" -> v, "Exprs" -> exprs, "Score" -> Max[dens]|>
@@ -4145,7 +4148,7 @@ Module[{
 
     {extraLegStyles, extraLegLabels} = Switch[inter["Type"],
       "POINT", {{Black}, {Row[{"prienik: [", Sequence @@ Riffle[TraditionalForm /@ inter["Point"], ", "], "]"}]}},
-      "LINE", {{Black}, {Row[{"priesečník: ", TraditionalForm @ best["Exprs"], ", ", \[FormalT], "\[Element]", "\[DoubleStruckR]"}]}},
+      "LINE", {{Black}, {Row[{"priesečník: ", TraditionalForm @ best["Exprs"], ", ", t, "∈", "\[DoubleStruckR]"}]}},
       _, {{}, {}}
     ];
 
@@ -4186,7 +4189,7 @@ Module[{
 
     formalParams = DeleteDuplicates @ Cases[
       Values[solMap],
-      Alternatives @@ {\[FormalT], \[FormalS], \[FormalR]},
+      Alternatives @@ {t, s, \[FormalR]},
       Infinity
     ];
 
@@ -4966,7 +4969,7 @@ Module[{
 
     If[st === "INFINITE",
       paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-      paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+      paramSymbols = If[Length[paramIdxs] === 1, {t}, {s, t}];
 
       appendStepHeader[
         content,
@@ -5017,8 +5020,8 @@ Module[{
       AppendTo[
         content,
         If[Length[paramIdxs] === 1,
-          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalR].",
-          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalR]."
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné t ∈ R.",
+          "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné s, t ∈ R."
         ]
       ];
       content = Join[content, verificationStepsInfinite[data, solExprs]];
@@ -5101,7 +5104,7 @@ Module[{
     If[st === "INFINITE",
       Module[{ paramIdxs, paramSymbols},
         paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-        paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+        paramSymbols = If[Length[paramIdxs] === 1, {t}, {s, t}];
 
         appendStepHeader[content,
           If[Length[paramIdxs] === 1,
@@ -5148,8 +5151,8 @@ Module[{
         appendStepHeader[content, "Skúška správnosti"];
         AppendTo[content,
           If[Length[paramIdxs] === 1,
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalR].",
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalR]."
+            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné t ∈ R.",
+            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné s, t ∈ R."
           ]
         ];
         content = Join[content, verificationStepsInfinite[data, solLocal]];
@@ -5373,7 +5376,7 @@ Module[{
         If[st === "INFINITE",
           Module[{paramIdxs, paramSymbols},
             paramIdxs = Lookup[data, "ParamIdxs", {n - 1, n}];
-            paramSymbols = If[Length[paramIdxs] === 1, {\[FormalT]}, {\[FormalS], \[FormalT]}];
+            paramSymbols = If[Length[paramIdxs] === 1, {t}, {s, t}];
 
             appendStepHeader[content, "Analýza riadkov"];
 
@@ -5390,22 +5393,21 @@ Module[{
             AppendTo[content, alignedAugmentedMatrix[aug, notes, <|"ActiveRows" -> paramIdxs|>]];
 
             Do[
-              AppendTo[content,
-                Row[{
-                  "Premennú ",
-                  vars[[paramIdxs[[k]]]],
-                  " označíme parametrom ",
-                  TraditionalForm[paramSymbols[[k]]],
-                  "."
-                }]
+              AppendTo[
+                content,
+                "Premennú " <>
+                    ToString[vars[[paramIdxs[[k]]]]] <>
+                    " označíme parametrom " <>
+                    ToString[paramSymbols[[k]]] <>
+                    "."
               ];
 
               AppendTo[
                 content,
-                Grid[
-                  {{vars[[paramIdxs[[k]]]], "=", TraditionalForm[paramSymbols[[k]]]}},
-                  Alignment -> {{Right, Center, Left}},
-                  BaseStyle -> {FontSize -> 16}
+                latex[
+                  ToString[vars[[paramIdxs[[k]]]]] <>
+                      " = " <>
+                      ToString[paramSymbols[[k]]]
                 ]
               ],
               {k, 1, Length[paramIdxs]}
@@ -5440,8 +5442,8 @@ Module[{
 
             AppendTo[content,
               If[Length[paramIdxs] === 1,
-                "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalR].",
-                "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalS], \[FormalT] \[Element] \[DoubleStruckCapitalR]."
+                "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné t ∈ R.",
+                "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné s, t ∈ R."
               ]
             ];
 
@@ -6259,7 +6261,7 @@ Module[{
           appendStepHeader[content, "Skúška správnosti"];
           AppendTo[
             content,
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalR]."
+            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné t ∈ R."
           ];
 
           content = Join[
@@ -6294,7 +6296,7 @@ Module[{
       ];
 
       If[result === "INFINITE",
-        Module[{paramSymbol = \[FormalT], solMap, solExprs, item, back, backVar},
+        Module[{paramSymbol = t, solMap, solExprs, item, back, backVar},
 
           appendStepHeader[content, "Vyjadrenie riešenia pomocou parametra"];
 
@@ -6346,7 +6348,7 @@ Module[{
           appendStepHeader[content, "Skúška správnosti"];
           AppendTo[
             content,
-            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné \[FormalT] \[Element] \[DoubleStruckCapitalR]."
+            "Dosadíme parametrické riešenie do pôvodných rovníc. V každom riadku musí vyjsť identita pre ľubovoľné t ∈ R."
           ];
 
           content = Join[
@@ -6529,48 +6531,84 @@ Module[{
 
     content
   ];
-  verificationStepsNone[data_Association] := Module[{ content = {}, A = data["A"], b = data["b"], aug0, rA, rAug, n},
 
-    n = Length[b];
+  verificationStepsNone[data_Association] := Module[
+    {content = {}, A = data["A"], b = data["b"], aug0, rA, rAug},
+
     aug0 = augFromAb[A, b];
+
     rA = MatrixRank[A];
     rAug = MatrixRank[aug0];
 
-    AppendTo[content,
-      Grid[
-        {
-          {Row[{"hodnosť(A) = ", rA}]},
-          {Row[{"hodnosť([A|b]) = ", rAug}]},
-          {If[rA < rAug,
-            Style["hodnosť(A) < hodnosť([A|b])  \[Rule]  sústava nemá riešenie (OK)", Darker[Green]],
-            Style["hodnosti sa nerovnajú tak, ako majú pre spor - over postup (CHYBA)", Red]
-          ]}
-        },
-        Alignment -> Center,
-        Spacings -> {0, 0.4},
-        BaseStyle -> {FontSize -> 13}
+    AppendTo[content, "hodnosť(A) = " <> ToString[rA]];
+    AppendTo[content, "hodnosť([A|b]) = " <> ToString[rAug]];
+
+    If[rA < rAug,
+      AppendTo[
+        content,
+        "hodnosť(A) < hodnosť([A|b]) → sústava nemá riešenie (OK)"
+      ],
+      AppendTo[
+        content,
+        "hodnosti sa nerovnajú tak, ako majú pre spor - over postup (CHYBA)"
       ]
     ];
+
     content
   ];
-  verificationStepsInfinite[data_Association, solExprs_List] := Module[{ content = {}, A = data["A"], b = data["b"], n = data["n"], lhs, diff, okQ},
+
+  verificationStepsInfinite[data_Association, solExprs_List] := Module[
+    {content = {}, A = data["A"], b = data["b"], n = data["n"], lhs, diff, okQ,
+      rowTeX, vecTeX},
+
+    rowTeX[v_List] := "\\left(" <> StringRiffle[tex /@ v, ", "] <> "\\right)";
+    vecTeX[v_List] := "\\left(" <> StringRiffle[tex /@ v, ", "] <> "\\right)";
 
     Do[
       lhs = Together[A[[i]] . solExprs];
       diff = Together[lhs - b[[i]]];
       okQ = TrueQ[Simplify[diff == 0]];
 
-      AppendTo[content,
-        svgColumnBlock[
-          {
-            svgRowBlock[{Row[{"Riadok ", i, ":  "}], styledPlainMatrix[{A[[i]]}], Style["\[CenterDot]", Bold], styledPlainMatrix[List /@ solExprs], Row[{" = ", TraditionalForm[lhs]}]}, 0.18],
-            Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}],
-            Row[{"LS - PS = ", TraditionalForm[diff]}],
-            If[okQ, Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]
-          },
-          0.16
+      AppendTo[
+        content,
+        "Riadok " <> ToString[i] <> ":"
+      ];
+
+      AppendTo[
+        content,
+        latex[
+          "\\mathrm{LS}_{" <> ToString[i] <> "} = " <>
+              rowTeX[A[[i]]] <>
+              " \\cdot " <>
+              vecTeX[solExprs] <>
+              " = " <>
+              tex[lhs]
         ]
-      ], {i, 1, n}
+      ];
+
+      AppendTo[
+        content,
+        latex[
+          "\\mathrm{PS}_{" <> ToString[i] <> "} = " <> tex[b[[i]]]
+        ]
+      ];
+
+      AppendTo[
+        content,
+        latex[
+          "\\mathrm{LS}_{" <> ToString[i] <> "} - \\mathrm{PS}_{" <> ToString[i] <> "} = " <> tex[diff]
+        ]
+      ];
+
+      AppendTo[
+        content,
+        If[
+          okQ,
+          "LS = PS (OK)",
+          "LS \[NotEqual] PS (CHYBA)"
+        ]
+      ],
+      {i, 1, n}
     ];
 
     content
@@ -6613,8 +6651,8 @@ Module[{
       printTextCell["Sústava má nekonečne veľa riešení."];
 
       If[ListQ[paramSol],
-        params = DeleteDuplicates @ Cases[paramSol, \[FormalS] | \[FormalT] | \[FormalR], Infinity];
-        If[params === {}, params = {\[FormalT]}];
+        params = DeleteDuplicates @ Cases[paramSol, s | t | \[FormalR], Infinity];
+        If[params === {}, params = {t}];
 
         printFormulaCell[
           Row[{
@@ -6622,7 +6660,7 @@ Module[{
             Row @ Riffle[paramSol, ", "],
             "], ",
             Row @ Riffle[
-              (Row[{#, " \[Element] ", \[DoubleStruckCapitalR]}] & /@ params),
+              (Row[{#, " ∈ ", R}] & /@ params),
               ", "
             ],
             " }"
