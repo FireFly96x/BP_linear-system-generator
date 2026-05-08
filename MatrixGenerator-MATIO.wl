@@ -1,6 +1,7 @@
 (* Change difficulty to "EASY", "MEDIUM", or "HARD" *)
 Module[{
-    difficulty = "MEDIUM", method = "Substitution", solutionType = "ONE", taskFormat = "EQUATIONS",
+    difficulty = "MEDIUM", method = "GaussJordan",
+  solutionType = "ONE", taskFormat = "EQUATIONS",
     visualization = False, text, latex, img,
     emit, tex, toBlock, collectBlocks,
     stepHeaderQ, makeStepGroups, generatorError, matrixToLaTeX,
@@ -26,7 +27,8 @@ Module[{
     cramerLabeledMatrixGrid, cramerLaplaceExplanation, cramerLaplaceReductionPanel, cramerMatrixCard,
     cramerMatrixLabel, cramerMinor, cramerRandomInvertible3x3, cramerRandomNonzeroValue,
     cramerSignedValueSum, cramerSingletonLineData, cramerSolveData, cramerZeroRowIndex,
-    divNote, dotProductTooltipMatrix, elemMatrixScale, eliminationStart2,
+    divNote, dotProductTooltipMatrix, matrixCellExpr, matrixCellStyle, matrixLabelExpr, matrixSpec,
+    svgBlockFromSpec, svgRowBlock, svgColumnBlock, elemMatrixScale, eliminationStart2,
     equationClass, equationOperationCount, equationSolutionTypeMatchesQ, findContradictionRow,
     formatLinearExpr, formatSubstLHS, formatSubstOnceLHS, gaussForceAdjacentPivotSwap,
     gaussForwardEliminationTrace, gaussForwardEliminationWithinBoundsQ, gaussJordanEliminationTrace, gaussJordanEliminationWithinBoundsQ,
@@ -180,7 +182,7 @@ Module[{
     Nothing,
 
     AssociationQ[item] && KeyExistsQ[item, "type"] && KeyExistsQ[item, "content"],
-    item,
+    KeyDrop[item, "svgSpec"],
 
     AssociationQ[item] && Lookup[item, "kind", ""] === "stepHeader",
     item,
@@ -212,7 +214,7 @@ Module[{
     Null,
 
     AssociationQ[block],
-    Sow[block],
+    Sow[KeyDrop[block, "svgSpec"]],
 
     ListQ[block],
     Scan[emit, block],
@@ -357,36 +359,20 @@ Module[{
   rowNoteDivide[i_, p_] := Row[{"R", i, " \[LeftArrow] R", i, " / ", p}];
   rowApplyDivide[aug_, i_Integer, p_Integer] := ReplacePart[aug, i -> (aug[[i]]/p)];
 
-  augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[
-    {{
-      alignedAugmentedMatrix[before, notes, hiBefore],
-      "\\sim",
-      alignedAugmentedMatrix[after, {}, hiAfter]
-    }},
-    Alignment -> {Left, Center, Left},
-    Spacings -> {1.1, 0}
+  augRender2[before_, after_, notes_, hiBefore_, hiAfter_] := svgRowBlock[
+    {alignedAugmentedMatrix[before, notes, hiBefore], "\[Tilde]", alignedAugmentedMatrix[after, {}, hiAfter]},
+    0.35
   ];
 
-  augRender3[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[
-    {{
-      alignedAugmentedMatrix[before, notes1, hi1],
-      "\\sim",
-      alignedAugmentedMatrix[mid, notes2, hi2],
-      "\\sim",
-      alignedAugmentedMatrix[after, {}, hi3]
-    }},
-    Alignment -> {Left, Center, Left, Center, Left},
-    Spacings -> {1.1, 0}
+  augRender3[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := svgRowBlock[
+    {alignedAugmentedMatrix[before, notes1, hi1], "\[Tilde]", alignedAugmentedMatrix[mid, notes2, hi2], "\[Tilde]", alignedAugmentedMatrix[after, {}, hi3]},
+    0.35
   ];
 
   (* pomenovaný stav matice *)
-  namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] := Grid[
-    {{
-      Style[Row[{label, " ="}], Bold, FontSize -> 16],
-      alignedAugmentedMatrix[aug, notes, hi]
-    }},
-    Alignment -> Left,
-    Spacings -> {2, 1}
+  namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] := svgRowBlock[
+    {Style[Row[{label, " ="}], Bold, FontSize -> 16], alignedAugmentedMatrix[aug, notes, hi]},
+    0.4
   ];
 
   SetAttributes[appendElemTransition, HoldFirst];
@@ -427,20 +413,16 @@ Module[{
 
     afterWithTooltips = dotProductTooltipMatrix[eMat, before];
 
-    AppendTo[
-      content,
-      Grid[
-        {{
-          labeledMatrixBlock[eLabel, styledPlainMatrix[eMat, eHi]],
-          Style["\[CenterDot]", Bold, FontSize -> 18],
-          labeledMatrixBlock[prevLabel, alignedAugmentedMatrix[before, notes, hiBefore]],
-          Style["=", Bold, FontSize -> 18],
-          labeledMatrixBlock[nextLabel, alignedAugmentedMatrix[afterWithTooltips, {}, hiAfter]]
-        }},
-        Alignment -> {Left, Center, Left, Center, Left},
-        Spacings -> {1.2, 0.8}
-      ]
-    ];
+    AppendTo[content, svgRowBlock[
+      {
+        labeledMatrixBlock[eLabel, styledPlainMatrix[eMat, eHi]],
+        Style["\[CenterDot]", Bold, FontSize -> 18],
+        labeledMatrixBlock[prevLabel, alignedAugmentedMatrix[before, notes, hiBefore]],
+        Style["=", Bold, FontSize -> 18],
+        labeledMatrixBlock[nextLabel, alignedAugmentedMatrix[afterWithTooltips, {}, hiAfter]]
+      },
+      0.35
+    ]];
   ];
 
   SetAttributes[applyElemMultiplyStep, HoldFirst];
@@ -768,29 +750,92 @@ Module[{
     ]
   ];
 
-  (* zvýraznené zobrazenie obyčajnej matice s riadkom a stĺpcom *)
-  styledPlainMatrix[m_, hi_Association : <||>] := Module[
-    {nRows, nCols, activeRows, sourceRows, activeCols, sourceCols, boldPositions,
-      zeroCells, orangeCells, cellBg, makeCell, leftBracketCell, rightBracketCell, rows},
+  (* zvyraznene zobrazenie matic cez Graphics -> SVG *)
+  matrixCellExpr[value_] := Module[{v = value},
+    v = v /. {
+      Style[x_, ___] :> x,
+      TraditionalForm[x_] :> x,
+      MatrixForm[x_] :> x,
+      Tooltip[x_, ___] :> x,
+      MouseAppearance[x_, ___] :> x,
+      Pane[x_, ___] :> x,
+      Item[x_, ___] :> x,
+      Framed[x_, ___] :> x
+    };
+    TraditionalForm[v]
+  ];
+
+  matrixLabelExpr[value_] := Module[{v = value},
+    v = v /. {
+      Style[x_, ___] :> x,
+      TraditionalForm[x_] :> x,
+      MatrixForm[x_] :> x,
+      Tooltip[x_, ___] :> x,
+      MouseAppearance[x_, ___] :> x,
+      Pane[x_, ___] :> x,
+      Item[x_, ___] :> x,
+      Framed[x_, ___] :> x
+    };
+    v
+  ];
+
+  matrixCellStyle[value_, boldQ_: False, color_: Automatic] := Module[{styles, color2 = color, bold2 = boldQ},
+    styles = Cases[value, Style[_, opts___] :> {opts}, Infinity];
+    styles = Flatten[styles];
+    If[MemberQ[styles, Bold], bold2 = True];
+    If[color2 === Automatic, color2 = FirstCase[styles, (FontColor -> c_) :> c, Automatic]];
+    If[color2 === Automatic, color2 = FirstCase[styles, c : (_RGBColor | _GrayLevel | Red | Orange | Blue | Green | Black) :> c, Black]];
+    <|"Bold" -> bold2, "Color" -> color2|>
+  ];
+
+  matrixSpec[m_, hi_Association : <||>, opts_Association : <||>] := Module[
+    {nRows, nCols, nA, augmentedQ, labelsQ, leftLabel, rightLabel, notes, notes2,
+      activeRows, sourceRows, activeCols, sourceCols, pivotPos, boldPositions, zeroCells,
+      orangeCells, focusCells, normalizeCells, cellW, cellH, labelH, noteW, w, h,
+      x0, y0, bgFor, cellPrim, textStyle, primitives, rows, dividerX, noteText, leftX, rightX},
 
     {nRows, nCols} = Dimensions[m];
+    nA = Lookup[opts, "DividerAfter", None];
+    augmentedQ = IntegerQ[nA] && 1 <= nA < nCols;
+    notes = Lookup[opts, "Notes", {}];
+    notes2 = If[notes === {}, ConstantArray["", nRows], PadRight[notes, nRows, ""]];
+    leftLabel = Lookup[opts, "LeftLabel", Lookup[hi, "LeftLabel", None]];
+    rightLabel = Lookup[opts, "RightLabel", Lookup[hi, "RightLabel", None]];
+    labelsQ = leftLabel =!= None || rightLabel =!= None;
 
+    normalizeCells[cells_] := Which[
+      MatchQ[cells, {_Integer, _Integer}], {cells},
+      ListQ[cells], cells,
+      True, {}
+    ];
+
+    pivotPos = Lookup[hi, "PivotPos", None];
     activeRows = DeleteCases[Flatten @ {Lookup[hi, "ActiveRows", {}], Lookup[hi, "ActiveRow", None]}, None];
     sourceRows = Flatten @ {Lookup[hi, "SourceRows", {}]};
-    activeCols = DeleteCases[Flatten @ {Lookup[hi, "ActiveCols", {}], Lookup[hi, "ActiveCol", None]}, None];
-    sourceCols = Flatten @ {Lookup[hi, "SourceCols", {}]};
+    activeCols = DeleteCases[Flatten @ {
+      Lookup[hi, "ActiveCols", {}], Lookup[hi, "ActiveCol", None],
+      Lookup[hi, "ActiveColumn", None], If[ListQ[pivotPos], pivotPos[[2]], None]
+    }, None];
+    sourceCols = DeleteCases[Flatten @ {Lookup[hi, "SourceCols", {}], Lookup[hi, "SourceCol", None], Lookup[hi, "SourceColumn", None]}, None];
+    boldPositions = normalizeCells[Lookup[hi, "BoldPositions", {}]];
+    zeroCells = normalizeCells[Lookup[hi, "ZeroCells", {}]];
+    orangeCells = normalizeCells[Lookup[hi, "OrangeCells", {}]];
+    focusCells = normalizeCells[Lookup[hi, "FocusCells", {}]];
 
-    boldPositions = Lookup[hi, "BoldPositions", {}];
-    If[MatchQ[boldPositions, {_Integer, _Integer}], boldPositions = {boldPositions}];
+    cellW = Lookup[opts, "CellWidth", 1.05];
+    cellH = Lookup[opts, "CellHeight", 0.68];
+    labelH = If[labelsQ, 0.48, 0];
+    noteW = If[notes === {}, 0, 2.2];
+    w = nCols cellW + noteW + 0.75;
+    h = nRows cellH + labelH + 0.22;
 
-    zeroCells = Lookup[hi, "ZeroCells", {}];
-    orangeCells = Lookup[hi, "OrangeCells", {}];
-
-    cellBg[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
+    bgFor[i_, j_] := Module[{aRowQ, sRowQ, aColQ, sColQ},
       aRowQ = MemberQ[activeRows, i]; sRowQ = MemberQ[sourceRows, i];
       aColQ = MemberQ[activeCols, j]; sColQ = MemberQ[sourceCols, j];
-
       Which[
+        MemberQ[zeroCells, {i, j}], RGBColor[1.00, 0.90, 0.90],
+        MemberQ[orangeCells, {i, j}], RGBColor[1.00, 0.93, 0.82],
+        MemberQ[focusCells, {i, j}], RGBColor[0.88, 0.94, 1.00],
         aRowQ && aColQ, RGBColor[0.86, 0.93, 1.00],
         sRowQ && aColQ, RGBColor[0.92, 0.90, 1.00],
         aRowQ && sColQ, RGBColor[0.90, 0.96, 0.94],
@@ -799,367 +844,143 @@ Module[{
         sRowQ, RGBColor[0.95, 0.92, 1.00],
         aColQ, RGBColor[1.00, 0.97, 0.88],
         sColQ, RGBColor[0.98, 0.95, 0.90],
-        True, None
+        True, White
       ]
     ];
 
-    makeCell[i_, j_, val_] := Module[{cell},
-      cell = If[
-        MemberQ[{Tooltip, MouseAppearance, Style, Row, Grid, Pane, Framed, TraditionalForm}, Head[val]],
-        val,
-        TraditionalForm[val]
+    cellPrim[i_, j_] := Module[{x, y, val, style, boldQ, color},
+      x = (j - 1) cellW;
+      y = (nRows - i) cellH;
+      val = m[[i, j]];
+      boldQ = MemberQ[boldPositions, {i, j}] || (ListQ[pivotPos] && pivotPos === {i, j}) || TrueQ[Lookup[hi, "BoldDiagonal", True] && ((j <= If[augmentedQ, nA, nCols] && i === j) || (augmentedQ && j > nA && i === j - nA))];
+      color = Which[
+        MemberQ[zeroCells, {i, j}], Red,
+        MemberQ[orangeCells, {i, j}], Orange,
+        True, Automatic
       ];
-
-      Which[
-        MemberQ[zeroCells, {i, j}], cell = Style[cell, Red, Bold],
-        MemberQ[orangeCells, {i, j}], cell = Style[cell, Orange, Bold],
-        MemberQ[boldPositions, {i, j}] || (MemberQ[activeRows, i] && MemberQ[activeCols, j]), cell = Style[cell, Bold]
-      ];
-
-      Item[
-        Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}],
-        Background -> cellBg[i, j]
-      ]
-    ];
-
-    leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
-    rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
-
-    rows = Table[
-      Join[
-        {If[i === 1, leftBracketCell, SpanFromAbove]},
-        Table[makeCell[i, j, m[[i, j]]], {j, 1, nCols}],
-        {If[i === 1, rightBracketCell, SpanFromAbove]}
-      ],
-      {i, 1, nRows}
-    ];
-
-    Grid[
-      rows,
-      Alignment -> Join[{Center}, ConstantArray[Right, nCols], {Center}],
-      Spacings -> {1, 1},
-      BaseStyle -> {FontSize -> 14}
-    ]
-  ];
-
-  (* blok s popisom nad maticou *)
-  labeledMatrixBlock[label_, body_] := Column[
-    {
-      Style[label, Bold, FontSize -> 15],
-      body
-    },
-    Alignment -> Center,
-    Spacings -> {0.4}
-  ];
-
-  alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{ nRows, nCols, nA, notes2, pivotPos, activeRows, sourceRows, activeCols, sourceCols, ZeroCells, orangeCells, bar,
-    leftLabel, rightLabel, showLabelsQ, cellBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, colSizes, labelGrid, matrixWithLabels},
-
-    {nRows, nCols} = Dimensions[aug];
-    nA = nCols - 1;
-
-    notes2 = If[notes === {}, ConstantArray["", nRows], PadRight[notes, nRows, ""]];
-    pivotPos = Lookup[hi, "PivotPos", None];
-    leftLabel = Lookup[hi, "LeftLabel", None];
-    rightLabel = Lookup[hi, "RightLabel", None];
-    showLabelsQ = leftLabel =!= None || rightLabel =!= None;
-
-    activeRows = DeleteCases[Flatten @ {Lookup[hi, "ActiveRows", {}], Lookup[hi, "ActiveRow", None]}, None];
-    sourceRows = Flatten @ {Lookup[hi, "SourceRows", {}]};
-
-    activeCols = DeleteCases[
-      Flatten @ {
-        Lookup[hi, "ActiveCols", {}],
-        Lookup[hi, "ActiveCol", None],
-        If[ListQ[pivotPos], pivotPos[[2]], Nothing]
-      },
-      None
-    ];
-    sourceCols = Flatten @ {Lookup[hi, "SourceCols", {}]};
-
-    ZeroCells = Lookup[hi, "ZeroCells", {}];
-    orangeCells = Lookup[hi, "OrangeCells", {}];
-
-    bar = Style["|", GrayLevel[.35], FontSize -> 16];
-
-    cellBg[i_, j_] := Module[{ aRowQ, sRowQ, aColQ, sColQ},
-      aRowQ = MemberQ[activeRows, i];
-      sRowQ = MemberQ[sourceRows, i];
-      aColQ = MemberQ[activeCols, j];
-      sColQ = MemberQ[sourceCols, j];
-
-      Which[
-        aRowQ && aColQ, RGBColor[0.86, 0.93, 1.00],
-        sRowQ && aColQ, RGBColor[0.92, 0.90, 1.00],
-        aRowQ && sColQ, RGBColor[0.90, 0.96, 0.94],
-        sRowQ && sColQ, RGBColor[0.95, 0.92, 0.98],
-        aRowQ, RGBColor[0.90, 0.95, 1.00],
-        sRowQ, RGBColor[0.95, 0.92, 1.00],
-        aColQ, RGBColor[1.00, 0.97, 0.88],
-        sColQ, RGBColor[0.98, 0.95, 0.90],
-        True, None
-      ]
-    ];
-
-    makeCell[i_, j_, val_] := Module[{cell, isGreen, isOrange, isDiag, isPivot},
-      cell = If[
-        MemberQ[{Tooltip, MouseAppearance, Style, Row, Grid, Pane, Framed, TraditionalForm}, Head[val]],
-        val,
-        TraditionalForm[val]
-      ];
-
-      isGreen = MemberQ[ZeroCells, {i, j}];
-      isOrange = MemberQ[orangeCells, {i, j}];
-      isDiag = j <= nA && i === j;
-      isPivot = ListQ[pivotPos] && pivotPos === {i, j};
-
-      Which[
-        isGreen, cell = Style[cell, Red, Bold],
-        isOrange, cell = Style[cell, Orange, Bold],
-        isPivot || isDiag, cell = Style[cell, Bold]
-      ];
-
-      Item[
-        Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}],
-        Background -> cellBg[i, j]
-      ]
-    ];
-
-    makeBar[i_] := Item[
-      bar,
-      Background -> Which[
-        MemberQ[activeRows, i], RGBColor[0.90, 0.95, 1.00],
-        MemberQ[sourceRows, i], RGBColor[0.95, 0.92, 1.00],
-        True, None
-      ]
-    ];
-
-    leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
-    rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
-
-    rows = Table[
-      Join[
-        {If[i === 1, leftBracketCell, SpanFromAbove]},
-        Table[makeCell[i, j, aug[[i, j]]], {j, 1, nA}],
-        {makeBar[i], makeCell[i, nA + 1, aug[[i, nA + 1]]]},
-        {If[i === 1, rightBracketCell, SpanFromAbove]}
-      ],
-      {i, 1, nRows}
-    ];
-
-    colSizes = Join[{0.2}, ConstantArray[1.2, nA], {0.2, 1.2, 0.2}];
-
-    matrixGrid = Grid[
-      rows,
-      Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center, Right, Center}],
-      Spacings -> {1, 1},
-      BaseStyle -> {FontSize -> 14},
-      ItemSize -> {colSizes, Automatic}
-    ];
-
-    labelGrid = Grid[
+      style = matrixCellStyle[val, boldQ, color];
       {
-        Join[
-          {""},
-          {Item[If[leftLabel === None, "", Style[leftLabel, Bold, FontSize -> 15]], Alignment -> Center]},
-          ConstantArray[SpanFromLeft, nA - 1],
-          {""},
-          {Item[If[rightLabel === None, "", Style[rightLabel, Bold, FontSize -> 15]], Alignment -> Center]},
-          {""}
+        EdgeForm[Directive[GrayLevel[0.86], AbsoluteThickness[0.6]]], bgFor[i, j], Rectangle[{x, y}, {x + cellW, y + cellH}],
+        Text[
+          Style[matrixCellExpr[val], FontSize -> 13, FontFamily -> "Arial", Sequence @@ If[TrueQ[style["Bold"]], {Bold}, {}], style["Color"]],
+          {x + cellW/2, y + cellH/2}
         ]
-      },
-      Alignment -> Center,
-      Spacings -> {1, 0},
-      BaseStyle -> {FontSize -> 14},
-      ItemSize -> {colSizes, Automatic}
+      }
     ];
 
-    matrixWithLabels = If[
-      showLabelsQ,
-      Column[{labelGrid, matrixGrid}, Alignment -> Center, Spacings -> {0.15}],
-      matrixGrid
-    ];
-
-    notesGrid = Grid[
-      List /@ (
-        Item[
-          Pane[Style[#, GrayLevel[.35], FontSize -> 13], {150, Automatic}, Alignment -> Left],
-          Background -> White
-        ] & /@ notes2
-      ),
-      Alignment -> Left,
-      Spacings -> {0, 1.15},
-      BaseStyle -> {FontSize -> 14}
-    ];
-
-    notesWithLabels = If[
-      showLabelsQ,
-      Column[
-        {
-          Style["\[InvisibleSpace]", Bold, FontSize -> 15],
-          notesGrid
-        },
-        Alignment -> Left,
-        Spacings -> {0.15}
-      ],
-      notesGrid
-    ];
-
-    Grid[
-      {{matrixWithLabels, Spacer[12], notesWithLabels}},
-      Alignment -> {Left, Center, Left},
-      Spacings -> {0, 0}
-    ]
-  ];
-
-  (* renderovanie pre tvar (A|E)                                            *)
-  alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := Module[
-    {nRows, nCols, nA, notes2, pivotPos, activeRow, sourceRows, zeroCells, orangeCells,
-      bar, rowColor, sourceColor, wrapBg, makeCell, makeBar, leftBracketCell,
-      rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, showPivotQ,
-      leftLabel, rightLabel, showLabelsQ, colSizes, labelGrid, matrixWithLabels},
-
-    {nRows, nCols} = Dimensions[aug];
-    nA = Quotient[nCols, 2];
-
-    notes2 = If[notes === {}, ConstantArray["", nRows], PadRight[notes, nRows, ""]];
-    pivotPos = Lookup[hi, "PivotPos", None];
-    activeRow = Lookup[hi, "ActiveRow", None];
-    sourceRows = Lookup[hi, "SourceRows", {}];
-    zeroCells = Lookup[hi, "ZeroCells", {}];
-    orangeCells = Lookup[hi, "OrangeCells", {}];
-
-    leftLabel = Lookup[hi, "LeftLabel", None];
-    rightLabel = Lookup[hi, "RightLabel", None];
-    showLabelsQ = leftLabel =!= None || rightLabel =!= None;
-
-    bar = Style["|", GrayLevel[.35], FontSize -> 16];
-    rowColor = RGBColor[0.90, 0.95, 1];
-    sourceColor = RGBColor[0.95, 0.92, 1.00];
-
-    wrapBg[i_, expr_] := Module[{bg = None},
-      If[IntegerQ[activeRow] && i === activeRow, bg = rowColor];
-      If[MemberQ[sourceRows, i], bg = sourceColor];
-      Item[expr, Background -> bg]
-    ];
-
-    showPivotQ = ListQ[pivotPos] &&
-        ((IntegerQ[activeRow] && activeRow === pivotPos[[1]]) || MemberQ[sourceRows, pivotPos[[1]]]);
-
-    makeCell[i_, j_, val_] := Module[{cell, isDiagLeft, isDiagRight, isDiag},
-      cell = TraditionalForm[val];
-
-      isDiagLeft = j <= nA && i === j;
-      isDiagRight = j > nA && i === j - nA;
-      isDiag = isDiagLeft || isDiagRight;
-
-      Which[
-        MemberQ[zeroCells, {i, j}], cell = Style[cell, Red, Bold],
-        MemberQ[orangeCells, {i, j}], cell = Style[cell, Orange, Bold],
-        showPivotQ && pivotPos === {i, j}, cell = Style[cell, Bold],
-        isDiag, cell = Style[cell, Bold]
-      ];
-
-      wrapBg[i, Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}]]
-    ];
-
-    makeBar[i_] := wrapBg[i, bar];
-
-    leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
-    rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
-
-    rows = Table[
-      Join[
-        {If[i === 1, leftBracketCell, SpanFromAbove]},
-        Table[makeCell[i, j, aug[[i, j]]], {j, 1, nA}],
-        {makeBar[i]},
-        Table[makeCell[i, j, aug[[i, j]]], {j, nA + 1, nCols}],
-        {If[i === 1, rightBracketCell, SpanFromAbove]}
-      ],
-      {i, 1, nRows}
-    ];
-
-    colSizes = Join[{0.2}, ConstantArray[1.2, nA], {0.2}, ConstantArray[1.2, nA], {0.2}];
-
-    matrixGrid = Grid[
+    rows = Flatten[Table[cellPrim[i, j], {i, 1, nRows}, {j, 1, nCols}], 2];
+    primitives = Join[
       rows,
-      Alignment -> Join[{Center}, ConstantArray[Right, nA], {Center}, ConstantArray[Right, nA], {Center}],
-      Spacings -> {1, 1},
-      BaseStyle -> {FontSize -> 14},
-      ItemSize -> {colSizes, Automatic}
+      {
+        Directive[GrayLevel[0.18], AbsoluteThickness[1.6]],
+        Line[{{-0.18, 0}, {-0.32, 0}, {-0.32, nRows cellH}, {-0.18, nRows cellH}}],
+        Line[{{nCols cellW + 0.18, 0}, {nCols cellW + 0.32, 0}, {nCols cellW + 0.32, nRows cellH}, {nCols cellW + 0.18, nRows cellH}}]
+      }
     ];
 
-    labelGrid = Grid[
-      {Join[
-        {""},
-        {Item[If[leftLabel === None, "", Style[leftLabel, Bold, FontSize -> 15]], Alignment -> Center]},
-        ConstantArray[SpanFromLeft, nA - 1],
-        {""},
-        {Item[If[rightLabel === None, "", Style[rightLabel, Bold, FontSize -> 15]], Alignment -> Center]},
-        ConstantArray[SpanFromLeft, nA - 1],
-        {""}
-      ]},
-      Alignment -> Center,
-      Spacings -> {1, 0},
-      BaseStyle -> {FontSize -> 14},
-      ItemSize -> {colSizes, Automatic}
+    If[augmentedQ,
+      dividerX = nA cellW;
+      primitives = Join[primitives, {Directive[GrayLevel[0.25], AbsoluteThickness[1.4]], Line[{{dividerX, 0}, {dividerX, nRows cellH}}]}]
     ];
 
-    matrixWithLabels = If[
-      showLabelsQ,
-      Column[{labelGrid, matrixGrid}, Alignment -> Center, Spacings -> {0.15}],
-      matrixGrid
+    If[labelsQ,
+      leftX = If[augmentedQ, nA cellW/2, nCols cellW/2];
+      rightX = If[augmentedQ, nA cellW + (nCols - nA) cellW/2, nCols cellW/2];
+      primitives = Join[primitives, {
+        Text[Style[matrixLabelExpr[leftLabel /. None -> ""], FontSize -> 14, FontFamily -> "Arial", Bold], {leftX, nRows cellH + 0.32}],
+        Text[Style[matrixLabelExpr[rightLabel /. None -> ""], FontSize -> 14, FontFamily -> "Arial", Bold], {rightX, nRows cellH + 0.32}]
+      }]
     ];
 
-    notesGrid = Grid[
-      List /@ (
-        Item[
-          Pane[
-            If[StringQ[#], Style[#, GrayLevel[.35], FontSize -> 13], #],
-            {Automatic, Automatic},
-            Alignment -> Left
-          ],
-          Background -> White
-        ] & /@ notes2
-      ),
-      Alignment -> Left,
-      Spacings -> {0, 1.15},
-      BaseStyle -> {FontSize -> 14}
+    If[notes =!= {},
+      noteText[i_] := If[StringQ[notes2[[i]]], notes2[[i]], matrixLabelExpr[notes2[[i]]]];
+      primitives = Join[primitives, Table[
+        Text[Style[noteText[i], FontSize -> 11, FontFamily -> "Arial", GrayLevel[0.35]], {nCols cellW + 0.65, (nRows - i + 0.5) cellH}, {-1, 0}],
+        {i, 1, nRows}
+      ]]
     ];
 
-    notesWithLabels = If[
-      showLabelsQ,
-      Column[{Style["\[InvisibleSpace]", Bold, FontSize -> 15], notesGrid}, Alignment -> Left, Spacings -> {0.15}],
-      notesGrid
-    ];
+    <|"Primitives" -> primitives, "Width" -> w, "Height" -> h, "ImageSize" -> Round[52 w]|>
+  ];
 
-    Grid[
-      {{matrixWithLabels, Spacer[12], notesWithLabels}},
-      Alignment -> {Left, Center, Left},
-      Spacings -> {0, 0}
+  svgBlockFromSpec[spec_Association] := Module[{graphics, svg},
+    graphics = Graphics[
+      spec["Primitives"],
+      PlotRange -> {{-0.45, spec["Width"] - 0.25}, {-0.12, spec["Height"] + 0.08}},
+      ImagePadding -> 2,
+      ImageSize -> spec["ImageSize"],
+      Background -> None
+    ];
+    svg = Quiet @ Check[ExportString[graphics, "SVG"], $Failed];
+    If[StringQ[svg] && StringContainsQ[svg, "<svg"],
+      <|"type" -> "svg", "content" -> svg, "svgSpec" -> spec|>,
+      latex[tex[graphics]]
     ]
   ];
 
-  augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := Grid[
-    {{
-      alignedAugmentedMatrixInverse[before, notes, hiBefore],
-      "\\sim",
-      alignedAugmentedMatrixInverse[after, {}, hiAfter]
-    }},
-    Alignment -> {Left, Center, Left},
-    Spacings -> {1.1, 0}
+  svgRowBlock[items_List, gap_: 0.25] := Module[{specs, maxH, x = 0, prims = {}, totalW, textSpec},
+    textSpec[item_] := <|
+      "Primitives" -> {Text[Style[matrixLabelExpr[item], FontSize -> 14, FontFamily -> "Arial"], {0.25, 0.2}]},
+      "Width" -> 0.55 + 0.12 StringLength[ToString[matrixLabelExpr[item]]],
+      "Height" -> 0.45,
+      "ImageSize" -> 80
+    |>;
+    specs = (Which[
+      AssociationQ[#] && KeyExistsQ[#, "svgSpec"], #["svgSpec"],
+      AssociationQ[#] && KeyExistsQ[#, "Primitives"], #,
+      True, textSpec[#]
+    ] &) /@ items;
+    maxH = Max[Lookup[specs, "Height"]];
+    Scan[
+      Function[spec,
+        prims = Join[prims, {Translate[spec["Primitives"], {x, (maxH - spec["Height"])/2}]}];
+        x += spec["Width"] + gap;
+      ],
+      specs
+    ];
+    totalW = Max[0.1, x - gap];
+    svgBlockFromSpec[<|"Primitives" -> prims, "Width" -> totalW, "Height" -> maxH, "ImageSize" -> Round[52 totalW]|>]
   ];
 
-  augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := Grid[
-    {{
-      alignedAugmentedMatrixInverse[before, notes1, hi1],
-      "\\sim",
-      alignedAugmentedMatrixInverse[mid, notes2, hi2],
-      "\\sim",
-      alignedAugmentedMatrixInverse[after, {}, hi3]
-    }},
-    Alignment -> {Left, Center, Left, Center, Left},
-    Spacings -> {1.1, 0}
+  svgColumnBlock[items_List, gap_: 0.18] := Module[{specs, maxW, y = 0, prims = {}, totalH, textSpec},
+    textSpec[item_] := <|"Primitives" -> {Text[Style[matrixLabelExpr[item], FontSize -> 14, FontFamily -> "Arial"], {0.3, 0.2}]}, "Width" -> 0.7 + 0.12 StringLength[ToString[matrixLabelExpr[item]]], "Height" -> 0.45, "ImageSize" -> 80|>;
+    specs = (Which[
+      AssociationQ[#] && KeyExistsQ[#, "svgSpec"], #["svgSpec"],
+      AssociationQ[#] && KeyExistsQ[#, "Primitives"], #,
+      True, textSpec[#]
+    ] &) /@ Reverse[items];
+    maxW = Max[Lookup[specs, "Width"]];
+    Scan[
+      Function[spec,
+        prims = Join[prims, {Translate[spec["Primitives"], {(maxW - spec["Width"])/2, y}]}];
+        y += spec["Height"] + gap;
+      ],
+      specs
+    ];
+    totalH = Max[0.1, y - gap];
+    svgBlockFromSpec[<|"Primitives" -> prims, "Width" -> maxW, "Height" -> totalH, "ImageSize" -> Round[52 maxW]|>]
+  ];
+
+  styledPlainMatrix[m_, hi_Association : <||>] := svgBlockFromSpec[matrixSpec[m, hi]];
+
+  labeledMatrixBlock[label_, body_] := svgColumnBlock[{Style[label, Bold, FontSize -> 15], body}, 0.12];
+
+  alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := svgBlockFromSpec[
+    matrixSpec[aug, hi, <|"DividerAfter" -> Dimensions[aug][[2]] - 1, "Notes" -> notes|>]
+  ];
+
+  alignedAugmentedMatrixInverse[aug_, notes_List : {}, hi_Association : <||>] := svgBlockFromSpec[
+    matrixSpec[aug, hi, <|"DividerAfter" -> Quotient[Dimensions[aug][[2]], 2], "Notes" -> notes|>]
+  ];
+
+  augRender2Inverse[before_, after_, notes_, hiBefore_, hiAfter_] := svgRowBlock[
+    {alignedAugmentedMatrixInverse[before, notes, hiBefore], "\[Tilde]", alignedAugmentedMatrixInverse[after, {}, hiAfter]},
+    0.35
+  ];
+
+  augRender3Inverse[before_, mid_, after_, notes1_, notes2_, hi1_, hi2_, hi3_] := svgRowBlock[
+    {alignedAugmentedMatrixInverse[before, notes1, hi1], "\[Tilde]", alignedAugmentedMatrixInverse[mid, notes2, hi2], "\[Tilde]", alignedAugmentedMatrixInverse[after, {}, hi3]},
+    0.35
   ];
 
   (* ~-~-~ BOUNDS & SOLVER HELPERS ~-~-~ *)
@@ -3104,17 +2925,13 @@ Module[{
       |>
     ];
 
-    Grid[
-      {{
+    svgRowBlock[
+      {
         cramerMatrixCard[matrix, highlight],
         Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
-        labeledMatrixBlock[
-          minorLabel,
-          cramerMatrixCard[minorMatrix, <|"FontSize" -> 13, "CellWidth" -> 1.05|>]
-        ]
-      }},
-      Alignment -> {Center, Center, Center},
-      Spacings -> {1.8, 1}
+        labeledMatrixBlock[minorLabel, cramerMatrixCard[minorMatrix, <|"FontSize" -> 13, "CellWidth" -> 1.05|>]]
+      },
+      0.45
     ]
   ];
 
@@ -3126,65 +2943,13 @@ Module[{
 
   cramerLabeledMatrixGrid[label_, matrix_, hi_Association : <||>] := labeledMatrixBlock[label, cramerMatrixCard[matrix, hi]];
 
-  cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[{ leftBg, rightBg, matrixWithColumnBackground},
-
-    leftBg = RGBColor[0.95, 0.92, 1.00];
-    rightBg = RGBColor[0.90, 0.95, 1.00];
-
-    (* lokálne vykreslenie matice so zvýrazneným stĺpcom *)
-    matrixWithColumnBackground[m_, bg_] := Module[
-      {nRows, nCols, leftBracketCell, rightBracketCell, makeCell, rows},
-
-      {nRows, nCols} = Dimensions[m];
-
-      makeCell[i_, j_] := Module[{ cell},
-        cell = TraditionalForm[m[[i, j]]];
-
-        If[j === column,
-          cell = Style[cell, Bold]
-        ];
-
-        Item[
-          Pane[cell, ImageSize -> {Automatic, 18}, Alignment -> {Right, Center}],
-          Background -> If[j === column, bg, None]
-        ]
-      ];
-
-      leftBracketCell = Item["", Frame -> {{True, False}, {True, True}}];
-      rightBracketCell = Item["", Frame -> {{False, True}, {True, True}}];
-
-      rows = Table[
-        Join[
-          {If[i === 1, leftBracketCell, SpanFromAbove]},
-          Table[makeCell[i, j], {j, 1, nCols}],
-          {If[i === 1, rightBracketCell, SpanFromAbove]}
-        ],
-        {i, 1, nRows}
-      ];
-
-      Grid[
-        rows,
-        Alignment -> Join[{Center}, ConstantArray[Right, nCols], {Center}],
-        Spacings -> {1, 1},
-        BaseStyle -> {FontSize -> 14}
-      ]
-    ];
-
-    Grid[
-      {{
-        labeledMatrixBlock[
-          Style["A", Italic],
-          matrixWithColumnBackground[A, leftBg]
-        ],
-        Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
-        labeledMatrixBlock[
-          auxLabel,
-          matrixWithColumnBackground[auxMatrix, rightBg]
-        ]
-      }},
-      Alignment -> {Center, Center, Center},
-      Spacings -> {1.5, 0}
-    ]
+  cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := svgRowBlock[
+    {
+      labeledMatrixBlock[Style["A", Italic], styledPlainMatrix[A, <|"ActiveCol" -> column|>]],
+      Style["\[LongRightArrow]", Bold, FontSize -> 24, GrayLevel[0.2]],
+      labeledMatrixBlock[auxLabel, styledPlainMatrix[auxMatrix, <|"ActiveCol" -> column|>]]
+    },
+    0.45
   ];
 
   cramerZeroRowIndex[matrix_] := FirstCase[Range[Length[matrix]], row_ /; AllTrue[matrix[[row]], # === 0 &], Missing["NotFound"]];
@@ -3287,31 +3052,17 @@ Module[{
     ]
   ];
 
-  cramer3x3VisualPanel[label_, matrix_] := Grid[{{
-    labeledMatrixBlock[label, cramerMatrixCard[matrix]],
-    Style["\[LongRightArrow]", Bold, FontSize -> 26],
-    Grid[
-      {{
-        Style["+", Bold, FontSize -> 28],
-        cramer3x3StyledMatrixByMode[matrix, "Positive"]
-      }},
-      Alignment -> {Left, Top},
-      Spacings -> {0.4, 0}
-    ],
-    Grid[
-      {{
-        Style["-", Bold, FontSize -> 28],
-        cramer3x3StyledMatrixByMode[matrix, "Negative"]
-      }},
-      Alignment -> {Left, Top},
-      Spacings -> {0.4, 0}
-    ]
-  }},
-    Alignment -> {Center, Center, Center, Center},
-    Spacings -> {1.5, 1}
+  cramer3x3VisualPanel[label_, matrix_] := svgRowBlock[
+    {
+      labeledMatrixBlock[label, cramerMatrixCard[matrix]],
+      Style["\[LongRightArrow]", Bold, FontSize -> 26],
+      svgRowBlock[{Style["+", Bold, FontSize -> 28], cramer3x3StyledMatrixByMode[matrix, "Positive"]}, 0.18],
+      svgRowBlock[{Style["-", Bold, FontSize -> 28], cramer3x3StyledMatrixByMode[matrix, "Negative"]}, 0.18]
+    },
+    0.45
   ];
 
-  (* vykreslí determinant 3×3 štandardným vzorcom *)
+    (* vykreslí determinant 3×3 štandardným vzorcom *)
   renderCramer3x3Det[matrix_, label_] := Module[{ content = {}, value, knownQ, knownMatrices, knownPos, knownData},
     value = Together[Det[matrix]];
 
@@ -3743,31 +3494,18 @@ Module[{
 
       AppendTo[
         content,
-        Grid[
+        svgColumnBlock[
           {
-            {
-              Row[{
-                "Riadok ", i, ":  ",
-                A[[i]],
-                " \[CenterDot] ",
-                TraditionalForm[solExprs],
-                " = ",
-                TraditionalForm[lhs]
-              }]
-            },
-            {Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}]},
-            {Row[{"LS - PS = ", TraditionalForm[diff]}]},
-            {
-              If[
-                okQ,
-                Style["LS = PS (OK)", Darker[Green]],
-                Style["LS \[NotEqual] PS (CHYBA)", Red]
-              ]
-            }
+            svgRowBlock[{Row[{"Riadok ", i, ":  "}], styledPlainMatrix[{A[[i]]}], Style["\[CenterDot]", Bold], styledPlainMatrix[List /@ solExprs], Row[{" = ", TraditionalForm[lhs]}]}, 0.18],
+            Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}],
+            Row[{"LS - PS = ", TraditionalForm[diff]}],
+            If[
+              okQ,
+              Style["LS = PS (OK)", Darker[Green]],
+              Style["LS \[NotEqual] PS (CHYBA)", Red]
+            ]
           },
-          Alignment -> Center,
-          Spacings -> {0, 0.4},
-          BaseStyle -> {FontSize -> 13}
+          0.16
         ]
       ],
       {i, 1, Length[b]}
@@ -5783,32 +5521,17 @@ Module[{
 
     xResult = invMatrix . b;
 
-    AppendTo[content, Module[{ resultNotes},
-      resultNotes = Grid[
-        List /@ MapThread[
-          Style[Row[{#1, " = ", tft[#2]}], GrayLevel[.35], FontSize -> 13] &,
-          {vars, xResult}
-        ],
-        Alignment -> Left,
-        Spacings -> {0, 1.15}
-      ];
-
-      Grid[
-        {{
-          Style["x =", Bold, FontSize -> 16],
-          labeledMatrixBlock[inverseASymbol[], styledPlainMatrix[invMatrix]],
-          Style["\[CenterDot]", Bold, FontSize -> 18],
-          labeledMatrixBlock[Style["b", Italic], styledPlainMatrix[List /@ b]],
-          Style["=", Bold, FontSize -> 18],
-          labeledMatrixBlock[Style["x", Italic], styledPlainMatrix[dotProductTooltipMatrix[invMatrix, List /@ b]]],
-          Spacer[3],
-          Column[{Style["\[InvisibleSpace]", Bold, FontSize -> 15], resultNotes},
-            Alignment -> Left, Spacings -> {4.4}
-          ]
-        }},
-        Alignment -> {Left, Center, Center, Center, Center, Center, Center, Left},
-        Spacings -> {1.1, 0}
-      ]
+    AppendTo[content, svgRowBlock[
+      {
+        Style["x =", Bold, FontSize -> 16],
+        labeledMatrixBlock[inverseASymbol[], styledPlainMatrix[invMatrix]],
+        Style["\[CenterDot]", Bold, FontSize -> 18],
+        labeledMatrixBlock[Style["b", Italic], styledPlainMatrix[List /@ b]],
+        Style["=", Bold, FontSize -> 18],
+        labeledMatrixBlock[Style["x", Italic], styledPlainMatrix[dotProductTooltipMatrix[invMatrix, List /@ b]]],
+        svgColumnBlock[MapThread[Style[Row[{#1, " = ", tft[#2]}], GrayLevel[.35], FontSize -> 13] &, {vars, xResult}], 0.18]
+      },
+      0.35
     ]];
 
     appendStepHeader[content, "Skúška správnosti"];
@@ -5818,19 +5541,16 @@ Module[{
       product = Together[A . invMatrix];
       isIdentity = product === IdentityMatrix[n];
 
-      AppendTo[content, Grid[
-        {{
+      AppendTo[content, svgRowBlock[
+        {
           labeledMatrixBlock[Row[{Style["A", Italic], " \[CenterDot] ", inverseASymbol[]}], styledPlainMatrix[dotProductTooltipMatrix[A, invMatrix]]],
           Style["=", Bold, FontSize -> 18],
           labeledMatrixBlock[Style["E", Italic], styledPlainMatrix[IdentityMatrix[n]]],
-          If[isIdentity, Style["Správne", Darker[Green], Bold], Style["Nesprávne", Red, Bold]]
-        }},
-        Alignment -> {Center, Center, Center, Center},
-        Spacings -> {1.2, 0},
-        BaseStyle -> {FontSize -> 13}
+          If[isIdentity, Style["Spravne", Darker[Green], Bold], Style["Nespravne", Red, Bold]]
+        },
+        0.35
       ]];
     ];
-
     content = Join[content, verificationSteps[data, xResult]];
 
     <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
@@ -5856,56 +5576,42 @@ Module[{
     prettyMatrix[label_, mat_, bold_List : {}] := labeledMatrixBlock[label, styledPlainMatrix[mat, <|"BoldPositions" -> bold|>]];
     prettyVector[label_, vec_List] := labeledMatrixBlock[label, styledPlainMatrix[List /@ vec]];
 
-    addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}] := AppendTo[content, Grid[
-      {{
-        prettyMatrix[Style["L", Italic], l, lBold],
-        Spacer[20],
-        prettyMatrix[Style["U", Italic], u, uBold]
-      }},
-      Alignment -> {Center, Center, Center},
-      Spacings -> {1.2, 0}
+    addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}] := AppendTo[content, svgRowBlock[
+      {prettyMatrix[Style["L", Italic], l, lBold], prettyMatrix[Style["U", Italic], u, uBold]},
+      0.6
     ]];
 
-    addVector[label_, vec_] := AppendTo[content, Grid[
-      {{prettyVector[Style[label, Italic], vec]}},
-      Alignment -> Left,
-      Spacings -> {1, 0}
-    ]];
+    addVector[label_, vec_] := AppendTo[content, prettyVector[Style[label, Italic], vec]];
 
-    appendProductDisplay[left_, right_] := AppendTo[content, Grid[
-      {{
+    appendProductDisplay[left_, right_] := AppendTo[content, svgRowBlock[
+      {
         prettyMatrix[Style["L", Italic], left],
         Style["\[CenterDot]", Bold, FontSize -> 18],
         prettyMatrix[Style["U", Italic], right],
         Style["=", Bold, FontSize -> 18],
         prettyMatrix[Style["A", Italic], dotProductTooltipMatrix[left, right]]
-      }},
-      Alignment -> {Center, Center, Center, Center, Center},
-      Spacings -> {1.2, 0}
+      },
+      0.35
     ]];
 
-    appendMatrixEquality[leftLabel_, leftMat_, rightLabel_, rightMat_, okQ_] := AppendTo[content, Grid[
-      {{
+    appendMatrixEquality[leftLabel_, leftMat_, rightLabel_, rightMat_, okQ_] := AppendTo[content, svgRowBlock[
+      {
         prettyMatrix[leftLabel, leftMat],
         Style["=", Bold, FontSize -> 18],
         prettyMatrix[rightLabel, rightMat],
         If[okQ, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> {Center, Center, Center, Center},
-      Spacings -> {1.2, 0},
-      BaseStyle -> {FontSize -> 13}
+      },
+      0.35
     ]];
 
-    appendVectorEquality[leftLabel_, leftVec_, rightLabel_, rightVec_, okQ_] := AppendTo[content, Grid[
-      {{
+    appendVectorEquality[leftLabel_, leftVec_, rightLabel_, rightVec_, okQ_] := AppendTo[content, svgRowBlock[
+      {
         prettyVector[leftLabel, leftVec],
         Style["=", Bold, FontSize -> 18],
         prettyVector[rightLabel, rightVec],
         If[okQ, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> {Center, Center, Center, Center},
-      Spacings -> {1.2, 0},
-      BaseStyle -> {FontSize -> 13}
+      },
+      0.35
     ]];
 
     currentLBoldPositions[step_] := Join[
@@ -6031,16 +5737,15 @@ Module[{
     If[taskFormat =!= "MATRIX",
       AppendTo[content, "Sústavu najprv zapíšeme v maticovom tvare A \[CenterDot] x = b."];
 
-      AppendTo[content, Grid[
-        {{
+      AppendTo[content, svgRowBlock[
+        {
           prettyMatrix[Style["A", Italic], A],
           Style["\[CenterDot]", Bold, FontSize -> 18],
           prettyVector[Style["x", Italic], xSymbols],
           Style["=", Bold, FontSize -> 18],
           prettyVector[Style["b", Italic], b]
-        }},
-        Alignment -> {Center, Center, Center, Center, Center},
-        Spacings -> {1.2, 0}
+        },
+        0.35
       ]];
     ];
 
@@ -6214,56 +5919,42 @@ Module[{
     prettyMatrix[label_, mat_, bold_List : {}] := labeledMatrixBlock[label, styledPlainMatrix[mat, <|"BoldPositions" -> bold|>]];
     prettyVector[label_, vec_List] := labeledMatrixBlock[label, styledPlainMatrix[List /@ vec]];
 
-    addMatrixPair[l_, lt_, lBold_List : {}, ltBold_List : {}] := AppendTo[content, Grid[
-      {{
-        prettyMatrix[Style["L", Italic], l, lBold],
-        Spacer[20],
-        prettyMatrix[transposeLSymbol[], lt, ltBold]
-      }},
-      Alignment -> {Center, Center, Center},
-      Spacings -> {1.2, 0}
+    addMatrixPair[l_, lt_, lBold_List : {}, ltBold_List : {}] := AppendTo[content, svgRowBlock[
+      {prettyMatrix[Style["L", Italic], l, lBold], prettyMatrix[transposeLSymbol[], lt, ltBold]},
+      0.6
     ]];
 
-    addVector[label_, vec_] := AppendTo[content, Grid[
-      {{prettyVector[Style[label, Italic], vec]}},
-      Alignment -> Left,
-      Spacings -> {1, 0}
-    ]];
+    addVector[label_, vec_] := AppendTo[content, prettyVector[Style[label, Italic], vec]];
 
-    appendProductDisplay[left_, right_] := AppendTo[content, Grid[
-      {{
+    appendProductDisplay[left_, right_] := AppendTo[content, svgRowBlock[
+      {
         prettyMatrix[Style["L", Italic], left],
         Style["\[CenterDot]", Bold, FontSize -> 18],
         prettyMatrix[transposeLSymbol[], right],
         Style["=", Bold, FontSize -> 18],
         prettyMatrix[Style["A", Italic], dotProductTooltipMatrix[left, right]]
-      }},
-      Alignment -> {Center, Center, Center, Center, Center},
-      Spacings -> {1.2, 0}
+      },
+      0.35
     ]];
 
-    appendMatrixEquality[leftLabel_, leftMat_, rightLabel_, rightMat_, okQ_] := AppendTo[content, Grid[
-      {{
+    appendMatrixEquality[leftLabel_, leftMat_, rightLabel_, rightMat_, okQ_] := AppendTo[content, svgRowBlock[
+      {
         prettyMatrix[leftLabel, leftMat],
         Style["=", Bold, FontSize -> 18],
         prettyMatrix[rightLabel, rightMat],
         If[okQ, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> {Center, Center, Center, Center},
-      Spacings -> {1.2, 0},
-      BaseStyle -> {FontSize -> 13}
+      },
+      0.35
     ]];
 
-    appendVectorEquality[leftLabel_, leftVec_, rightLabel_, rightVec_, okQ_] := AppendTo[content, Grid[
-      {{
+    appendVectorEquality[leftLabel_, leftVec_, rightLabel_, rightVec_, okQ_] := AppendTo[content, svgRowBlock[
+      {
         prettyVector[leftLabel, leftVec],
         Style["=", Bold, FontSize -> 18],
         prettyVector[rightLabel, rightVec],
         If[okQ, Style["OK", Darker[Green], Bold], Style["CHYBA", Red, Bold]]
-      }},
-      Alignment -> {Center, Center, Center, Center},
-      Spacings -> {1.2, 0},
-      BaseStyle -> {FontSize -> 13}
+      },
+      0.35
     ]];
 
     currentLBoldPositions[step_] := Flatten[Table[{r, c}, {c, 1, step}, {r, c, n}], 1];
@@ -6277,16 +5968,15 @@ Module[{
     If[taskFormat =!= "MATRIX",
       AppendTo[content, "Sústavu prepíšeme do maticového tvaru."];
 
-      AppendTo[content, Grid[
-        {{
+      AppendTo[content, svgRowBlock[
+        {
           prettyMatrix[Style["A", Italic], A],
           Style["\[CenterDot]", Bold, FontSize -> 18],
           prettyVector[Style["x", Italic], vars],
           Style["=", Bold, FontSize -> 18],
           prettyVector[Style["b", Italic], b]
-        }},
-        Alignment -> {Center, Center, Center, Center, Center},
-        Spacings -> {1.2, 0}
+        },
+        0.35
       ]];
     ];
 
@@ -6431,16 +6121,15 @@ Module[{
 
       AppendTo[content, "Sústavu zapíšeme v tvare A \[CenterDot] x = b. Najprv vypočítame det(A). Ak det(A) nie je nula, môžeme použiť Cramerovo pravidlo."];
 
-      AppendTo[content, Grid[
-        {{
+      AppendTo[content, svgRowBlock[
+        {
           labeledMatrixBlock[Style["A", Italic], styledPlainMatrix[A]],
           Style["\[CenterDot]", Bold, FontSize -> 18],
           labeledMatrixBlock[Style["x", Italic], styledPlainMatrix[List /@ vars]],
           Style["=", Bold, FontSize -> 18],
           labeledMatrixBlock[Style["b", Italic], styledPlainMatrix[List /@ b]]
-        }},
-        Alignment -> {Center, Center, Center, Center, Center},
-        Spacings -> {1.2, 0}
+        },
+        0.35
       ]];
     ];
 
@@ -6762,15 +6451,13 @@ Module[{
     Do[
       lhs = A[[i]] . sol;
       AppendTo[content,
-        Grid[
+        svgColumnBlock[
           {
-            {Row[{"LS", i, ":  ", A[[i]], " \[CenterDot] ", sol, " = ", tft[lhs]}]},
-            {Row[{"PS", i, " = ", tft[b[[i]]]}]},
-            {If[lhs === b[[i]], Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]}
+            svgRowBlock[{Row[{"LS", i, ":  "}], styledPlainMatrix[{A[[i]]}], Style["\[CenterDot]", Bold], styledPlainMatrix[List /@ sol], Row[{" = ", tft[lhs]}]}, 0.18],
+            Row[{"PS", i, " = ", tft[b[[i]]]}],
+            If[lhs === b[[i]], Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]
           },
-          Alignment -> Center,
-          Spacings -> {0, 0.4},
-          BaseStyle -> {FontSize -> 13}
+          0.16
         ]
       ], {i, 1, n}
     ];
@@ -6809,16 +6496,14 @@ Module[{
       okQ = TrueQ[Simplify[diff == 0]];
 
       AppendTo[content,
-        Grid[
+        svgColumnBlock[
           {
-            {Row[{"Riadok ", i, ":  ", A[[i]], " \[CenterDot] ", TraditionalForm[solExprs], " = ", TraditionalForm[lhs]}]},
-            {Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}]},
-            {Row[{"LS - PS = ", TraditionalForm[diff]}]},
-            {If[okQ, Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]}
+            svgRowBlock[{Row[{"Riadok ", i, ":  "}], styledPlainMatrix[{A[[i]]}], Style["\[CenterDot]", Bold], styledPlainMatrix[List /@ solExprs], Row[{" = ", TraditionalForm[lhs]}]}, 0.18],
+            Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}],
+            Row[{"LS - PS = ", TraditionalForm[diff]}],
+            If[okQ, Style["LS = PS (OK)", Darker[Green]], Style["LS \[NotEqual] PS (CHYBA)", Red]]
           },
-          Alignment -> Center,
-          Spacings -> {0, 0.4},
-          BaseStyle -> {FontSize -> 13}
+          0.16
         ]
       ], {i, 1, n}
     ];
@@ -6891,7 +6576,7 @@ Module[{
     solution = Lookup[stepData, "Solution", Lookup[data, "x", Missing["NotAvailable"]]];
     invMatrix = Lookup[stepData, "InverseMatrix", Missing["NotAvailable"]];
 
-    If[MatrixQ[invMatrix], printResultBlock["Inverzná matica:", MatrixForm[invMatrix]]];
+    If[MatrixQ[invMatrix], printResultBlock["Inverzná matica:", styledPlainMatrix[invMatrix]]];
 
     If[ListQ[solution], printResultBlock["Riešenie sústavy:", solutionRow[vars, solution]]]];
 
@@ -6903,11 +6588,11 @@ Module[{
     uMatrix = Lookup[stepData, "U", Missing["NotAvailable"]];
     yVector = Lookup[stepData, "Y", Missing["NotAvailable"]];
 
-    If[MatrixQ[lMatrix], printResultBlock["Matica L:", MatrixForm[lMatrix]]];
+    If[MatrixQ[lMatrix], printResultBlock["Matica L:", styledPlainMatrix[lMatrix]]];
 
-    If[MatrixQ[uMatrix], printResultBlock["Matica U:", MatrixForm[uMatrix]]];
+    If[MatrixQ[uMatrix], printResultBlock["Matica U:", styledPlainMatrix[uMatrix]]];
 
-    If[ListQ[yVector], printResultBlock["Pomocný vektor y:", MatrixForm[yVector]]];
+    If[ListQ[yVector], printResultBlock["Pomocný vektor y:", styledPlainMatrix[List /@ yVector]]];
 
     If[ListQ[solution], printResultBlock["Riešenie sústavy:", solutionRow[vars, solution]]]];
 
@@ -6919,11 +6604,11 @@ Module[{
     ltMatrix = If[MatrixQ[lMatrix], Transpose[lMatrix], Missing["NotAvailable"]];
     yVector = Lookup[stepData, "Y", Missing["NotAvailable"]];
 
-    If[MatrixQ[lMatrix], printResultBlock["Matica L:", MatrixForm[lMatrix]]];
+    If[MatrixQ[lMatrix], printResultBlock["Matica L:", styledPlainMatrix[lMatrix]]];
 
-    If[MatrixQ[ltMatrix], printResultBlock[Row[{"Matica ", transposeLSymbol[], ":"}], MatrixForm[ltMatrix]]];
+    If[MatrixQ[ltMatrix], printResultBlock[Row[{"Matica ", transposeLSymbol[], ":"}], styledPlainMatrix[ltMatrix]]];
 
-    If[ListQ[yVector], printResultBlock["Pomocný vektor y:", MatrixForm[yVector]]];
+    If[ListQ[yVector], printResultBlock["Pomocný vektor y:", styledPlainMatrix[List /@ yVector]]];
 
     If[ListQ[solution], printResultBlock["Riešenie sústavy:", solutionRow[vars, solution]]]];
 
