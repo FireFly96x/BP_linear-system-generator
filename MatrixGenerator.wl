@@ -224,6 +224,8 @@ appendStepHeader[content_, text_, gap_: 2] := (
 
 withStepCounter[renderFn_] := Block[{stepsCounter = 0}, renderFn[]];
 makeStepHeader[text_] := (stepsCounter++;Style[Row[{stepsCounter, ". ", text}], Bold]);
+
+(* vykreslenie jedného prvku postupu podľa jeho typu *)
 renderStepItem[item_] := Which[
   StringQ[item], printTextCell[item],
   Head[item] === Spacer, printCellStyle["", "Text"],
@@ -236,7 +238,7 @@ renderStepItem[item_] := Which[
 buildMatrixVars[n_] := Take[{a, b, c, d, e, f}, n];
 buildEquationVars[n_Integer] := Take[{x, y, z}, n];
 
-(* pre output vypise infinte ↓, neskor to vymyslim inak *)
+(* zostavenie parametrického riešenia z upravenej rozšírenej matice *)
 infiniteSolutionFromSolvedAug[data_Association] := Module[{ n = data["n"], augS, A, b, idxs, params, solExprs, pivot, knownTerm},
 
   augS = data["SolvedAug"];
@@ -325,6 +327,7 @@ namedAugmentedStateCard[label_, aug_, notes_List : {}, hi_Association : <||>] :=
 
 SetAttributes[appendElemTransition, HoldFirst];
 
+(* vykreslenie jedného kroku cez elementárnu maticu *)
 appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer, n_Integer, eIndex_Integer,
   mIndex_Integer, boldPos_: Automatic, hiBefore_Association : <||>, hiAfter_Association : <||>, eOrangePos_: {}
 ] := Module[
@@ -381,6 +384,7 @@ appendElemTransition[content_, before_, after_, note_, eMat_, targetRow_Integer,
 
 SetAttributes[applyElemMultiplyStep, HoldFirst];
 
+(* krok násobenia riadku aj s elementárnou maticou *)
 applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotPos_: None] := Module[{ before, after, eMat, hi, note},
   before = aug;
   after = ReplacePart[before, rowIdx -> factor before[[rowIdx]]];
@@ -406,6 +410,7 @@ applyElemMultiplyStep[content_, aug_, rowIdx_Integer, factor_, n_Integer, pivotP
 
 SetAttributes[applyElemCombineStep, HoldFirst];
 
+(* krok pripočítania násobkov iných riadkov k cieľovému riadku *)
 applyElemCombineStep[content_, aug_, rowIdx_Integer, terms_List, n_Integer, pivotPos_: None] := Module[
   {before, after, eMat, hiBefore, hiAfter, note, termDisplay, zeroCell},
 
@@ -513,6 +518,7 @@ applyJordanSwapStep[content_, aug_, i_Integer, k_Integer, n_Integer, showElemQ_?
 
 SetAttributes[applyJordanElimStep, HoldFirst];
 
+(* jeden eliminačný krok pre Gauss-Jordanovu úpravu *)
 applyJordanElimStep[content_, aug_, r_Integer, i_Integer, n_Integer, hiBase_Association, showElemQ_?BooleanQ] := Module[
   {workAug, before, elimRes, p, a, directCoeff, g, p2, a2, g2},
 
@@ -552,6 +558,7 @@ applyJordanElimStep[content_, aug_, r_Integer, i_Integer, n_Integer, hiBase_Asso
 
 SetAttributes[rowAppendElimStep, HoldFirst];
 
+(* pridanie eliminačného kroku vrátane prípadného skrátenia riadku *)
 rowAppendElimStep[content_, before_, elimRes_, r_Integer, i_Integer, n_Integer, hiBase_Association] := Module[{ notes, notes2, mid, after2, hi1, hi2, hi3},
   notes = ConstantArray["", n];
   notes[[r]] = rowNoteElim[r, i, elimRes["p2"], elimRes["a2"]];
@@ -632,6 +639,7 @@ rowNoteElim[r_, i_, p2_, a2_] := Module[{ leftPart, rightPart, op},
   Row[{"R", r, " \[LeftArrow] ", leftPart, op, rightPart}]
 ];
 
+(* celočíselné vynulovanie prvku pomocou pivotného riadku bez zbytočných zlomkov *)
 rowApplyElimStable[aug_, r_Integer, i_Integer] := Module[{ p, a, g1, p2, a2, rowRaw, g2, div, rowFinal, augRaw, augFinal},
 
   p = aug[[i, i]];
@@ -667,6 +675,7 @@ findContradictionRow[aug_] := Module[{ idx = FirstCase[Range[Length[aug]], i_ /;
 
 (* ~-~-~ MATRIX VISUALIZATION ~-~-~ *)
 
+(* výsledok násobenia matíc s tooltipmi pre skalárne súčiny *)
 dotProductTooltipMatrix[left_, right_] := Module[{ makeTermDisplay, makeTooltipCell},
 
   makeTermDisplay[a_, b_] := Row[{luFactorDisplay[a], "\[CenterDot]", luFactorDisplay[b]}];
@@ -788,6 +797,7 @@ labeledMatrixBlock[label_, body_] := Column[
   Spacings -> {0.4}
 ];
 
+(* renderovanie rozšírenej matice (A|b) so zvýraznením *)
 alignedAugmentedMatrix[aug_, notes_List : {}, hi_Association : <||>] := Module[{ nRows, nCols, nA, notes2, pivotPos, activeRows, sourceRows, activeCols, sourceCols, ZeroCells, orangeCells, bar,
   leftLabel, rightLabel, showLabelsQ, cellBg, makeCell, makeBar, leftBracketCell, rightBracketCell, rows, matrixGrid, notesGrid, notesWithLabels, colSizes, labelGrid, matrixWithLabels},
 
@@ -1114,6 +1124,7 @@ matrixMaxAbs[m_] := Max[Abs[Flatten[m]]];
 
 SetAttributes[appendNoneConclusionAndStop, HoldFirst];
 
+(* ukončenie výpočtu pri spornom riadku 0 = k *)
 appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False, mIndex_: None] := Module[{ n, badIdx, notes},
 
   n = data["n"];
@@ -1142,6 +1153,7 @@ appendNoneConclusionAndStop[content_, aug_, data_Association, showElemQ_: False,
   Throw[<|"Content" -> content, "Solution" -> "NONE"|>, "StopMatrixSteps"]
 ];
 
+(* opakované generovanie, kým medzikroky neprekročia zadané hranice *)
 generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, pivotMode_: "ZERO", boundAugFn_: Automatic, boundCheckFn_: Automatic] := Module[{ data, retries = 0, augForCheck, resolvedBoundAugFn, resolvedBoundCheckFn},
 
   resolvedBoundAugFn = If[
@@ -1186,6 +1198,7 @@ generateDataWithBounds[diff_String, n_Integer, solType_, triType_, scrambleFn_, 
 kSetTri := nonzeroRange[-4, 7];
 kSetGauss := nonzeroRange[-2, 3];
 
+(* východisková diagonálna rozšírená matica podľa typu riešenia *)
 makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, paramIdxs = {}, badRow, rhsNonzero, numParams, pivotRows, coeffPool, buildParamColumn, col1, col2, tries},
 
   rhsNonzero = DeleteCases[Range[$bRange[[1]], $bRange[[2]]], 0];
@@ -1332,6 +1345,7 @@ makeDiagonalAug[n_Integer, solType_String] := Module[{ A, b, x, idx, paramIdx, p
 
 (* -- Scramble Helpers -- *)
 
+(* plánované stĺpce, v ktorých má nastať výmena pivotu *)
 gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
   possibleCols = Range[Max[0, pivotCount - 1]];
 
@@ -1343,6 +1357,7 @@ gaussPlannedPivotSwapColumns[pivotCount_Integer] := Module[{ possibleCols},
   ]
 ];
 
+(* zistenie, v ktorých stĺpcoch trace skutočne zmenil pivot na menší *)
 gaussObservedPivotSwapColumns[trace_List] := Module[{ cols = {}, step, prev, i, k, currentPivot, newPivot},
 
   Do[
@@ -1369,6 +1384,7 @@ gaussObservedPivotSwapColumns[trace_List] := Module[{ cols = {}, step, prev, i, 
   cols
 ];
 
+(* vynútenie výmeny susedného pivotu pri zachovaní hraníc *)
 gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[{ work = aug, rowI, rowK, factors, chosen},
 
   If[i >= Length[aug], Return[work]];
@@ -1397,6 +1413,7 @@ gaussForceAdjacentPivotSwap[aug_, i_Integer, bnd_Integer] := Module[{ work = aug
   rowApplySwap[work, i, i + 1]
 ];
 
+(* trace doprednej Gaussovej eliminácie pre kontrolu medzikrokov *)
 gaussForwardEliminationTrace[aug_, pivotMode_: "ZERO"] := Module[{ workAug, n, i, r, pivotRowFn, pivotRow, pivotValue, elimRes, trace = {}},
 
   workAug = aug;
@@ -2285,6 +2302,7 @@ genScrambleSubstitution[diff_String, baseData_Association] := Module[
 
 (* ~-~-~ STEP GENERATION HELPERS ~-~-~ *)
 
+(* spätné dosadzovanie pre trojuholníkovú maticu *)
 appendTriangularSubstitutionSteps[mat_, rhs_, vars_, sol0_, order_List, content_, initialKnownIdxs_List : {}, skipIdxs_List : {}] := Module[{ n = Length[mat], sol = sol0, out = content,
   solvedIdxs, boldVal, coeffTimes, addOneRow},
 
@@ -2522,6 +2540,7 @@ gaussJordanEliminationTrace[aug_, pivotMode_: "MIN"] := Module[{ workAug, n, i, 
 
 (* --- LU / Cholesky HELPERS --- *)
 
+(* výpočet dát pre LU rozklad a následné dosadenie *)
 luSolveData[A_, b_] := Module[{ n, L, U, y, x, i, j, terms, sumTerm, pivotValue},
 
   n = Length[A];
@@ -2575,6 +2594,7 @@ luSolveData[A_, b_] := Module[{ n, L, U, y, x, i, j, terms, sumTerm, pivotValue}
   <|"L" -> L, "U" -> U, "Y" -> y, "X" -> x|>
 ];
 
+(* výpočet dát pre Choleského rozklad a následné dosadenie *)
 choleskySolveData[A_, b_] := Module[{ n, L, y, x, i, j, diagTerms, mixedTerms, diagRadicand, diagValue, sumTerm},
 
   n = Length[A];
@@ -2807,6 +2827,7 @@ buildCholeskyOffDiagonalLines[j_Integer, i_Integer, A_, L_, diagValue_, value_] 
 
 cramerRandomNonzeroValue[maxAbs_Integer : 4] := RandomChoice[DeleteCases[Range[-maxAbs, maxAbs], 0]];
 
+(* náhodná regulárna 3x3 matica s obmedzeným determinantom *)
 cramerRandomInvertible3x3[maxAbs_Integer : 4, maxDet_Integer : 30] := Module[{ candidate, tries = 0, pool},
   pool = Join[Range[-maxAbs, -1], Range[1, maxAbs], Range[-maxAbs, -1], Range[1, maxAbs]];
 
@@ -2842,6 +2863,7 @@ generateCramerEasyMatrix[solutionVector_List] := Module[{ candidate, rhsVector, 
   $Failed
 ];
 
+(* determinant 4x4 cez jeden Laplaceov rozvoj a determinant 3x3 *)
 renderCramer4x4Reduction[matrix_, label_] := Module[{ content = {}, line1, signed1, minor3, minor3Label, det3Data, value},
 
   minor3Label = Subscript[Style["M", Italic], 3];
@@ -2948,6 +2970,7 @@ generateCramerHardMatrix[solutionVector_List] := Module[{ core, candidate, rhsVe
   $Failed
 ];
 
+(* determinanty hlavnej a pomocných matíc pre Cramerovo pravidlo *)
 cramerSolveData[A_, b_] := Module[{ detA, auxMatrices, auxDeterminants, solution},
 
   detA = Together[Det[A]];
@@ -2982,6 +3005,7 @@ cramerMatrixLabel[var_] := Subscript[Style["A", Italic], Style[var, Italic]];
 
 cramerDetLabel[label_] := Row[{"det(", label, ")"}];
 
+(* vykreslenie matice so zvýraznením riadku, stĺpca alebo pivotu *)
 cramerMatrixCard[matrix_, hi_Association : <||>] := Module[
   {activeRow, activeColumn, pivotPos, focusCells, columnAsRowQ, rowTextColor, colTextColor, focusTextColor, pivotTextColor, zeroTextColor, styledMatrix},
 
@@ -3029,6 +3053,7 @@ cramerMatrixCard[matrix_, hi_Association : <||>] := Module[
   styledPlainMatrix[styledMatrix]
 ];
 
+(* panel pre Laplaceov rozvoj so zvýrazneným minorom *)
 cramerLaplaceReductionPanel[matrix_, lineData_Association, minorLabel_, minorMatrix_] := Module[{highlight},
   highlight = If[
     lineData["Type"] === "Row",
@@ -3068,6 +3093,7 @@ cramerFactor[value_] := If[
 
 cramerLabeledMatrixGrid[label_, matrix_, hi_Association : <||>] := labeledMatrixBlock[label, cramerMatrixCard[matrix, hi]];
 
+(* porovnanie pôvodnej a pomocnej matice so zvýrazneným nahradeným stĺpcom *)
 cramerAuxiliaryMatrixPanel[A_, auxMatrix_, column_Integer, auxLabel_] := Module[{ leftBg, rightBg, matrixWithColumnBackground},
 
   leftBg = RGBColor[0.95, 0.92, 1.00];
@@ -3148,6 +3174,7 @@ cramer3x3NegativeColors = {
   RGBColor[0.00, 0.60, 0.78]
 };
 
+(* farebné zvýraznenie diagonál pre Sarrusovo pravidlo *)
 cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[{groups, colors, modeColor, styled},
 
   {groups, colors} = Switch[
@@ -3179,6 +3206,7 @@ cramer3x3StyledMatrixByMode[matrix_, mode_String] := Module[{groups, colors, mod
   styledPlainMatrix[styled]
 ];
 
+(* vzorec Sarrusovho pravidla pre konkrétnu maticu 3x3 *)
 cramer3x3FormulaDisplay[matrix_] := Module[{a, b, c, d, e, f, g, h, i, termProduct},
   {{a, b, c}, {d, e, f}, {g, h, i}} = matrix;
 
@@ -3202,6 +3230,7 @@ cramer3x3FormulaDisplay[matrix_] := Module[{a, b, c, d, e, f, g, h, i, termProdu
   }]
 ];
 
+(* zápis súčtu so znamienkami bez nulových členov *)
 cramerSignedValueSum[values_List] := Module[{ clean, first, rest},
   clean = Select[Together /@ values, # =!= 0 &];
 
@@ -3229,6 +3258,7 @@ cramerSignedValueSum[values_List] := Module[{ clean, first, rest},
   ]
 ];
 
+(* vizuálne rozdelenie kladných a záporných diagonál determinantov 3x3 *)
 cramer3x3VisualPanel[label_, matrix_] := Grid[{{
     labeledMatrixBlock[label, cramerMatrixCard[matrix]],
     Style["\[LongRightArrow]", Bold, FontSize -> 26],
@@ -3481,6 +3511,7 @@ renderCramer5x5Reduction[matrix_, label_] := Module[{ content = {}, line1, line2
   <|"Content" -> content, "Value" -> value, "Matrix" -> matrix|>
 ];
 
+(* výber vhodného spôsobu výpočtu determinantu podľa veľkosti matice *)
 renderCramerDeterminant[matrix_, label_] := Switch[
   Length[matrix],
   3, renderCramer3x3Det[matrix, label],
@@ -3509,6 +3540,7 @@ equationSolutionTypeMatchesQ[A_, rhs_, solType_String] := Module[{rankA, rankAug
 
 (* ~-~-~ VALIDATION ~-~-~ *)
 
+(* formátovanie členov lineárneho výrazu so znamienkami *)
 renderTermsRow[terms_List, mode_ : "Numeric", highlightVar_ : None] := Module[
   {pairs, out = {}, first = True, c, v, zeroQ, negQ, t},
   pairs = Select[terms, MatchQ[#, {_, _}] &];
@@ -3535,6 +3567,7 @@ renderTermsRow[terms_List, mode_ : "Numeric", highlightVar_ : None] := Module[
   If[out === {}, tf[0], Row[out]]
 ];
 
+(* zarovnanie viacerých riadkov rovníc s poznámkami vpravo *)
 alignedEquations[data_, breaks_List : {}, gap_ : 1.25] := Module[{eq = Style["=", 16], bar = Style["|", GrayLevel[.25]], n, rowGaps, stepRow, baseGap = 0.5, bigGap = gap},
   n = Length[data];
   rowGaps = ConstantArray[baseGap, Max[n, 1]];
@@ -3579,6 +3612,7 @@ addNote[k_] := Which[
 multNote[m_] := If[PossibleZeroQ[m - 1], "", Row[{"\[CenterDot]", " ", wrapNegValue[m]}]];
 divNote[d_] := If[PossibleZeroQ[d - 1], "", Row[{":", " ", wrapNegValue[d]}]];
 
+(* poznámka k dosadeniu už vypočítaných premenných *)
 substNote[solMap_, remVars_, row_, vars_] := Module[{rowByVar, usedVars},
 (* spárujeme premenné s koeficientmi bezpečne *)
   rowByVar = AssociationThread[vars -> row];
@@ -3595,6 +3629,7 @@ substNote[solMap_, remVars_, row_, vars_] := Module[{rowByVar, usedVars},
   ]
 ];
 
+(* kroky izolovania premennej z rovnice s jedným neznámym členom *)
 isolateVarFromCoeffEqSteps[c_, var_, rhs_] := Module[{steps = {}, value},
   Which[
     PossibleZeroQ[c],
@@ -3618,6 +3653,7 @@ isolateVarFromCoeffEqSteps[c_, var_, rhs_] := Module[{steps = {}, value},
   ]
 ];
 
+(* ľavá strana rovnice po dosadení známych premenných *)
 formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_ : False] := Module[{terms = {}, first = True, addTerm, emitKnownTerm, emitUnknownTerm},
   addTerm[content_, sign_] := (AppendTo[terms, If[first, If[sign === -1, Row[{"-", content}], content], Row[{If[sign === -1, " - ", " + "], content}]]]; first = False);
   emitKnownTerm[c_, v_] := Module[{prod},
@@ -3728,6 +3764,7 @@ verificationStepsEquationInfinite[A_, b_, vars_, solExprs_List] := Module[
   content
 ];
 
+(* výber jednoduchej rovnice a voľnej premennej pre parametrické riešenie *)
 chooseInfiniteEquationRelation[eqs_List, varsNow_List] := Module[
   {paramSymbol = \[FormalT], candidates = {}, normalized, row, rhs, solveIdx, paramIdx,
     exprWithVars, exprWithParam, coeffParam, constParam, denScore, score},
@@ -3800,6 +3837,7 @@ chooseInfiniteEquationRelation[eqs_List, varsNow_List] := Module[
 
 SetAttributes[appendEquationInfiniteParametrization, HoldFirst];
 
+(* doplnenie krokov parametrizácie pre nekonečne veľa riešení *)
 appendEquationInfiniteParametrization[content_, config_Association, A_, b_, origVars_, eqs_, varsNow_, stack_] := Module[
   {relation, solMap, solExprs, paramVar, paramSymbol, solveVar, row, rhs, solveIdx,
     unknownCoeff, knownSum, rhsAfterMove, valueExpanded, valueExpandedDisplay,
@@ -4014,6 +4052,7 @@ appendEquationVerification[content_, A_, b_, vars_, result_] := Module[{items},
 
 scaleTerms[terms_List, k_Integer] := ({k #[[1]], #[[2]]} & /@ terms);
 
+(* vytvorenie zámerne zložitejšieho tvaru jednej rovnice *)
 buildHardEq[row_, rhs_, vars_] := Module[{n = Length[vars], idxMove, cLeftPool, cLeft, varTerms, kept, moved, leftBase, rightBase},
   idxMove = RandomSample[Range[n], RandomChoice[Range[1, n - 1]]];
   cLeftPool = DeleteCases[Range[-7, 7], 0];
@@ -4032,6 +4071,7 @@ pickHardMultipliers15[n_] := Module[{ks},
   ks
 ];
 
+(* príprava hard zadania v nenormalizovanom tvare *)
 buildHardDisplay[data_Association, vars_] := Module[{A = data["A"], b = data["b"], n = Length[vars], ks, eqDisp = {}, leftBaseAll = {}, rightBaseAll = {}, m, lMult, rMult},
   ks = pickHardMultipliers15[n];
 
@@ -4062,6 +4102,7 @@ zeroCoeff3[A_] := Module[{mask, zeroRowsByCol, zeroColsByRow},
   <|"Mask" -> mask, "ZeroRowsByCol" -> zeroRowsByCol, "ZeroColsByRow" -> zeroColsByRow|>
 ];
 
+(* normalizačné kroky pre hard sústavu 3x3 *)
 hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[{content = {}, ks, leftBase, rightBase, k, lMult, rMult, coeffL, coeffR, constL, constR, addTerms, addNoteFromTerms,
   addNoteLocal, rowStd, rhsStd, rowsStd, rhsStdAll, gcds, rowDiv, rhsDiv, rowsFinal, rhsFinal, anyDivQ},
 
@@ -4149,6 +4190,7 @@ hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[{content = {}
 
 (* ~-~-~ INFINITE SOLUTIONS & PARAMETRIZATION ~-~-~ *)
 
+(* voľba parametrizácie s čo najmenšími menovateľmi *)
 chooseParametrization[A_, b_, vars_] := Module[{eqs, candidates, try, results},
   eqs = Thread[A . vars == b];
   candidates = List /@ vars;
@@ -4231,6 +4273,7 @@ generateEquationDataWithBounds[dim_Integer, diff_String, solType_String, vars_Li
 
 (* ~-~-~ VISUALIZATION HELPERS ~-~-~ *)
 
+(* typ spoločného prieniku troch rovín *)
 systemIntersection3[A_, b_, vars_] := Module[{rA = MatrixRank[A], rAb = MatrixRank[Join[A, Transpose[{b}], 2]], ns},
   If[rAb > rA, <|"Type" -> "NONE"|>,
     If[rA == 3, <|"Type" -> "POINT", "Point" -> LinearSolve[A, b]|>,
@@ -4373,6 +4416,7 @@ solveOneVarEquationSteps[{row_List, rhs_}, {var_}] := Module[{c = row[[1]], cls,
   ]
 ];
 
+(* spätné dopočítanie jednej premennej z pivotnej rovnice *)
 backSubstituteVariableSteps[{row_List, rhs_}, vars_List, solMap_Association, solvedVar_] := Module[
   {steps = {}, currentLHS, substLHS, expandedTerms = {}, combinedTerms, combinedLHS,
     unknownCoeff, knownTerms, knownSum, rhsShift, noteShift, valueExpanded, valueFactored, valueFinal,
@@ -4600,6 +4644,7 @@ backSubstituteVariableSteps[solvedVar_, expr_, vars_List, solMap_Association] :=
   ]
 ];
 
+(* jeden redukčný krok eliminačnej metódy *)
 reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, content = {}, data2, sumRow, sumRHS, elimIdx, keepIdx, keepVar, elimVar, pivotEq, newEq, cls,
   red, A2, b2, remVars, idx},
 
@@ -4716,6 +4761,7 @@ reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, 
   |>
 ];
 
+(* výber premennej na elimináciu v sústave 2x2 *)
 pickElimVar2[A_] := Module[{scores},
   scores = Table[
     Module[{c1 = A[[1, i]], c2 = A[[2, i]], lcm},
@@ -4729,6 +4775,7 @@ pickElimVar2[A_] := Module[{scores},
   If[scores[[2]] < scores[[1]], 2, 1]
 ];
 
+(* výber premennej na elimináciu v sústave 3x3 *)
 pickElimVar3[A_] := Module[{zp, scorePair, zeroCols, scoreZeroCol, baseScores},
   zp = zeroCoeff3[A];
   scorePair[c1_, c2_] := If[Abs[c1] == Abs[c2] && Sign[c1] =!= Sign[c2], 0, LCM[Abs[c1], Abs[c2]]];
@@ -4749,6 +4796,7 @@ pickElimVar3[A_] := Module[{zp, scorePair, zeroCols, scoreZeroCol, baseScores},
   Ordering[baseScores, 1][[1]]
 ];
 
+(* príprava dvojice rovníc na vyrušenie zvolenej premennej *)
 eliminationStart2[A_, b_, vars_] := Module[{idx, k1, k2, lcm, m1, m2, choice, targetVar, needsMult, content = {}, rows1, rows2},
   idx = pickElimVar2[A];
   targetVar = vars[[idx]];
@@ -4784,6 +4832,7 @@ eliminationStart2[A_, b_, vars_] := Module[{idx, k1, k2, lcm, m1, m2, choice, ta
   <|"content" -> content, "m1" -> m1, "m2" -> m2, "EliminatedVariable" -> choice, "A_mod" -> {m1 A[[1]], m2 A[[2]]}, "b_mod" -> {m1 b[[1]], m2 b[[2]]}|>
 ];
 
+(* výber najvýhodnejšej dvojice riadkov pre elimináciu v 3x3 *)
 pickBestElimPair[rowIdx_List, elimCol_Integer, A_] := Module[{pairs, scorePair},
   pairs = Subsets[rowIdx, {2}];
   scorePair[{i_, j_}] := Module[{c1 = A[[i, elimCol]], c2 = A[[j, elimCol]]},
@@ -4792,6 +4841,7 @@ pickBestElimPair[rowIdx_List, elimCol_Integer, A_] := Module[{pairs, scorePair},
   First @ MinimalBy[pairs, scorePair]
 ];
 
+(* výber riadku, z ktorého sa bude spätne dosadzovať v 3x3 *)
 pickSubstRow3[zp_, elimCol_Integer, A_] := Module[{rows = Range[3], allNonZero, elimNonZero, score},
   allNonZero = Select[rows, zp["ZeroColsByRow"][[#]] === {} && A[[#, elimCol]] =!= 0 &];
   elimNonZero = Select[rows, A[[#, elimCol]] =!= 0 &];
@@ -4803,6 +4853,7 @@ pickSubstRow3[zp_, elimCol_Integer, A_] := Module[{rows = Range[3], allNonZero, 
   ]
 ];
 
+(* eliminácia jednej premennej z dvojice rovníc *)
 reducePair3[rowA_, rhsA_, rowB_, rhsB_, elimCol_, vars_] := Module[{content = {}, valA = rowA[[elimCol]], valB = rowB[[elimCol]], lcm, m1, m2, rowA2, rhsA2, rowB2, rhsB2, newRow, newRHS, rows1, rows2},
   If[valA == 0 || valB == 0,
     AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{rowA, vars}], "Numeric", vars[[elimCol]]], rhsA, ""}, {renderTermsRow[Transpose[{rowB, vars}], "Numeric", vars[[elimCol]]], rhsB, ""}}]];
@@ -4842,6 +4893,7 @@ additionEquationRow2[rowMod_, rhsMod_, vars_] := {
   ""
 };
 
+(* redukcia sústavy 3x3 na dvojicu rovníc 2x2 *)
 reduce3to2[A_, b_, vars_] := Module[{content = {}, zp, substPick, elimCol, elimVar, zeroRows, nonZeroRows, iKeep, rowIV, rhsIV, rowV, rhsV, remCols, remVars, A2, b2, twoCombosQ, pair, i1, i2},
   appendStepHeader[content, "Redukcia sústavy 3x3 na 2x2"];
   zp = zeroCoeff3[A];
@@ -4901,6 +4953,7 @@ reduce3to2[A_, b_, vars_] := Module[{content = {}, zp, substPick, elimCol, elimV
 
 (* ~-~-~ SUBSTITUTION HELPERS ~-~-~ *)
 
+(* jeden redukčný krok dosadzovacej metódy *)
 reduceOnceBySubstitution[eqs_List, vars_List] := Module[{n = Length[vars], A, b, content = {}, rI, cI, solveData, substRule, elimVar, remVars, res, newEq, cls, lastSolve, red, A2, b2},
   A = eqs[[All, 1]]; b = eqs[[All, 2]];
 
@@ -4993,6 +5046,7 @@ pickSubstSolve3[A_, b_, vars_] := Module[{scores},
   First @ Position[scores, Min[scores]]
 ];
 
+(* kroky vyjadrenia jednej premennej z rovnice *)
 solveForVarSteps[row_, rhs_, vars_, varIndex_] := Module[{targetVar, c, otherTerms, rhsExpr, stepsIso = {}, moveNote, currentLHS, iso, solExpr},
   targetVar = vars[[varIndex]];
   c = row[[varIndex]];
@@ -5013,6 +5067,7 @@ solveForVarSteps[row_, rhs_, vars_, varIndex_] := Module[{targetVar, c, otherTer
   <|"Content" -> stepsIso, "Rule" -> (targetVar -> solExpr), "Expr" -> solExpr, "Var" -> targetVar|>
 ];
 
+(* dosadenie vyjadrenej premennej do ďalšej rovnice *)
 substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[{targetVar, substExpr, stepRows, currentLHS, sNote, pos, targetCoeff, baseTerms, subCoeffs, subConst, distTerms, lhsCombined, newRow, constLeft, newRHS, c},
   targetVar = rule[[1]]; substExpr = rule[[2]]; stepRows = {};
 
@@ -5081,6 +5136,7 @@ substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
 
 ];
 
+(* redukcia sústavy 3x3 na 2x2 pomocou dosadzovania *)
 reduce3to2BySubstitution[A_, b_, vars_] := Module[{content = {}, rI, cI, solveData, elimVar, substRule, otherRowsIdx, A2, b2, remVars, remCols, idx},
   {rI, cI} = pickSubstSolve3[A, b, vars];
   elimVar = vars[[cI]];
@@ -5710,7 +5766,7 @@ stepsInverseMatrix[data_Association] := Module[{ content = {}, n, A, b, vars, au
   <|"Content" -> content, "Solution" -> xResult, "InverseMatrix" -> invMatrix|>
 ];
 
-stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U, y, x, tmp, addHeader, addText, addMatrixPair, addVector, addFormula, addSubHeader, resultStyle,
+stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U, y, x, tmp, addHeader, addText, addMatrixPair, addFormula, addSubHeader, resultStyle,
     prettyMatrix, prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality, i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck,
     xSymbols, formatLinearEquation, formatForwardEquation, formatBackwardEquation, symbolicProductSum, numericProductSum, sigmaUDisplay, sigmaLDisplay,
     buildUFormulaLines, buildLFormulaLines, buildYFormulaLines, currentLBoldPositions, currentUBoldPositions, taskFormat
@@ -5743,13 +5799,7 @@ stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U,
     Spacings -> {1.2, 0}
   ]];
 
-  addVector[label_, vec_] := AppendTo[content, highlightGrid @ Grid[
-    {{prettyVector[Style[label, Italic], vec]}},
-    Alignment -> Left,
-    Spacings -> {1, 0}
-  ]];
-
-  appendProductDisplay[left_, right_, result_] := AppendTo[content, highlightGrid @ Grid[
+  appendProductDisplay[left_, right_, result_] := AppendTo[content, Grid[
     {{
       prettyMatrix[Style["L", Italic], left],
       Style["\[CenterDot]", Bold, FontSize -> 18],
@@ -6099,15 +6149,13 @@ stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U,
   luProduct = Together[L . U];
 
   appendProductDisplay[L, U, luProduct];
-  appendMatrixEquality[Row[{Style["L", Italic], " \[CenterDot] ", Style["U", Italic]}], luProduct, Style["A", Italic], A, luProduct === A];
 
   addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
   addText["Najprv vyriešime pomocnú sústavu L \[CenterDot] y = b. Keďže L je dolná trojuholníková matica, použijeme dopredné dosadzovanie."];
   AppendTo[content, alignedAugmentedMatrix[augFromAb[L, b], {}, <|"BoldDiagonal" -> True, "LeftLabel" -> Style["L", Italic], "RightLabel" -> Style["b", Italic]|>]];
 
   tmp = appendTriangularSubstitutionSteps[
-    L,
-    b,
+    L, b,
     Table[luScalarSymbol["y", k], {k, 1, n}],
     ConstantArray[0, n],
     Range[n],
@@ -6117,7 +6165,7 @@ stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U,
   y = tmp[[1]];
   content = tmp[[2]];
 
-  addVector["y", y];
+  AppendTo[content, prettyVector[Style["y", Italic], y]];
 
   addHeader["Riešenie sústavy U \[CenterDot] x = y"];
   addText["Potom vyriešime sústavu U \[CenterDot] x = y. Keďže U je horná trojuholníková matica, použijeme spätné dosadzovanie."];
@@ -6161,7 +6209,7 @@ stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U,
   |>
 ];
 
-stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, choleskyData, L, LT, y, x, tmp, addHeader, addText, addSubHeader, addFormula, addMatrixPair, addVector, prettyMatrix,
+stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, choleskyData, L, LT, y, x, tmp, addHeader, addText, addSubHeader, addFormula, addMatrixPair, prettyMatrix,
   prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality, i, j, productCheck, lowerCheck, upperCheck, ySymbols, currentLBoldPositions, currentLTBoldPositions, taskFormat},
 
   n = data["n"];
@@ -6190,13 +6238,7 @@ stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, cholesk
     Spacings -> {1.2, 0}
   ]];
 
-  addVector[label_, vec_] := AppendTo[content, highlightGrid @ Grid[
-    {{prettyVector[Style[label, Italic], vec]}},
-    Alignment -> Left,
-    Spacings -> {1, 0}
-  ]];
-
-  appendProductDisplay[left_, right_, result_] := AppendTo[content, highlightGrid @ Grid[
+  appendProductDisplay[left_, right_, result_] := AppendTo[content, Grid[
     {{
       prettyMatrix[Style["L", Italic], left],
       Style["\[CenterDot]", Bold, FontSize -> 18],
@@ -6327,7 +6369,6 @@ stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, cholesk
   productCheck = Together[L . LT];
 
   appendProductDisplay[L, LT, productCheck];
-  appendMatrixEquality[Row[{Style["L", Italic], " \[CenterDot] ", transposeLSymbol[]}], productCheck, Style["A", Italic], A, productCheck === A];
 
   addHeader["Riešenie pomocnej sústavy L \[CenterDot] y = b"];
   addText["Najprv vyriešime pomocnú sústavu L \[CenterDot] y = b. Keďže L je dolná trojuholníková matica, použijeme dopredné dosadzovanie."];
@@ -6345,7 +6386,7 @@ stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, cholesk
   y = tmp[[1]];
   content = tmp[[2]];
 
-  addVector["y", y];
+  AppendTo[content, prettyVector[Style["y", Italic], y]];
 
   addHeader[Row[{"Riešenie sústavy ", transposeLSymbol[], " \[CenterDot] x = y"}]];
   addText[Row[{"Potom vyriešime sústavu ", transposeLSymbol[], " \[CenterDot] x = y. Keďže ", transposeLSymbol[], " je horná trojuholníková matica, použijeme spätné dosadzovanie."}]];
