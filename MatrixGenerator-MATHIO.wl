@@ -1,6 +1,6 @@
 Module[{
   difficulty = "MEDIUM", (* EASY/MEDIUM/HARD *)
-  method = "ElemGJ", (* Triangular/Gauss/GaussJordan/GaussJordanPivot/ ElemGJ/Inverse/LU/Cholesky/Cramer/Elimination/Substitution *)
+  method = "GaussJordan", (* Triangular/Gauss/GaussJordan/GaussJordanPivot/ ElemGJ/Inverse/LU/Cholesky/Cramer/Elimination/Substitution *)
   solutionType = "ONE", (* ONE/NONE/INFINITE *)
   taskFormat = "MATRIX", (* EQUATIONS/MATRIX *)
   visualization = False, (* True/False *)
