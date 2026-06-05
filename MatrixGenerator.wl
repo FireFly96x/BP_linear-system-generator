@@ -4230,7 +4230,7 @@ hardNormalizationSteps3[A_, b_, vars_, data_Association] := Module[{content = {}
     If[pairs === {}, Return[""]];
     pieces = Table[
       With[{cc = pairs[[j, 1]], sym = pairs[[j, 2]]},
-        Row[{If[cc >= 0, "+", "-"], If[sym === None, tf[Abs[cc]], tf[If[Abs[cc] === 1, sym, Abs[cc] sym]]]}]
+        Row[{If[cc >= 0, "+ ", "- "], If[sym === None, tf[Abs[cc]], tf[If[Abs[cc] === 1, sym, Abs[cc] sym]]]}]
       ],
       {j, 1, Length[pairs]}
     ];
@@ -7840,7 +7840,7 @@ GenElimination[diff_String, mode_String, opts : OptionsPattern[]] := Module[{spe
     "EntryFn" -> GenElimination,
     "MsgPrefix" -> GenElimination,
     "DimKey" -> "Elimination",
-    "SectionTitle" -> "Eliminačná metóda",
+    "SectionTitle" -> "Eliminačná (sčítacia) metóda",
     "TaskText" -> "Riešte sústavu rovníc eliminačnou metódou (sčítaním rovníc).",
     "ScrambleFn" -> genScrambleElimination,
     "StepsFn" -> stepsElimination
