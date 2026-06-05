@@ -3700,7 +3700,6 @@ divNote[d_] := If[PossibleZeroQ[d - 1], "", Row[{":", " ", wrapNegValue[d]}]];
 
 (* poznámka k dosadeniu už vypočítaných premenných *)
 substNote[solMap_, remVars_, row_, vars_] := Module[{rowByVar, usedVars},
-(* spárujeme premenné s koeficientmi bezpečne *)
   rowByVar = AssociationThread[vars -> row];
 
   usedVars = Select[
@@ -3711,10 +3710,23 @@ substNote[solMap_, remVars_, row_, vars_] := Module[{rowByVar, usedVars},
   If[
     usedVars === {},
     "",
-    Row[Riffle[(Row[{#, " \[Rule] ", tft[solMap[#]]}] & /@ usedVars), ", "]]
+    Row[
+      Riffle[
+        (
+          Row[{
+            #,
+            " \[Rule] ",
+            formatLinearExpr[
+              Expand[Together[solMap[#]]],
+              DeleteCases[vars, #]
+            ]
+          }]
+        ) & /@ usedVars,
+        ", "
+      ]
+    ]
   ]
 ];
-
 (* kroky izolovania premennej z rovnice s jedným neznámym členom *)
 isolateVarFromCoeffEqSteps[c_, var_, rhs_] := Module[{steps = {}, value},
   Which[
@@ -3740,19 +3752,56 @@ isolateVarFromCoeffEqSteps[c_, var_, rhs_] := Module[{steps = {}, value},
 ];
 
 (* ľavá strana rovnice po dosadení známych premenných *)
-formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_ : False] := Module[{terms = {}, first = True, addTerm, emitKnownTerm, emitUnknownTerm},
-  addTerm[content_, sign_] := (AppendTo[terms, If[first, If[sign === -1, Row[{"-", content}], content], Row[{If[sign === -1, " - ", " + "], content}]]]; first = False);
-  emitKnownTerm[c_, v_] := Module[{prod},
+formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_ : False] := Module[
+  {terms = {}, first = True, addTerm, emitKnownTerm, emitUnknownTerm, exprBody, prod},
+
+  addTerm[content_, sign_] := (
+    AppendTo[
+      terms,
+      If[
+        first,
+        If[sign === -1, Row[{"-", content}], content],
+        Row[{If[sign === -1, " - ", " + "], content}]
+      ]
+    ];
+    first = False
+  );
+
+  emitKnownTerm[c_, v_] := Module[{},
     If[!KeyExistsQ[solMap, v], Return[Null]];
-    If[TrueQ[evalMode], prod = Together[c*solMap[v]]; If[!PossibleZeroQ[prod], addTerm[tf[Abs[prod]], Sign[prod]]], addTerm[coeffVal[Abs[c], solMap[v]], Sign[c]]]
+
+    If[
+      TrueQ[evalMode],
+      prod = Together[c solMap[v]];
+      If[!PossibleZeroQ[prod], addTerm[tf[Abs[prod]], Sign[prod]]],
+      exprBody = Row[{
+        "(",
+        formatLinearExpr[Expand[Together[solMap[v]]], DeleteCases[vars, v]],
+        ")"
+      }];
+
+      addTerm[
+        If[
+          Abs[c] === 1,
+          exprBody,
+          Row[{tf[Abs[c]], "\[CenterDot]", exprBody}]
+        ],
+        Sign[c]
+      ]
+    ]
   ];
+
   emitUnknownTerm[c_, v_] := addTerm[tf[If[Abs[c] === 1, v, Abs[c] v]], Sign[c]];
+
   Do[
     With[{c = row[[i]], v = vars[[i]]},
-      If[c =!= 0, If[v === unknownVar, emitUnknownTerm[c, v], emitKnownTerm[c, v]]]
+      If[c =!= 0,
+        If[v === unknownVar, emitUnknownTerm[c, v], emitKnownTerm[c, v]]
+      ]
     ],
     {i, 1, Length[vars]}
   ];
+
   If[terms === {}, tf[0], Row[terms]]
 ];
 
@@ -5258,16 +5307,44 @@ formatLinearExpr[expr_, vrs_List] := Module[{coeffs, c0, terms = {}},
   renderTermsRow[terms]
 ];
 
-formatSubstOnceLHS[row_, vars_, targetVar_, substExpr_] := Module[{terms = {}, first = True, addTerm},
-  addTerm[content_, sign_] := (AppendTo[terms, If[first, If[sign === -1, Row[{"-", content}], content], Row[{If[sign === -1, " - ", " + "], content}]]]; first = False);
+formatSubstOnceLHS[row_, vars_, targetVar_, substExpr_] := Module[
+  {terms = {}, first = True, addTerm, substVars, substBody},
+
+  addTerm[content_, sign_] := (
+    AppendTo[
+      terms,
+      If[
+        first,
+        If[sign === -1, Row[{"-", content}], content],
+        Row[{If[sign === -1, " - ", " + "], content}]
+      ]
+    ];
+    first = False
+  );
+
+  substVars = DeleteCases[vars, targetVar];
+  substBody = Row[{"(", formatLinearExpr[Expand[Together[substExpr]], substVars], ")"}];
+
   Do[
     With[{c = row[[i]], v = vars[[i]]},
       If[c =!= 0,
-        If[v === targetVar, addTerm[coeffVal[Abs[c], substExpr], Sign[c]], addTerm[tf[If[Abs[c] === 1, v, Abs[c] v]], Sign[c]]]
+        If[
+          v === targetVar,
+          addTerm[
+            If[
+              Abs[c] === 1,
+              substBody,
+              Row[{tf[Abs[c]], "\[CenterDot]", substBody}]
+            ],
+            Sign[c]
+          ],
+          addTerm[tf[If[Abs[c] === 1, v, Abs[c] v]], Sign[c]]
+        ]
       ]
     ],
     {i, 1, Length[vars]}
   ];
+
   If[terms === {}, tf[0], Row[terms]]
 ];
 
@@ -5282,86 +5359,154 @@ pickSubstSolve3[A_, b_, vars_] := Module[{scores},
 ];
 
 (* kroky vyjadrenia jednej premennej z rovnice *)
-solveForVarSteps[row_, rhs_, vars_, varIndex_] := Module[{targetVar, c, otherTerms, rhsExpr, stepsIso = {}, moveNote, currentLHS, iso, solExpr},
+solveForVarSteps[row_, rhs_, vars_, varIndex_] := Module[
+  {
+    targetVar, c, otherVars, otherTerms, moveExpr, rhsExpr, solExpr,
+    stepsIso = {}, moveNote, currentLHS, rhsDisplay
+  },
+
   targetVar = vars[[varIndex]];
   c = row[[varIndex]];
-  otherTerms = Delete[row, varIndex] . Delete[vars, varIndex];
+  otherVars = Delete[vars, varIndex];
+
+  (* členy mimo vyjadrovanej premennej držíme rozvinuté *)
+  otherTerms = Expand[Together[Delete[row, varIndex] . otherVars]];
+  moveExpr = Expand[Together[-otherTerms]];
 
   currentLHS = renderTermsRow[Transpose[{row, vars}]];
-  moveNote = If[PossibleZeroQ[otherTerms], "", addNote[-otherTerms]];
+  moveNote = If[PossibleZeroQ[moveExpr], "", addNote[moveExpr]];
 
   AppendTo[stepsIso, {currentLHS, tf[rhs], moveNote}];
-  rhsExpr = Together[rhs - otherTerms];
 
-  iso = isolateVarFromCoeffEqSteps[c, targetVar, rhsExpr];
-  stepsIso = Join[stepsIso, iso["Steps"]];
-  solExpr = iso["Value"];
+  rhsExpr = Expand[Together[rhs + moveExpr]];
+  rhsDisplay = formatLinearExpr[rhsExpr, otherVars];
 
-  If[!(PossibleZeroQ[otherTerms] && c === 1), AppendTo[stepsIso, {tf[targetVar], formatLinearExpr[solExpr, DeleteCases[vars, targetVar]], ""}]];
+  Which[
+    c === 1,
+    Null,
 
-  <|"Content" -> stepsIso, "Rule" -> (targetVar -> solExpr), "Expr" -> solExpr, "Var" -> targetVar|>
+    c === -1,
+    AppendTo[stepsIso, {tf[-targetVar], rhsDisplay, multNote[-1]}],
+
+    True,
+    AppendTo[stepsIso, {tf[c targetVar], rhsDisplay, divNote[c]}]
+  ];
+
+  (* do pravidla aj do výstupu ukladáme rozvinutý výraz *)
+  solExpr = Expand[Together[rhsExpr/c]];
+
+  AppendTo[
+    stepsIso,
+    {
+      Style[tf[targetVar], Bold],
+      Style[formatLinearExpr[solExpr, otherVars], Bold],
+      ""
+    }
+  ];
+
+  <|
+    "Content" -> stepsIso,
+    "Rule" -> (targetVar -> solExpr),
+    "Expr" -> solExpr,
+    "Var" -> targetVar
+  |>
 ];
 
 (* dosadenie vyjadrenej premennej do ďalšej rovnice *)
 substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
   {
-    targetVar, substExpr, stepRows, currentLHS, sNote, pos, targetCoeff,
-    baseTerms, subCoeffs, subConst, distTerms, lhsCombined, newRow,
-    constLeft, newRHS, rowKey, lastKey = None, dedupRows = {}
+    targetVar, substExpr, expandedSubstExpr, substRule, stepRows,
+    currentLHS, sNote, pos, targetCoeff, allTerms, baseBefore, baseAfter,
+    subCoeffs, subConst, expandedSubTerms, distTerms, lhsCombined,
+    newRow, constLeft, newRHS, c, lhsTermsWithConst
   },
 
   targetVar = rule[[1]];
   substExpr = rule[[2]];
+  expandedSubstExpr = Expand[Together[substExpr]];
+  substRule = targetVar -> expandedSubstExpr;
   stepRows = {};
 
   currentLHS = renderTermsRow[Transpose[{row, vars}]];
-  sNote = substNote[<|targetVar -> substExpr|>, {targetVar}, row, vars];
+  sNote = substNote[<|targetVar -> expandedSubstExpr|>, {targetVar}, row, vars];
 
   AppendTo[stepRows, {currentLHS, tf[rhs], sNote}];
 
   pos = First @ First @ Position[vars, targetVar];
   targetCoeff = row[[pos]];
 
-  If[PossibleZeroQ[targetCoeff],
+  If[
+    PossibleZeroQ[targetCoeff],
+
     newRow = Coefficient[row . vars, #] & /@ remainingVars;
     constLeft = (row . vars) /. (Rule[#, 0] & /@ remainingVars);
     newRHS = rhs - constLeft;
 
-    If[Length[remainingVars] === 1,
+    If[
+      Length[remainingVars] === 1,
       Module[{c = newRow[[1]], v = remainingVars[[1]], iso},
         iso = isolateVarFromCoeffEqSteps[c, v, newRHS];
 
         Which[
           c === 1,
-          Return[<|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>],
+          Return[
+            <|
+              "Content" -> {{
+                Style[renderTermsRow[Transpose[{row, vars}]], Bold],
+                Style[tf[rhs], Bold],
+                ""
+              }},
+              "NewEq" -> {newRow, newRHS}
+            |>
+          ],
 
           c =!= 0 && iso["Type"] === "GENERAL",
           Return[
             <|
-              "Content" -> Join[stepRows, iso["Steps"]],
+              "Content" -> iso["Steps"],
               "NewEq" -> {{1}, iso["Value"]}
             |>
           ],
 
           True,
-          Return[<|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>]
+          Return[
+            <|
+              "Content" -> {{
+                Style[renderTermsRow[Transpose[{row, vars}]], Bold],
+                Style[tf[rhs], Bold],
+                ""
+              }},
+              "NewEq" -> {newRow, newRHS}
+            |>
+          ]
         ]
       ],
-      Return[<|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>]
+
+      Return[
+        <|
+          "Content" -> {{
+            Style[renderTermsRow[Transpose[{row, vars}]], Bold],
+            Style[tf[rhs], Bold],
+            ""
+          }},
+          "NewEq" -> {newRow, newRHS}
+        |>
+      ]
     ];
   ];
 
-  baseTerms = Select[
-    Delete[MapThread[List, {row, vars}], pos],
-    #[[1]] =!= 0 &
-  ];
+  allTerms = MapThread[List, {row, vars}];
 
-  {subCoeffs, subConst} = linearDecompose[substExpr, remainingVars];
+  baseBefore = Select[Take[allTerms, pos - 1], !PossibleZeroQ[#[[1]]] &];
+  baseAfter = Select[Drop[allTerms, pos], !PossibleZeroQ[#[[1]]] &];
 
-  distTerms = Join[
+  {subCoeffs, subConst} = linearDecompose[expandedSubstExpr, remainingVars];
+
+  expandedSubTerms = Join[
     DeleteCases[
       Table[
-        If[PossibleZeroQ[subCoeffs[[k]]],
+        If[
+          PossibleZeroQ[subCoeffs[[k]]],
           Nothing,
           {targetCoeff subCoeffs[[k]], remainingVars[[k]]}
         ],
@@ -5369,37 +5514,59 @@ substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
       ],
       Nothing
     ],
-    If[PossibleZeroQ[subConst], {}, {{targetCoeff subConst, None}}],
-    baseTerms
+    If[PossibleZeroQ[subConst], {}, {{targetCoeff subConst, None}}]
   ];
 
-  AppendTo[stepRows, {formatSubstOnceLHS[row, vars, targetVar, substExpr], tf[rhs], ""}];
-  AppendTo[stepRows, {renderTermsRow[orderTermsByVars[distTerms, vars], "Symbolic"], tf[rhs], ""}];
+  distTerms = Join[baseBefore, expandedSubTerms, baseAfter];
 
-  lhsCombined = Expand[row . vars /. rule];
+  If[
+    Abs[targetCoeff] =!= 1,
+    AppendTo[stepRows, {formatSubstOnceLHS[row, vars, targetVar, expandedSubstExpr], tf[rhs], ""}]
+  ];
+
+  AppendTo[stepRows, {renderTermsRow[distTerms, "Symbolic"], tf[rhs], ""}];
+
+  lhsCombined = Expand[row . vars /. substRule];
 
   newRow = Coefficient[lhsCombined, #] & /@ remainingVars;
   constLeft = lhsCombined /. (Rule[#, 0] & /@ remainingVars);
   newRHS = rhs - constLeft;
 
-  AppendTo[stepRows, {renderTermsRow[Transpose[{newRow, remainingVars}]], tf[newRHS], ""}];
-
-  Do[
-    rowKey = ToString[{stepRows[[i, 1]], stepRows[[i, 2]]}, InputForm];
-
-    If[rowKey === lastKey,
-      If[stepRows[[i, 3]] =!= "" && dedupRows =!= {},
-        dedupRows[[-1, 3]] = stepRows[[i, 3]]
+  lhsTermsWithConst = Join[
+    DeleteCases[
+      Table[
+        If[PossibleZeroQ[newRow[[k]]], Nothing, {newRow[[k]], remainingVars[[k]]}],
+        {k, 1, Length[remainingVars]}
       ],
-      AppendTo[dedupRows, stepRows[[i]]];
-      lastKey = rowKey
+      Nothing
     ],
-    {i, 1, Length[stepRows]}
+    If[PossibleZeroQ[constLeft], {}, {{constLeft, None}}]
   ];
 
-  stepRows = dedupRows;
+  If[
+    !PossibleZeroQ[constLeft],
+    AppendTo[
+      stepRows,
+      {
+        renderTermsRow[lhsTermsWithConst],
+        tf[rhs],
+        addNote[-constLeft]
+      }
+    ]
+  ];
 
-  If[Length[remainingVars] === 1,
+  AppendTo[
+    stepRows,
+    {
+      Style[renderTermsRow[Transpose[{newRow, remainingVars}]], Bold],
+      Style[tf[newRHS], Bold],
+      ""
+    }
+  ];
+
+  If[
+    Length[remainingVars] === 1,
+
     With[
       {
         c = newRow[[1]],
@@ -5420,6 +5587,7 @@ substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
         <|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>
       ]
     ],
+
     <|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>
   ]
 ];
