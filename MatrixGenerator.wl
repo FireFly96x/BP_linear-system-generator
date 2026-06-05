@@ -3547,7 +3547,10 @@ equationSolutionTypeMatchesQ[A_, rhs_, solType_String] := Module[{rankA, rankAug
 
 (* formátovanie členov lineárneho výrazu so znamienkami *)
 renderTermsRow[terms_List, mode_ : "Numeric", highlightVar_ : None] := Module[
-  {pairs, out = {}, first = True, c, v, zeroQ, negQ, highlightedQ, t, varStyle},
+  {
+    pairs, out = {}, first = True, c, v, zeroQ, negQ,
+    highlightedQ, t, varPart, highlightColor = RGBColor[0.0, 0.2, 0.95]
+  },
 
   pairs = Select[terms, MatchQ[#, {_, _}] &];
   zeroQ = If[mode === "Symbolic", PossibleZeroQ, (# == 0 &)];
@@ -3561,18 +3564,16 @@ renderTermsRow[terms_List, mode_ : "Numeric", highlightVar_ : None] := Module[
     If[zeroQ[c], Continue[]];
 
     highlightedQ = Which[
+      v === None, False,
       highlightVar === None, False,
       ListQ[highlightVar], MemberQ[highlightVar, v],
       True, v === highlightVar
     ];
 
-    varStyle = If[
+    (* zvýrazníme iba premennú, nie koeficient *)
+    varPart = If[
       highlightedQ,
-      If[
-        ListQ[highlightVar],
-        Style[tf[v], Bold],
-        Style[tf[v], Bold, RGBColor[0.8, 0, 0]]
-      ],
+      Style[tf[v], Bold, highlightColor],
       tf[v]
     ];
 
@@ -3581,10 +3582,10 @@ renderTermsRow[terms_List, mode_ : "Numeric", highlightVar_ : None] := Module[
       tf[Abs[c]],
 
       highlightedQ && Abs[c] === 1,
-      varStyle,
+      varPart,
 
       highlightedQ,
-      Row[{tf[Abs[c]], "", varStyle}],
+      Row[{tf[Abs[c]], varPart}],
 
       Abs[c] === 1,
       tf[v],
@@ -3631,7 +3632,7 @@ coeffVal[coeff_, val_] := Which[
   coeff === 0, 0,
   coeff === 1, wrapNegValue[val],
   coeff === -1, Row[{"-", wrapNegValue[val]}],
-  NumberQ[val], Row[{tft[coeff], "\[CenterDot]", wrapNegValue[val]}],
+  NumberQ[val], Row[{tft[coeff], " \[CenterDot] ", wrapNegValue[val]}],
   True, Row[{tft[coeff], wrapNegValue[val]}]
 ];
 
@@ -3794,7 +3795,7 @@ formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_ : False] := Module[
   {
     terms = {}, first = True, addTerm, emitKnownTerm, emitUnknownTerm,
     expr, exprVars, exprCoeffs, exprConst, exprTerms, hasVariableTermsQ,
-    exprBody, prod
+    exprBody, prod, highlightColor = RGBColor[0.0, 0.2, 0.95]
   },
 
   addTerm[content_, sign_] := (
@@ -3839,17 +3840,18 @@ formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_ : False] := Module[
 
       hasVariableTermsQ = AnyTrue[exprTerms, #[[2]] =!= None &];
 
-      exprBody = If[
-        hasVariableTermsQ,
-        Row[{"(", renderTermsRow[exprTerms, "Symbolic", exprVars], ")"}],
-        Style[Row[{"(", renderTermsRow[exprTerms, "Symbolic"], ")"}], Bold]
+      (* ak dosádzame číslo, zvýrazníme celé číslo; ak výraz, zvýrazníme iba premenné vo výraze *)
+      exprBody = Style[
+        Row[{"(", renderTermsRow[exprTerms, "Symbolic"], ")"}],
+        Bold,
+        highlightColor
       ];
 
       addTerm[
         If[
           Abs[c] === 1,
           exprBody,
-          Row[{tf[Abs[c]], "\[CenterDot]", exprBody}]
+          Row[{tf[Abs[c]], " \[CenterDot] ", exprBody}]
         ],
         Sign[c]
       ]
@@ -4637,10 +4639,7 @@ showSubstitutionRowQ = False},
       If[KeyExistsQ[solMap, v],
 
       (* pri dosadení najprv zobrazíme nahradený výraz, až potom ho upravíme *)
-        If[
-          Abs[c] =!= 1 || !TrueQ[Expand[c solMap[v]] === c solMap[v]],
-          showSubstitutionRowQ = True
-        ];
+        showSubstitutionRowQ = True;
 
         expr = Expand[c solMap[v]];
         summands = If[Head[expr] === Plus, List @@ expr, {expr}];
@@ -5385,7 +5384,8 @@ formatLinearExpr[expr_, vrs_List] := Module[{coeffs, c0, terms = {}},
 formatSubstOnceLHS[row_, vars_, targetVar_, substExpr_] := Module[
   {
     terms = {}, first = True, addTerm, substVars, expandedSubstExpr,
-    substCoeffs, substConst, substTerms, hasVariableTermsQ, substBody
+    substCoeffs, substConst, substTerms, hasVariableTermsQ, substBody,
+    highlightColor = RGBColor[0.0, 0.2, 0.95]
   },
 
   addTerm[content_, sign_] := (
@@ -5422,10 +5422,11 @@ formatSubstOnceLHS[row_, vars_, targetVar_, substExpr_] := Module[
 
   hasVariableTermsQ = AnyTrue[substTerms, #[[2]] =!= None &];
 
-  substBody = If[
-    hasVariableTermsQ,
-    Row[{"(", renderTermsRow[substTerms, "Symbolic", substVars], ")"}],
-    Style[Row[{"(", renderTermsRow[substTerms, "Symbolic"], ")"}], Bold]
+  (* ak je dosadený výraz s premennými, zvýrazníme iba premenné; ak je to číslo, zvýrazníme celé číslo *)
+  substBody = Style[
+    Row[{"(", renderTermsRow[substTerms, "Symbolic"], ")"}],
+    Bold,
+    highlightColor
   ];
 
   Do[
@@ -5438,7 +5439,7 @@ formatSubstOnceLHS[row_, vars_, targetVar_, substExpr_] := Module[
             If[
               Abs[c] === 1,
               substBody,
-              Row[{tf[Abs[c]], "\[CenterDot]", substBody}]
+              Row[{tf[Abs[c]], " \[CenterDot] ", substBody}]
             ],
             Sign[c]
           ],
@@ -5477,7 +5478,7 @@ solveForVarSteps[row_, rhs_, vars_, varIndex_] := Module[
   otherTerms = Expand[Together[Delete[row, varIndex] . otherVars]];
   moveExpr = Expand[Together[-otherTerms]];
 
-  currentLHS = renderTermsRow[Transpose[{row, vars}], "Numeric", {targetVar}];
+  currentLHS = renderTermsRow[Transpose[{row, vars}]];
   moveNote = If[PossibleZeroQ[moveExpr], "", addNote[moveExpr]];
 
   AppendTo[stepsIso, {currentLHS, tf[rhs], moveNote}];
@@ -5623,9 +5624,9 @@ substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
 
   distTerms = Join[baseBefore, expandedSubTerms, baseAfter];
 
-  If[
-    Abs[targetCoeff] =!= 1,
-    AppendTo[stepRows, {formatSubstOnceLHS[row, vars, targetVar, expandedSubstExpr], tf[rhs], ""}]
+  AppendTo[
+    stepRows,
+    {formatSubstOnceLHS[row, vars, targetVar, expandedSubstExpr], tf[rhs], ""}
   ];
 
   AppendTo[stepRows, {renderTermsRow[distTerms, "Symbolic"], tf[rhs], ""}];
