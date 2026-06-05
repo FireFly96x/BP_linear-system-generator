@@ -3599,6 +3599,92 @@ coeffVal[coeff_, val_] := Which[
 
 signBtwTerms[c_] := If[c < 0, " - ", " + "];
 
+secondEquationStyle[] := RGBColor[0.05, 0.25, 0.85];
+
+styledTermBody[coef_, symbol_, style_ : None] := Module[{body},
+  body = If[
+    symbol === None,
+    tf[Abs[coef]],
+    tf[If[Abs[coef] === 1, symbol, Abs[coef] symbol]]
+  ];
+
+  If[style === None, body, Style[body, style]]
+];
+
+signedPiecesRow[pieces_List] := Module[{out = {}, first = True, coef, body, negQ},
+  Do[
+    {coef, body} = pieces[[i]];
+
+    If[PossibleZeroQ[coef], Continue[]];
+
+    negQ = TrueQ[coef < 0];
+
+    If[first,
+      If[negQ, out = Join[out, {"-", body}], out = Join[out, {body}]];
+      first = False;,
+      out = Join[out, {If[negQ, " - ", " + "], body}]
+    ],
+    {i, 1, Length[pieces]}
+  ];
+
+  If[out === {}, tf[0], Row[out]]
+];
+
+additionExpandedEquationRow[rowMod_, rhsMod_, vars_, secondStyle_ : Automatic] := Module[
+  {style, lhsPieces, rhsPieces},
+
+  style = If[secondStyle === Automatic, secondEquationStyle[], secondStyle];
+
+  lhsPieces = Join[
+    DeleteCases[
+      MapThread[
+        If[PossibleZeroQ[#1], Nothing, {#1, styledTermBody[#1, #2]}] &,
+        {rowMod[[1]], vars}
+      ],
+      Nothing
+    ],
+    DeleteCases[
+      MapThread[
+        If[PossibleZeroQ[#1], Nothing, {#1, styledTermBody[#1, #2, style]}] &,
+        {rowMod[[2]], vars}
+      ],
+      Nothing
+    ]
+  ];
+
+  rhsPieces = DeleteCases[
+    {
+      If[PossibleZeroQ[rhsMod[[1]]], Nothing, {rhsMod[[1]], tf[Abs[rhsMod[[1]]]]}],
+      If[PossibleZeroQ[rhsMod[[2]]], Nothing, {rhsMod[[2]], Style[tf[Abs[rhsMod[[2]]]], style]}]
+    },
+    Nothing
+  ];
+
+  {signedPiecesRow[lhsPieces], signedPiecesRow[rhsPieces], ""}
+];
+
+equationRowsFromSystem[A_, b_, vars_] := Table[
+  {renderTermsRow[Transpose[{A[[i]], vars}]], b[[i]], ""},
+  {i, 1, Length[b]}
+];
+
+deduplicateEquationRows[rows_List] := Module[{out = {}, lastKey = None, key},
+  Do[
+    key = ToString[{rows[[i, 1]], rows[[i, 2]]}, InputForm];
+
+    If[key === lastKey,
+      If[Length[rows[[i]]] >= 3 && rows[[i, 3]] =!= "" && out =!= {},
+        out[[-1, 3]] = rows[[i, 3]]
+      ],
+      AppendTo[out, rows[[i]]];
+      lastKey = key
+    ],
+    {i, 1, Length[rows]}
+  ];
+
+  out
+];
+
 addNote[k_] := Which[
   PossibleZeroQ[k], "",
   TrueQ[k > 0], Row[{"+ ", tft[k]}],
@@ -3671,85 +3757,63 @@ formatSubstLHS[row_, vars_, solMap_, unknownVar_, evalMode_ : False] := Module[{
 ];
 
 verificationStepsEquation[A_, b_, vars_, sol_] := Module[
-  {content = {}, solN = Together /@ sol, lhs, prodRow, sumRow},
+  {
+    content = {}, solN = Together /@ sol, lhs, prodRow, sumRow,
+    prodParts, sumParts, firstProd, firstSum, addProd, addSum, okQ
+  },
 
   Do[
-    prodRow = Row @ Riffle[
-      DeleteCases[
-        MapThread[
-          If[#1 === 0, Nothing,
-            Row@{tf[#1], "\[CenterDot]", Style[wrapNegValue[#2], Bold]}
-          ] &,
-          {A[[i]], solN}
-        ],
-        Nothing
-      ],
-      " + "
+    prodParts = {};
+    sumParts = {};
+    firstProd = True;
+    firstSum = True;
+
+    addProd[coef_, val_] := Module[{body},
+      If[PossibleZeroQ[coef], Return[Null]];
+
+      body = Row[{tf[Abs[coef]], "\[CenterDot]", Style[wrapNegValue[val], Bold]}];
+
+      If[firstProd,
+        prodParts = Join[prodParts, If[TrueQ[coef < 0], {"-", body}, {body}]];
+        firstProd = False,
+        prodParts = Join[prodParts, {If[TrueQ[coef < 0], " - ", " + "], body}]
+      ];
     ];
 
-    sumRow = Row @ Riffle[
-      DeleteCases[
-        MapThread[
-          If[#1 === 0, Nothing, tf[Together[#1 #2]]] &,
-          {A[[i]], solN}
-        ],
-        Nothing
-      ],
-      " + "
+    addSum[term_] := Module[{body},
+      If[PossibleZeroQ[term], Return[Null]];
+
+      body = tf[Abs[term]];
+
+      If[firstSum,
+        sumParts = Join[sumParts, If[TrueQ[term < 0], {"-", body}, {body}]];
+        firstSum = False,
+        sumParts = Join[sumParts, {If[TrueQ[term < 0], " - ", " + "], body}]
+      ];
     ];
+
+    Do[
+      addProd[A[[i, j]], solN[[j]]];
+      addSum[Together[A[[i, j]] solN[[j]]]],
+      {j, 1, Length[solN]}
+    ];
+
+    prodRow = If[prodParts === {}, tf[0], Row[prodParts]];
+    sumRow = If[sumParts === {}, tf[0], Row[sumParts]];
 
     lhs = Together[A[[i]] . solN];
-
-    AppendTo[content,
-      Grid[
-        {
-          {Row[{"LS", i, " = ", prodRow, " = ", sumRow, " = ", Style[tft[lhs], Bold]}]},
-          {Row[{"PS", i, " = ", Style[tft[b[[i]]], Bold]}]},
-          {If[lhs === b[[i]],
-            Style[Row[{"LS", i, " = PS", i, " (OK)"}], Darker[Green]],
-            Style[Row[{"LS", i, " \[NotEqual] PS", i, " (CHYBA)"}], Red]
-          ]}
-        },
-        Alignment -> Left,
-        Spacings -> {0, 0.4},
-        BaseStyle -> {FontSize -> 13}
-      ]
-    ],
-    {i, Length[b]}
-  ];
-
-  content
-];
-
-verificationStepsEquationInfinite[A_, b_, vars_, solExprs_List] := Module[
-  {content = {}, lhs, diff, okQ},
-
-  Do[
-    lhs = Together[A[[i]] . solExprs];
-    diff = Together[lhs - b[[i]]];
-    okQ = TrueQ[diff === 0] || TrueQ[Simplify[diff == 0]];
+    okQ = PossibleZeroQ[Together[lhs - b[[i]]]];
 
     AppendTo[
       content,
       Grid[
         {
+          {Row[{"LS", i, " = ", prodRow, " = ", sumRow, " = ", Style[tft[lhs], Bold]}]},
+          {Row[{"PS", i, " = ", Style[tft[b[[i]]], Bold]}]},
           {
-            Row[{
-              "Riadok ", i, ":  ",
-              tf[A[[i]]],
-              " \[CenterDot] ",
-              TraditionalForm[solExprs],
-              " = ",
-              TraditionalForm[lhs]
-            }]
-          },
-          {Row[{"PS", i, " = ", TraditionalForm[b[[i]]]}]},
-          {Row[{"LS - PS = ", TraditionalForm[diff]}]},
-          {
-            If[
-              okQ,
-              Style["LS = PS (OK)", Darker[Green]],
-              Style["LS \[NotEqual] PS (CHYBA)", Red]
+            If[okQ,
+              Style[Row[{"LS", i, " = PS", i, " (OK)"}], Darker[Green]],
+              Style[Row[{"LS", i, " \[NotEqual] PS", i, " (CHYBA)"}], Red]
             ]
           }
         },
@@ -3758,7 +3822,7 @@ verificationStepsEquationInfinite[A_, b_, vars_, solExprs_List] := Module[
         BaseStyle -> {FontSize -> 13}
       ]
     ],
-    {i, 1, Length[b]}
+    {i, Length[b]}
   ];
 
   content
@@ -3994,7 +4058,7 @@ appendEquationInfiniteParametrization[content_, config_Association, A_, b_, orig
     AppendTo[
       content,
       Style[
-        "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej pivotnej rovnice:",
+        "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej rovnice:"
         Italic
       ]
     ];
@@ -4040,7 +4104,7 @@ appendEquationVerification[content_, A_, b_, vars_, result_] := Module[{items},
 
   AppendTo[
     content,
-    "Správnosť overíme dosadením nájdeného riešenia do pôvodnej sústavy rovníc a porovnáme ľavú a pravú stranu v každom riadku:"
+    "Správnosť overíme dosadením nájdeného riešenia do sústavy rovníc a porovnáme ľavú a pravú stranu v každom riadku:"
   ];
 
   items = verificationStepsEquation[A, b, vars, result];
@@ -4645,26 +4709,33 @@ backSubstituteVariableSteps[solvedVar_, expr_, vars_List, solMap_Association] :=
 ];
 
 (* jeden redukčný krok eliminačnej metódy *)
-reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, content = {}, data2, sumRow, sumRHS, elimIdx, keepIdx, keepVar, elimVar, pivotEq, newEq, cls,
-  red, A2, b2, remVars, idx},
+reduceOnceByElimination[eqs_List, vars_List] := Module[
+  {
+    n = Length[vars], A, b, content = {}, data2, sumRow, sumRHS,
+    elimIdx, keepIdx, keepVar, elimVar, pivotEq, newEq, cls,
+    lastSolve, red, A2, b2, remVars, idx
+  },
 
-  A = eqs[[All, 1]]; b = eqs[[All, 2]];
+  A = eqs[[All, 1]];
+  b = eqs[[All, 2]];
 
   If[n === 2,
-    Module[{rowsShow, zeroCase, rowKeep, elimIdx0, keepIdx0, elimVar0, keepVar0, pivotEq0, newEq0, cls0},
+    Module[
+      {
+        rowsShow, zeroCase, rowKeep, elimIdx0, keepIdx0,
+        elimVar0, keepVar0, pivotEq0, newEq0, cls0
+      },
 
-    (* zobrazenie pôvodných rovníc *)
       rowsShow = {
         {renderTermsRow[Transpose[{A[[1]], vars}]], b[[1]], ""},
         {renderTermsRow[Transpose[{A[[2]], vars}]], b[[2]], ""}
       };
 
-      (* ak už máme nulový koeficient v 2x2, nerobíme LCM (zabránime 1/0) *)
       zeroCase = Which[
-        A[[1, 1]] === 0, {1, 1},  (* 1. rovnica nemá x *)
-        A[[2, 1]] === 0, {2, 1},  (* 2. rovnica nemá x *)
-        A[[1, 2]] === 0, {1, 2},  (* 1. rovnica nemá y *)
-        A[[2, 2]] === 0, {2, 2},  (* 2. rovnica nemá y *)
+        PossibleZeroQ[A[[1, 1]]], {1, 1},
+        PossibleZeroQ[A[[2, 1]]], {2, 1},
+        PossibleZeroQ[A[[1, 2]]], {1, 2},
+        PossibleZeroQ[A[[2, 2]]], {2, 2},
         True, None
       ];
 
@@ -4674,31 +4745,33 @@ reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, 
 
         elimVar0 = vars[[elimIdx0]];
         keepVar0 = vars[[keepIdx0]];
-
-        (* pivotEq musí byť tá druhá rovnica (aby sme z nej dopočítali eliminovanú premennú) *)
         pivotEq0 = {A[[3 - rowKeep]], b[[3 - rowKeep]]};
 
         appendStepHeader[content, "Priama redukcia"];
-        AppendTo[content,
+
+        AppendTo[
+          content,
           "V jednej rovnici je koeficient pri premennej " <> ToString[elimVar0] <>
               " nulový, preto už táto rovnica obsahuje iba " <> ToString[keepVar0] <> "."
         ];
+
         AppendTo[content, alignedEquations[rowsShow]];
 
         newEq0 = {{{A[[rowKeep, keepIdx0]]}, b[[rowKeep]]}};
         cls0 = equationClass[{A[[rowKeep, keepIdx0]]}, b[[rowKeep]]];
 
-        Return[<|
-          "Content" -> content,
-          "NewEqs" -> newEq0,
-          "NewVars" -> {keepVar0},
-          "ElimVar" -> elimVar0,
-          "PivotEq" -> pivotEq0,
-          "Classes" -> {cls0}
-        |>];
+        Return[
+          <|
+            "Content" -> content,
+            "NewEqs" -> newEq0,
+            "NewVars" -> {keepVar0},
+            "ElimVar" -> elimVar0,
+            "PivotEq" -> pivotEq0,
+            "Classes" -> {cls0}
+          |>
+        ]
       ];
 
-      (* štandardný prípad - bez núl, môžeme robiť LCM a sčítanie *)
       data2 = eliminationStart2[A, b, vars];
       content = Join[content, data2["content"]];
 
@@ -4711,7 +4784,12 @@ reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, 
       keepVar = vars[[keepIdx]];
 
       appendStepHeader[content, "Sčítanie rovníc"];
-      AppendTo[content, "Sčítame rovnice, aby sme vyrušili premennú " <> ToString[elimVar] <> "."];
+
+      AppendTo[
+        content,
+        "Sčítame rovnice, aby sme eliminovali premennú " <> ToString[elimVar] <> "."
+      ];
+
       newEq = {{{sumRow[[keepIdx]]}, sumRHS}};
       cls = equationClass[{sumRow[[keepIdx]]}, sumRHS];
 
@@ -4721,32 +4799,45 @@ reduceOnceByElimination[eqs_List, vars_List] := Module[{n = Length[vars], A, b, 
         content,
         alignedEquations[
           Join[
+            Table[
+              {
+                renderTermsRow[Transpose[{data2["A_mod"][[i]], vars}]],
+                data2["b_mod"][[i]],
+                ""
+              },
+              {i, 1, 2}
+            ],
             {additionEquationRow2[data2["A_mod"], data2["b_mod"], vars]},
             lastSolve["Content"]
-          ]
+          ],
+          {2, 3},
+          1
         ]
       ];
 
       pivotEq = {A[[1]], b[[1]]};
 
-      Return[<|
-        "Content" -> content,
-        "NewEqs" -> newEq,
-        "NewVars" -> {keepVar},
-        "ElimVar" -> elimVar,
-        "PivotEq" -> pivotEq,
-        "Classes" -> {cls}
-      |>];
-
+      Return[
+        <|
+          "Content" -> content,
+          "NewEqs" -> newEq,
+          "NewVars" -> {keepVar},
+          "ElimVar" -> elimVar,
+          "PivotEq" -> pivotEq,
+          "Classes" -> {cls}
+        |>
+      ]
     ]
   ];
 
-  (* n === 3 *)
   red = reduce3to2[A, b, vars];
+
   If[red === $Failed, Return[$Failed]];
 
   content = Join[content, red["Content"]];
-  A2 = red["A2"]; b2 = red["b2"]; remVars = red["remVars"];
+  A2 = red["A2"];
+  b2 = red["b2"];
+  remVars = red["remVars"];
   idx = red["SubstRowIndex"];
 
   pivotEq = {A[[idx]], b[[idx]]};
@@ -4854,101 +4945,245 @@ pickSubstRow3[zp_, elimCol_Integer, A_] := Module[{rows = Range[3], allNonZero, 
 ];
 
 (* eliminácia jednej premennej z dvojice rovníc *)
-reducePair3[rowA_, rhsA_, rowB_, rhsB_, elimCol_, vars_] := Module[{content = {}, valA = rowA[[elimCol]], valB = rowB[[elimCol]], lcm, m1, m2, rowA2, rhsA2, rowB2, rhsB2, newRow, newRHS, rows1, rows2},
-  If[valA == 0 || valB == 0,
-    AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{rowA, vars}], "Numeric", vars[[elimCol]]], rhsA, ""}, {renderTermsRow[Transpose[{rowB, vars}], "Numeric", vars[[elimCol]]], rhsB, ""}}]];
-    If[valB == 0, {newRow, newRHS} = {rowB, rhsB}, {newRow, newRHS} = {rowA, rhsA}],
-    lcm = LCM[Abs[valA], Abs[valB]];
-    m1 = lcm/Abs[valA];
-    m2 = lcm/Abs[valB];
-    If[Sign[valA] == Sign[valB], m2 = -m2];
+reducePair3[rowA_, rhsA_, rowB_, rhsB_, elimCol_, vars_] := Module[
+  {
+    content = {},
+    valA = rowA[[elimCol]],
+    valB = rowB[[elimCol]],
+    lcm, m1, m2, needsMult,
+    rowA2, rhsA2, rowB2, rhsB2,
+    newRow, newRHS, rows1, rows2
+  },
 
-    rows1 = {{renderTermsRow[Transpose[{rowA, vars}], "Numeric", vars[[elimCol]]], rhsA, multNote[m1]}, {renderTermsRow[Transpose[{rowB, vars}], "Numeric", vars[[elimCol]]], rhsB, multNote[m2]}};
+  If[PossibleZeroQ[valA] || PossibleZeroQ[valB],
+    AppendTo[
+      content,
+      alignedEquations[
+        {
+          {renderTermsRow[Transpose[{rowA, vars}], "Numeric", vars[[elimCol]]], rhsA, ""},
+          {renderTermsRow[Transpose[{rowB, vars}], "Numeric", vars[[elimCol]]], rhsB, ""}
+        }
+      ]
+    ];
 
-    rowA2 = m1 rowA; rhsA2 = m1 rhsA;
-    rowB2 = m2 rowB; rhsB2 = m2 rhsB;
+    If[PossibleZeroQ[valB],
+      {newRow, newRHS} = {rowB, rhsB},
+      {newRow, newRHS} = {rowA, rhsA}
+    ];
 
-    rows2 = {{renderTermsRow[Transpose[{rowA2, vars}]], rhsA2, ""}, {renderTermsRow[Transpose[{rowB2, vars}]], rhsB2, ""}};
-    AppendTo[content, alignedEquations[Join[rows1, rows2], {2}, 1]];
+    AppendTo[
+      content,
+      alignedEquations[
+        {{
+          Style[renderTermsRow[Transpose[{newRow, vars}]], Bold],
+          Style[newRHS, Bold],
+          ""
+        }}
+      ]
+    ];
 
-    newRow = rowA2 + rowB2;
-    newRHS = rhsA2 + rhsB2;
+    Return[<|"Row" -> newRow, "RHS" -> newRHS, "Content" -> content|>]
   ];
 
-  AppendTo[content, alignedEquations[{{Style[renderTermsRow[Transpose[{newRow, vars}]], Darker[Green, 0.2]], Style[newRHS, Darker[Green, 0.2]], ""}}]];
+  lcm = LCM[Abs[valA], Abs[valB]];
+  m1 = lcm/Abs[valA];
+  m2 = lcm/Abs[valB];
+
+  If[Sign[valA] == Sign[valB], m2 = -m2];
+
+  needsMult = !(m1 === 1 && m2 === 1);
+
+  rows1 = {
+    {renderTermsRow[Transpose[{rowA, vars}], "Numeric", vars[[elimCol]]], rhsA, multNote[m1]},
+    {renderTermsRow[Transpose[{rowB, vars}], "Numeric", vars[[elimCol]]], rhsB, multNote[m2]}
+  };
+
+  rowA2 = m1 rowA;
+  rhsA2 = m1 rhsA;
+  rowB2 = m2 rowB;
+  rhsB2 = m2 rhsB;
+
+  rows2 = {
+    {renderTermsRow[Transpose[{rowA2, vars}]], rhsA2, ""},
+    {renderTermsRow[Transpose[{rowB2, vars}]], rhsB2, ""}
+  };
+
+  If[needsMult,
+    AppendTo[content, alignedEquations[Join[rows1, rows2], {2}, 1]],
+    AppendTo[content, alignedEquations[rows1]]
+  ];
+
+  newRow = rowA2 + rowB2;
+  newRHS = rhsA2 + rhsB2;
+
+  AppendTo[
+    content,
+    alignedEquations[
+      {
+        additionEquationRow2[{rowA2, rowB2}, {rhsA2, rhsB2}, vars],
+        {
+          Style[renderTermsRow[Transpose[{newRow, vars}]], Bold],
+          Style[newRHS, Bold],
+          ""
+        }
+      },
+      {1},
+      1
+    ]
+  ];
+
   <|"Row" -> newRow, "RHS" -> newRHS, "Content" -> content|>
 ];
 
-additionEquationRow2[rowMod_, rhsMod_, vars_] := {
-  Row[{
-    tf[rowMod[[1, 1]] vars[[1]]],
-    signBtwTerms[rowMod[[2, 1]]],
-    tf[Abs[rowMod[[2, 1]]] vars[[1]]],
-    signBtwTerms[rowMod[[1, 2]]],
-    tf[Abs[rowMod[[1, 2]]] vars[[2]]],
-    signBtwTerms[rowMod[[2, 2]]],
-    tf[Abs[rowMod[[2, 2]]] vars[[2]]]
-  }],
-  Row[{rhsMod[[1]], signBtwTerms[rhsMod[[2]]], Abs[rhsMod[[2]]]}],
-  ""
-};
+additionEquationRow2[rowMod_, rhsMod_, vars_] := Module[
+  {
+    secondStyle = RGBColor[0.05, 0.25, 0.85],
+    lhsParts = {}, rhsParts = {},
+    firstLHS = True, firstRHS = True,
+    addToLHS, addToRHS
+  },
+
+  addToLHS[coef_, v_, style_ : None] := Module[{bodyExpr, body},
+    If[PossibleZeroQ[coef], Return[Null]];
+
+    bodyExpr = If[Abs[coef] === 1, v, Abs[coef] v];
+    body = If[style === None, tf[bodyExpr], Style[tf[bodyExpr], style]];
+
+    If[firstLHS,
+      lhsParts = Join[lhsParts, If[TrueQ[coef < 0], {"-", body}, {body}]];
+      firstLHS = False,
+      lhsParts = Join[lhsParts, {If[TrueQ[coef < 0], " - ", " + "], body}]
+    ];
+  ];
+
+  addToRHS[coef_, style_ : None] := Module[{body},
+    If[PossibleZeroQ[coef], Return[Null]];
+
+    body = If[style === None, tf[Abs[coef]], Style[tf[Abs[coef]], style]];
+
+    If[firstRHS,
+      rhsParts = Join[rhsParts, If[TrueQ[coef < 0], {"-", body}, {body}]];
+      firstRHS = False,
+      rhsParts = Join[rhsParts, {If[TrueQ[coef < 0], " - ", " + "], body}]
+    ];
+  ];
+
+  Do[
+    addToLHS[rowMod[[1, i]], vars[[i]]];
+    addToLHS[rowMod[[2, i]], vars[[i]], secondStyle],
+    {i, 1, Length[vars]}
+  ];
+
+  addToRHS[rhsMod[[1]]];
+  addToRHS[rhsMod[[2]], secondStyle];
+
+  {
+    If[lhsParts === {}, tf[0], Row[lhsParts]],
+    If[rhsParts === {}, tf[0], Row[rhsParts]],
+    ""
+  }
+];
 
 (* redukcia sústavy 3x3 na dvojicu rovníc 2x2 *)
-reduce3to2[A_, b_, vars_] := Module[{content = {}, zp, substPick, elimCol, elimVar, zeroRows, nonZeroRows, iKeep, rowIV, rhsIV, rowV, rhsV, remCols, remVars, A2, b2, twoCombosQ, pair, i1, i2},
+reduce3to2[A_, b_, vars_] := Module[
+  {
+    content = {}, zp, substPick, elimCol, elimVar, zeroRows, nonZeroRows,
+    iKeep, rowIV, rhsIV, rowV, rhsV, remCols, remVars, A2, b2,
+    twoCombosQ, pair, i1, i2
+  },
+
   appendStepHeader[content, "Redukcia sústavy 3x3 na 2x2"];
+
   zp = zeroCoeff3[A];
   elimCol = pickElimVar3[A];
   elimVar = vars[[elimCol]];
-  AppendTo[content, "Vyrušíme premennú " <> ToString[elimVar] <> ", aby sme získali sústavu 2x2."];
+
+  AppendTo[content, "Eliminujeme premennú " <> ToString[elimVar] <> ", aby sme získali sústavu 2x2."];
 
   zeroRows = zp["ZeroRowsByCol"][[elimCol]];
   nonZeroRows = Complement[Range[3], zeroRows];
 
   If[Length[zeroRows] >= 1,
     twoCombosQ = False;
+
     If[Length[nonZeroRows] >= 2,
       iKeep = First[zeroRows];
       pair = pickBestElimPair[nonZeroRows, elimCol, A];
       {i1, i2} = pair;
 
       AppendTo[content, Style["a) Kombinácia " <> ToString[i1] <> ". a " <> ToString[i2] <> ". rovnice:", Italic]];
+
       With[{res = reducePair3[A[[i1]], b[[i1]], A[[i2]], b[[i2]], elimCol, vars]},
-        content = Join[content, res["Content"]]; rowIV = res["Row"]; rhsIV = res["RHS"];
+        content = Join[content, res["Content"]];
+        rowIV = res["Row"];
+        rhsIV = res["RHS"];
       ];
 
-      rowV = A[[iKeep]]; rhsV = b[[iKeep]];
-      AppendTo[content, Style["b) Rovnica bez vyrušovanej premennej (použijeme ju priamo):", Italic]];
-      AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{rowV, vars}]], rhsV, ""}}]],
-      {i1, i2} = zeroRows[[1 ;; 2]];
-      rowIV = A[[i1]]; rhsIV = b[[i1]];
-      rowV = A[[i2]]; rhsV = b[[i2]];
+      rowV = A[[iKeep]];
+      rhsV = b[[iKeep]];
 
-      AppendTo[content, Style["a) Rovnice bez vyrušovanej premennej (použijeme ich priamo):", Italic]];
-      AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{rowIV, vars}]], rhsIV, ""}, {renderTermsRow[Transpose[{rowV, vars}]], rhsV, ""}}]];
+      AppendTo[content, Style["b) Rovnica bez eliminovanej premennej (použijeme ju priamo):", Italic]];
+      AppendTo[content, alignedEquations[{{renderTermsRow[Transpose[{rowV, vars}]], rhsV, ""}}]],
+
+      {i1, i2} = zeroRows[[1 ;; 2]];
+
+      rowIV = A[[i1]];
+      rhsIV = b[[i1]];
+      rowV = A[[i2]];
+      rhsV = b[[i2]];
+
+      AppendTo[content, Style["a) Rovnice bez eliminovanej premennej (použijeme ich priamo):", Italic]];
+      AppendTo[
+        content,
+        alignedEquations[
+          {
+            {renderTermsRow[Transpose[{rowIV, vars}]], rhsIV, ""},
+            {renderTermsRow[Transpose[{rowV, vars}]], rhsV, ""}
+          }
+        ]
+      ];
     ],
+
     twoCombosQ = True;
 
     AppendTo[content, Style["a) Kombinácia 1. a 2. rovnice:", Italic]];
+
     With[{res = reducePair3[A[[1]], b[[1]], A[[2]], b[[2]], elimCol, vars]},
-      content = Join[content, res["Content"]]; rowIV = res["Row"]; rhsIV = res["RHS"];
+      content = Join[content, res["Content"]];
+      rowIV = res["Row"];
+      rhsIV = res["RHS"];
     ];
 
     AppendTo[content, Style["b) Kombinácia 1. a 3. rovnice:", Italic]];
+
     With[{res = reducePair3[A[[1]], b[[1]], A[[3]], b[[3]], elimCol, vars]},
-      content = Join[content, res["Content"]]; rowV = res["Row"]; rhsV = res["RHS"];
+      content = Join[content, res["Content"]];
+      rowV = res["Row"];
+      rhsV = res["RHS"];
     ];
   ];
 
   remCols = Delete[Range[3], elimCol];
   remVars = vars[[remCols]];
+
   A2 = {rowIV[[remCols]], rowV[[remCols]]};
   b2 = {rhsIV, rhsV};
 
   substPick = pickSubstRow3[zp, elimCol, A];
+
   If[substPick === $Failed, Return[$Failed]];
 
-  <|"Content" -> content, "A2" -> A2, "b2" -> b2, "remVars" -> remVars, "elimCol" -> elimCol, "elimVar" -> elimVar,
-    "twoCombosQ" -> twoCombosQ, "SubstRowIndex" -> substPick["Index"], "SubstAllNonZeroQ" -> substPick["AllNonZeroQ"]|>
+  <|
+    "Content" -> content,
+    "A2" -> A2,
+    "b2" -> b2,
+    "remVars" -> remVars,
+    "elimCol" -> elimCol,
+    "elimVar" -> elimVar,
+    "twoCombosQ" -> twoCombosQ,
+    "SubstRowIndex" -> substPick["Index"],
+    "SubstAllNonZeroQ" -> substPick["AllNonZeroQ"]
+  |>
 ];
 
 (* ~-~-~ SUBSTITUTION HELPERS ~-~-~ *)
@@ -5068,17 +5303,26 @@ solveForVarSteps[row_, rhs_, vars_, varIndex_] := Module[{targetVar, c, otherTer
 ];
 
 (* dosadenie vyjadrenej premennej do ďalšej rovnice *)
-substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[{targetVar, substExpr, stepRows, currentLHS, sNote, pos, targetCoeff, baseTerms, subCoeffs, subConst, distTerms, lhsCombined, newRow, constLeft, newRHS, c},
-  targetVar = rule[[1]]; substExpr = rule[[2]]; stepRows = {};
+substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
+  {
+    targetVar, substExpr, stepRows, currentLHS, sNote, pos, targetCoeff,
+    baseTerms, subCoeffs, subConst, distTerms, lhsCombined, newRow,
+    constLeft, newRHS, rowKey, lastKey = None, dedupRows = {}
+  },
+
+  targetVar = rule[[1]];
+  substExpr = rule[[2]];
+  stepRows = {};
 
   currentLHS = renderTermsRow[Transpose[{row, vars}]];
   sNote = substNote[<|targetVar -> substExpr|>, {targetVar}, row, vars];
+
   AppendTo[stepRows, {currentLHS, tf[rhs], sNote}];
 
   pos = First @ First @ Position[vars, targetVar];
   targetCoeff = row[[pos]];
 
-  If[PossibleZeroQ[targetCoeff], (* ak premenná nebola v rovnici, nič nemeníme *)
+  If[PossibleZeroQ[targetCoeff],
     newRow = Coefficient[row . vars, #] & /@ remainingVars;
     constLeft = (row . vars) /. (Rule[#, 0] & /@ remainingVars);
     newRHS = rhs - constLeft;
@@ -5086,36 +5330,82 @@ substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
     If[Length[remainingVars] === 1,
       Module[{c = newRow[[1]], v = remainingVars[[1]], iso},
         iso = isolateVarFromCoeffEqSteps[c, v, newRHS];
+
         Which[
-          c === 1, Return[<|"Content" -> {{renderTermsRow[Transpose[{row, vars}]], tf[rhs], ""}}, "NewEq" -> {newRow, newRHS}|>],
-          c =!= 0 && iso["Type"] === "GENERAL", Return[<|"Content" -> iso["Steps"], "NewEq" -> {{1}, iso["Value"]}|>],
-          True, Return[<|"Content" -> {{renderTermsRow[Transpose[{row, vars}]], tf[rhs], ""}}, "NewEq" -> {newRow, newRHS}|>]
+          c === 1,
+          Return[<|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>],
+
+          c =!= 0 && iso["Type"] === "GENERAL",
+          Return[
+            <|
+              "Content" -> Join[stepRows, iso["Steps"]],
+              "NewEq" -> {{1}, iso["Value"]}
+            |>
+          ],
+
+          True,
+          Return[<|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>]
         ]
       ],
-      Return[<|"Content" -> {{renderTermsRow[Transpose[{row, vars}]], tf[rhs], ""}}, "NewEq" -> {newRow, newRHS}|>]
+      Return[<|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>]
     ];
   ];
 
-  baseTerms = Select[Delete[MapThread[List, {row, vars}], pos], #[[1]] =!= 0 &];
+  baseTerms = Select[
+    Delete[MapThread[List, {row, vars}], pos],
+    #[[1]] =!= 0 &
+  ];
+
   {subCoeffs, subConst} = linearDecompose[substExpr, remainingVars];
 
   distTerms = Join[
-    DeleteCases[Table[If[PossibleZeroQ[subCoeffs[[k]]], Nothing, {targetCoeff*subCoeffs[[k]], remainingVars[[k]]}], {k, 1, Length[remainingVars]}], Nothing],
-    If[PossibleZeroQ[subConst], {}, {{targetCoeff*subConst, None}}],
+    DeleteCases[
+      Table[
+        If[PossibleZeroQ[subCoeffs[[k]]],
+          Nothing,
+          {targetCoeff subCoeffs[[k]], remainingVars[[k]]}
+        ],
+        {k, 1, Length[remainingVars]}
+      ],
+      Nothing
+    ],
+    If[PossibleZeroQ[subConst], {}, {{targetCoeff subConst, None}}],
     baseTerms
   ];
 
-  If[Abs[targetCoeff] =!= 1, AppendTo[stepRows, {formatSubstOnceLHS[row, vars, targetVar, substExpr], tf[rhs], ""}]];
+  AppendTo[stepRows, {formatSubstOnceLHS[row, vars, targetVar, substExpr], tf[rhs], ""}];
   AppendTo[stepRows, {renderTermsRow[orderTermsByVars[distTerms, vars], "Symbolic"], tf[rhs], ""}];
 
   lhsCombined = Expand[row . vars /. rule];
+
   newRow = Coefficient[lhsCombined, #] & /@ remainingVars;
   constLeft = lhsCombined /. (Rule[#, 0] & /@ remainingVars);
   newRHS = rhs - constLeft;
+
   AppendTo[stepRows, {renderTermsRow[Transpose[{newRow, remainingVars}]], tf[newRHS], ""}];
 
+  Do[
+    rowKey = ToString[{stepRows[[i, 1]], stepRows[[i, 2]]}, InputForm];
+
+    If[rowKey === lastKey,
+      If[stepRows[[i, 3]] =!= "" && dedupRows =!= {},
+        dedupRows[[-1, 3]] = stepRows[[i, 3]]
+      ],
+      AppendTo[dedupRows, stepRows[[i]]];
+      lastKey = rowKey
+    ],
+    {i, 1, Length[stepRows]}
+  ];
+
+  stepRows = dedupRows;
+
   If[Length[remainingVars] === 1,
-    With[{c = newRow[[1]], v = remainingVars[[1]], iso = isolateVarFromCoeffEqSteps[newRow[[1]], remainingVars[[1]], newRHS]},
+    With[
+      {
+        c = newRow[[1]],
+        v = remainingVars[[1]],
+        iso = isolateVarFromCoeffEqSteps[newRow[[1]], remainingVars[[1]], newRHS]
+      },
       Which[
         c === 1,
         <|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>,
@@ -5132,8 +5422,6 @@ substituteIntoEquationSteps[row_, rhs_, vars_, rule_, remainingVars_] := Module[
     ],
     <|"Content" -> stepRows, "NewEq" -> {newRow, newRHS}|>
   ]
-
-
 ];
 
 (* redukcia sústavy 3x3 na 2x2 pomocou dosadzovania *)
@@ -6754,7 +7042,7 @@ stepsElimination[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
     "ReduceInfiniteText" -> "Počas eliminácie sme dostali identitu, teda vždy pravdivú rovnosť. Jedna neznáma zostáva voľná, preto má sústava nekonečne veľa riešení.",
     "FinalNoneText" -> "V poslednej rovnici sme dostali spor, preto sústava nemá riešenie.",
     "FinalInfiniteText" -> "V poslednej rovnici sme dostali identitu, preto má sústava nekonečne veľa riešení.",
-    "BackHeader" -> "Spätné dosadenie do pivotnej rovnice",
+    "BackHeader" -> "Spätné dosadenie do vhodnej rovnice",
     "StackItemFn" -> Function[{step, varsNow},
       <|"PivotEq" -> step["PivotEq"], "VarsBefore" -> varsNow, "ElimVar" -> step["ElimVar"]|>
     ],
@@ -6762,7 +7050,11 @@ stepsElimination[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
     "BackFn" -> Function[{item, solMap},
       backSubstituteVariableSteps[item["PivotEq"], item["VarsBefore"], solMap, item["ElimVar"]]
     ]
-  |>, A, b, vars, data
+  |>,
+  A,
+  b,
+  vars,
+  data
 ];
 
 stepsSubstitution[A_, b_, vars_, data_ : <||>] := stepsEquationCore[
