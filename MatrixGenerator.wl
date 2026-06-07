@@ -2663,12 +2663,6 @@ luScalarSymbol[sym_String, i_] := Subscript[Style[sym, Italic], i];
 
 luFactorDisplay[val_] := If[NumberQ[val] && val < 0, Row[{"(", tft[val], ")"}], tft[val]];
 
-luCoeffTimes[a_, x_] := Which[
-  a === 1, x,
-  a === -1, Row[{"-", x}],
-  True, Row[{tft[a], "\[CenterDot]", x}]
-];
-
 luSumDisplay[terms_List] := Module[{values, clean, first, rest},
   values = Times @@@ Select[terms, #[[1]] =!= 0 && #[[2]] =!= 0 &];
   clean = Select[Together /@ values, # =!= 0 &];
@@ -2702,32 +2696,6 @@ luWrappedSumDisplay[terms_List] := Module[{vals, sumVal, sumDisp, needsParensQ},
   ];
 
   If[needsParensQ, Row[{"(", sumDisp, ")"}], sumDisp]
-];
-
-luLinearCombinationDisplay[terms_List] := Module[{ clean, first, rest, formatPositiveTerm, formatFirstTerm, formatNextTerm},
-
-  clean = Select[terms, Together[#[[1]]] =!= 0 &];
-  If[clean === {}, Return[tft[0]]];
-
-  formatPositiveTerm[{coef_, var_}] := luCoeffTimes[coef, var];
-
-  formatFirstTerm[{coef_, var_}] := If[coef < 0,
-    Row[{"-", formatPositiveTerm[{Abs[coef], var}]}],
-    formatPositiveTerm[{coef, var}]
-  ];
-
-  formatNextTerm[{coef_, var_}] := If[coef < 0,
-    {" - ", formatPositiveTerm[{Abs[coef], var}]},
-    {" + ", formatPositiveTerm[{coef, var}]}
-  ];
-
-  first = First[clean];
-  rest = Rest[clean];
-
-  Row @ Flatten @ Join[
-    {formatFirstTerm[first]},
-    formatNextTerm /@ rest
-  ]
 ];
 
 choleskySqrtDisplay[arg_] := Row[{"\[Sqrt]", "(", arg, ")"}];
@@ -3265,25 +3233,25 @@ cramerSignedValueSum[values_List] := Module[{ clean, first, rest},
 
 (* vizuálne rozdelenie kladných a záporných diagonál determinantov 3x3 *)
 cramer3x3VisualPanel[label_, matrix_] := Grid[{{
-    labeledMatrixBlock[label, cramerMatrixCard[matrix]],
-    Style["\[LongRightArrow]", Bold, FontSize -> 26],
-    Grid[
-      {{
-        Style["+", Bold, FontSize -> 28],
-        cramer3x3StyledMatrixByMode[matrix, "Positive"]
-      }},
-      Alignment -> {Left, Top},
-      Spacings -> {0.4, 0}
-    ],
-    Grid[
-      {{
-        Style["-", Bold, FontSize -> 28],
-        cramer3x3StyledMatrixByMode[matrix, "Negative"]
-      }},
-      Alignment -> {Left, Top},
-      Spacings -> {0.4, 0}
-    ]
-  }},
+  labeledMatrixBlock[label, cramerMatrixCard[matrix]],
+  Style["\[LongRightArrow]", Bold, FontSize -> 26],
+  Grid[
+    {{
+      Style["+", Bold, FontSize -> 28],
+      cramer3x3StyledMatrixByMode[matrix, "Positive"]
+    }},
+    Alignment -> {Left, Top},
+    Spacings -> {0.4, 0}
+  ],
+  Grid[
+    {{
+      Style["-", Bold, FontSize -> 28],
+      cramer3x3StyledMatrixByMode[matrix, "Negative"]
+    }},
+    Alignment -> {Left, Top},
+    Spacings -> {0.4, 0}
+  ]
+}},
   Alignment -> {Center, Center, Center, Center},
   Spacings -> {1.5, 1}
 ];
@@ -3628,102 +3596,6 @@ wrapNegValue[val_] := Which[
   True, tft[val]
 ];
 
-coeffVal[coeff_, val_] := Which[
-  coeff === 0, 0,
-  coeff === 1, wrapNegValue[val],
-  coeff === -1, Row[{"-", wrapNegValue[val]}],
-  NumberQ[val], Row[{tft[coeff], " \[CenterDot] ", wrapNegValue[val]}],
-  True, Row[{tft[coeff], wrapNegValue[val]}]
-];
-
-signBtwTerms[c_] := If[c < 0, " - ", " + "];
-
-secondEquationStyle[] := RGBColor[0.05, 0.25, 0.85];
-
-styledTermBody[coef_, symbol_, style_ : None] := Module[{body},
-  body = If[
-    symbol === None,
-    tf[Abs[coef]],
-    tf[If[Abs[coef] === 1, symbol, Abs[coef] symbol]]
-  ];
-
-  If[style === None, body, Style[body, style]]
-];
-
-signedPiecesRow[pieces_List] := Module[{out = {}, first = True, coef, body, negQ},
-  Do[
-    {coef, body} = pieces[[i]];
-
-    If[PossibleZeroQ[coef], Continue[]];
-
-    negQ = TrueQ[coef < 0];
-
-    If[first,
-      If[negQ, out = Join[out, {"-", body}], out = Join[out, {body}]];
-      first = False;,
-      out = Join[out, {If[negQ, " - ", " + "], body}]
-    ],
-    {i, 1, Length[pieces]}
-  ];
-
-  If[out === {}, tf[0], Row[out]]
-];
-
-additionExpandedEquationRow[rowMod_, rhsMod_, vars_, secondStyle_ : Automatic] := Module[
-  {style, lhsPieces, rhsPieces},
-
-  style = If[secondStyle === Automatic, secondEquationStyle[], secondStyle];
-
-  lhsPieces = Join[
-    DeleteCases[
-      MapThread[
-        If[PossibleZeroQ[#1], Nothing, {#1, styledTermBody[#1, #2]}] &,
-        {rowMod[[1]], vars}
-      ],
-      Nothing
-    ],
-    DeleteCases[
-      MapThread[
-        If[PossibleZeroQ[#1], Nothing, {#1, styledTermBody[#1, #2, style]}] &,
-        {rowMod[[2]], vars}
-      ],
-      Nothing
-    ]
-  ];
-
-  rhsPieces = DeleteCases[
-    {
-      If[PossibleZeroQ[rhsMod[[1]]], Nothing, {rhsMod[[1]], tf[Abs[rhsMod[[1]]]]}],
-      If[PossibleZeroQ[rhsMod[[2]]], Nothing, {rhsMod[[2]], Style[tf[Abs[rhsMod[[2]]]], style]}]
-    },
-    Nothing
-  ];
-
-  {signedPiecesRow[lhsPieces], signedPiecesRow[rhsPieces], ""}
-];
-
-equationRowsFromSystem[A_, b_, vars_] := Table[
-  {renderTermsRow[Transpose[{A[[i]], vars}]], b[[i]], ""},
-  {i, 1, Length[b]}
-];
-
-deduplicateEquationRows[rows_List] := Module[{out = {}, lastKey = None, key},
-  Do[
-    key = ToString[{rows[[i, 1]], rows[[i, 2]]}, InputForm];
-
-    If[key === lastKey,
-      If[Length[rows[[i]]] >= 3 && rows[[i, 3]] =!= "" && out =!= {},
-        out[[-1, 3]] = rows[[i, 3]]
-      ],
-      AppendTo[out, rows[[i]]];
-      lastKey = key
-    ],
-    {i, 1, Length[rows]}
-  ];
-
-  out
-];
-
 addNote[k_] := Which[
   PossibleZeroQ[k], "",
   TrueQ[k > 0], Row[{"+ ", tft[k]}],
@@ -3943,6 +3815,12 @@ verificationStepsEquation[A_, b_, vars_, sol_] := Module[
   ];
 
   content
+];
+
+(* overenie parametrického riešenia pre rovnicové metódy *)
+verificationStepsEquationInfinite[A_, b_, _List, solExprs_List] := Module[{data},
+  data = <|"A" -> A, "b" -> b, "n" -> Length[b]|>;
+  verificationStepsInfinite[data, solExprs]
 ];
 
 (* výber jednoduchej rovnice a voľnej premennej pre parametrické riešenie *)
@@ -4175,7 +4053,7 @@ appendEquationInfiniteParametrization[content_, config_Association, A_, b_, orig
     AppendTo[
       content,
       Style[
-        "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej rovnice:"
+        "Dopočítame premennú " <> ToString[backVar] <> " dosadením do vhodnej rovnice:",
         Italic
       ]
     ];
@@ -4612,7 +4490,7 @@ backSubstituteVariableSteps[{row_List, rhs_}, vars_List, solMap_Association, sol
     unknownCoeff, knownTerms, knownSum, rhsShift, noteShift, valueExpanded, valueFactored, valueFinal,
     formalParams, displayVars, c, v, expr, summands, termVar, termCoeff, keyOrder = {}, coeffByKey = <||>,
     addCombinedTerm, renderMovedRHS, moveTerms, movedRHS, finalRows, rowKey, lastKey = None, dedupRows = {},
-showSubstitutionRowQ = False},
+    showSubstitutionRowQ = False},
 
 (* pôvodná rovnica a dosadenie *)
   currentLHS = renderTermsRow[Transpose[{row, vars}], "Numeric", Keys[solMap]];
@@ -5358,13 +5236,6 @@ reduceOnceBySubstitution[eqs_List, vars_List] := Module[{n = Length[vars], A, b,
     "RuleExpr" -> red["substRule"][[2]],
     "Classes" -> (equationClass @@@ Thread[{A2, b2}])
   |>
-];
-
-orderTermsByVars[terms_List, vars_List] := Module[{pairs, varOrder, key},
-  pairs = Select[terms, MatchQ[#, {_, _}] &];
-  varOrder = AssociationThread[vars -> Range[Length[vars]]];
-  key[t_] := Which[t[[2]] === None, Infinity, KeyExistsQ[varOrder, t[[2]]], varOrder[t[[2]]], True, Infinity];
-  SortBy[pairs, key]
 ];
 
 linearDecompose[expr_, vrs_List] := Module[{ee, coeffs, c0},
@@ -6812,15 +6683,37 @@ stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, cholesk
   prettyMatrix[label_, mat_, bold_List : {}] := labeledMatrixBlock[label, styledPlainMatrix[mat, <|"BoldPositions" -> bold|>]];
   prettyVector[label_, vec_List] := labeledMatrixBlock[label, styledPlainMatrix[List /@ vec]];
 
-  addMatrixPair[l_, lt_, lBold_List : {}, ltBold_List : {}] := AppendTo[content, Grid[
-    {{
-      prettyMatrix[Style["L", Italic], l, lBold],
-      Spacer[20],
-      prettyMatrix[transposeLSymbol[], lt, ltBold]
-    }},
-    Alignment -> {Center, Center, Center},
-    Spacings -> {1.2, 0}
-  ]];
+  addMatrixPair[l_, lt_, lBold_List : {}, ltBold_List : {}, knownStep_ : All] := Module[{lView = l, ltView = lt},
+    If[IntegerQ[knownStep],
+      lView = Table[
+        Which[
+          r < c, 0,
+          c <= knownStep, l[[r, c]],
+          True, luEntrySymbol["l", r, c]
+        ],
+        {r, 1, n}, {c, 1, n}
+      ];
+
+      ltView = Table[
+        Which[
+          r > c, 0,
+          r <= knownStep, lt[[r, c]],
+          True, luEntrySymbol["l", c, r]
+        ],
+        {r, 1, n}, {c, 1, n}
+      ];
+    ];
+
+    AppendTo[content, Grid[
+      {{
+        prettyMatrix[Style["L", Italic], lView, lBold],
+        Spacer[20],
+        prettyMatrix[transposeLSymbol[], ltView, ltBold]
+      }},
+      Alignment -> {Center, Center, Center},
+      Spacings -> {1.2, 0}
+    ]]
+  ];
 
   appendProductDisplay[left_, right_, result_] := AppendTo[content, Grid[
     {{
@@ -6910,7 +6803,7 @@ stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, cholesk
 
   addHeader["Inicializácia matice L"];
   addText[Row[{"Maticu L budeme vypĺňať postupne po stĺpcoch. Z nej potom automaticky dostaneme transponovanú maticu ", transposeLSymbol[], "."}]];
-  addMatrixPair[L, LT];
+  addMatrixPair[L, LT, {}, {}, 0];
 
   Do[
     addHeader["Krok " <> ToString[i] <> " – výpočet " <> ToString[i] <> ". stĺpca matice L"];
@@ -6933,7 +6826,7 @@ stepsCholesky[data_Association] := Module[{ content = {}, n, A, b, vars, cholesk
 
     LT = Transpose[L];
     addText["Po tomto kroku už poznáme tieto nové prvky matíc:"];
-    addMatrixPair[L, LT, currentLBoldPositions[i], currentLTBoldPositions[i]];
+    addMatrixPair[L, LT, currentLBoldPositions[i], currentLTBoldPositions[i], i];
     ,
     {i, 1, n}
   ];
@@ -7674,7 +7567,7 @@ runMatrixGenerator[spec_Association, diff_String, mode_String, opts : OptionsPat
   If[taskPrinter === Automatic, printTaskBlock[data, vars, taskText, taskFormat], taskPrinter[data, vars]];
 
   (*If[KeyExistsQ[data, "RetryCount"],*)
-    (*printTextCell["Počet pregenerovaní: " <> ToString[data["RetryCount"]]];*)
+  (*printTextCell["Počet pregenerovaní: " <> ToString[data["RetryCount"]]];*)
   (*];*)
 
   If[mode === "TASK_STEPS_RESULT",
