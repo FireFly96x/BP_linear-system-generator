@@ -6328,10 +6328,10 @@ stepsInverseMatrix[data_Association] := Module[{ content = {}, n, A, b, vars, au
 ];
 
 stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U, y, x, tmp, addHeader, addText, addMatrixPair, addFormula, addSubHeader, resultStyle,
-    prettyMatrix, prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality, i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck,
-    xSymbols, formatLinearEquation, formatForwardEquation, formatBackwardEquation, symbolicProductSum, numericProductSum, sigmaUDisplay, sigmaLDisplay,
-    buildUFormulaLines, buildLFormulaLines, buildYFormulaLines, currentLBoldPositions, currentUBoldPositions, taskFormat
-  },
+  prettyMatrix, prettyVector, appendProductDisplay, appendMatrixEquality, appendVectorEquality, i, j, terms, sumTerm, pivotValue, luProduct, lowerCheck, upperCheck,
+  xSymbols, formatLinearEquation, formatForwardEquation, formatBackwardEquation, symbolicProductSum, numericProductSum, sigmaUDisplay, sigmaLDisplay,
+  buildUFormulaLines, buildLFormulaLines, buildYFormulaLines, currentLBoldPositions, currentUBoldPositions, taskFormat
+},
 
   n = data["n"];
   A = data["A"];
@@ -6350,15 +6350,38 @@ stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U,
   prettyMatrix[label_, mat_, bold_List : {}] := labeledMatrixBlock[label, styledPlainMatrix[mat, <|"BoldPositions" -> bold|>]];
   prettyVector[label_, vec_List] := labeledMatrixBlock[label, styledPlainMatrix[List /@ vec]];
 
-  addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}] := AppendTo[content, Grid[
-    {{
-      prettyMatrix[Style["L", Italic], l, lBold],
-      Spacer[20],
-      prettyMatrix[Style["U", Italic], u, uBold]
-    }},
-    Alignment -> {Center, Center, Center},
-    Spacings -> {1.2, 0}
-  ]];
+  addMatrixPair[l_, u_, lBold_List : {}, uBold_List : {}, knownStep_ : All] := Module[{lView = l, uView = u},
+    If[IntegerQ[knownStep],
+      lView = Table[
+        Which[
+          r < c, 0,
+          r === c, l[[r, c]],
+          c <= knownStep, l[[r, c]],
+          True, luEntrySymbol["l", r, c]
+        ],
+        {r, 1, n}, {c, 1, n}
+      ];
+
+      uView = Table[
+        Which[
+          r > c, 0,
+          r <= knownStep, u[[r, c]],
+          True, luEntrySymbol["u", r, c]
+        ],
+        {r, 1, n}, {c, 1, n}
+      ];
+    ];
+
+    AppendTo[content, Grid[
+      {{
+        prettyMatrix[Style["L", Italic], lView, lBold],
+        Spacer[20],
+        prettyMatrix[Style["U", Italic], uView, uBold]
+      }},
+      Alignment -> {Center, Center, Center},
+      Spacings -> {1.2, 0}
+    ]]
+  ];
 
   appendProductDisplay[left_, right_, result_] := AppendTo[content, Grid[
     {{
@@ -6636,7 +6659,7 @@ stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U,
 
   addHeader["Inicializácia matíc"];
   addText["Začíname s jednotkovou diagonálou v matici L. Ostatné prvky matíc L a U budeme postupne dopočítavať."];
-  addMatrixPair[L, U, Table[{r, r}, {r, 1, n}], {}];
+  addMatrixPair[L, U, currentLBoldPositions[0], {}, 0];
 
   Do[
     If[
@@ -6688,7 +6711,7 @@ stepsLU[data_Association] := Module[{ content = {}, n, A, b, vars, luData, L, U,
 
     If[i < n,
       addText["Po tomto kroku už poznáme tieto nové prvky matíc L a U:"];
-      addMatrixPair[L, U, currentLBoldPositions[i], currentUBoldPositions[i]];
+      addMatrixPair[L, U, currentLBoldPositions[i], currentUBoldPositions[i], i];
     ];
     ,
     {i, 1, n}
