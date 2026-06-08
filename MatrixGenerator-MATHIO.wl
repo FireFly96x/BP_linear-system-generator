@@ -5860,13 +5860,6 @@ Module[{
           ]
         ];
 
-        If[
-          showElemQ,
-          AppendTo[content,
-            "Tip: Keď prejdete kurzorom nad prvky výslednej matice, zobrazí sa vám príslušný skalárny súčin."
-          ]
-        ];
-
         Do[
           Module[{kPivot},
             kPivot = pivotRowFn[aug, i];
@@ -5920,13 +5913,6 @@ Module[{
           If[showElemQ,
             "Teraz vynulujeme čísla nad pivotmi. Každú riadkovú úpravu zapíšeme aj pomocou elementárnej matice.",
             "Teraz vynulujeme čísla nad pivotmi."
-          ]
-        ];
-
-        If[
-          showElemQ,
-          AppendTo[content,
-            "Tip: Keď prejdete kurzorom nad prvky výslednej matice, zobrazí sa vám príslušný skalárny súčin."
           ]
         ];
 
@@ -6183,7 +6169,6 @@ Module[{
 
     appendStepHeader[content, "Výpočet riešenia"];
     AppendTo[content, "Keď už poznáme inverznú maticu, riešenie sústavy vypočítame zo vzťahu x = A^-1 · b."];
-    AppendTo[content, "Tip: Keď prejdete kurzorom nad prvky výsledného vektora x, zobrazí sa skalárny súčin, z ktorého dané číslo vzniklo."];
 
     xResult = invMatrix . b;
 
@@ -6536,7 +6521,7 @@ Module[{
 
     addHeader["Overenie rozkladu L \[CenterDot] U = A"];
     AppendTo[content, "Skontrolujeme, že súčin L \[CenterDot] U sa rovná matici A."];
-    AppendTo[content, "Tip: Keď prejdete kurzorom nad prvky výslednej matice, zobrazí sa výpočet, z ktorého dané číslo vzniklo."];
+    
 
     luProduct = Together[L . U];
 
@@ -6761,7 +6746,7 @@ Module[{
 
     appendStepHeader[content, "Overenie rozkladu L · L^T = A"];
     AppendTo[content, "Skontrolujeme, že súčin L · L^T sa rovná matici A."];
-    AppendTo[content, "Tip: Keď prejdete kurzorom nad prvky výslednej matice, zobrazí sa výpočet, z ktorého dané číslo vzniklo."];
+    
 
     productCheck = Together[L . LT];
 
